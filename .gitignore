@@ -1,5 +1,9 @@
 # FRC Specific Files
 ctre_sim/
+networktables.json
+simgui-ds.json
+simgui-window.json
+simgui.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -10,12 +10,13 @@ from wpimath.geometry import Pose2d, Rotation2d
 
 class RobotContainer:
     def __init__(self):
+        # Initialize drivetrain subsystem
         self.drivetrain = SwerveDriveConstants.create_drivetrain()
 
         # Initialize controller
         self.controller = commands2.button.CommandXboxController(0)
         
-        # Create max speed variables
+        # Define max speed variables
         self.max_linear_speed = SwerveDriveConstants.max_linear_speed
         self.max_angular_rate = SwerveDriveConstants.max_angular_rate
     

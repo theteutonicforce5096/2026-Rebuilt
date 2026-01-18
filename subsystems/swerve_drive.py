@@ -104,8 +104,8 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-            .with_deadband(self.max_linear_speed * 0.01)
-            .with_rotational_deadband(self.max_angular_rate * 0.01)
+            .with_deadband(self.max_linear_speed * 0.05)
+            .with_rotational_deadband(self.max_angular_rate * 0.05)
             .with_desaturate_wheel_speeds(True)
         )
 
@@ -114,8 +114,8 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-            .with_deadband(self.max_linear_speed * 0.005)
-            .with_rotational_deadband(self.max_angular_rate * 0.005)
+            .with_deadband(self.max_linear_speed * 0.025)
+            .with_rotational_deadband(self.max_angular_rate * 0.025)
             .with_desaturate_wheel_speeds(True)
         )
 
