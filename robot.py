@@ -8,11 +8,12 @@
 import commands2
 import wpilib
 import wpilib.drive
-
+import LED_controller
 
 class MyRobot(wpilib.TimedRobot):
     def robotInit(self):
-        pass
+        self.led_controller = LED_controller.LED()
+        
         """
        5096 👅👅
         """
@@ -35,7 +36,7 @@ class MyRobot(wpilib.TimedRobot):
         """This function is called once each time the robot enters teleoperated mode."""
         pass
     def teleopPeriodic(self):
-        pass
+        self.led_controller.auto_in_progress()
         """This function is called periodically during teleoperated mode."""
         
     def testInit(self):
