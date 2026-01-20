@@ -15,6 +15,7 @@ Controls LEDS 👅👅
     def __init__(self):
 # Hardware Init
         self.candle = hardware.CANdle(1)
+        self.rgb = phoenix6.signals
         # self.led_configs = LEDConfigs( 
         #     strip_type = "RGB", 
         #     brightness_scalar = 1.0, 
@@ -22,14 +23,13 @@ Controls LEDS 👅👅
         #     )
         # self.candle_config = CANdleConfiguration().with_led(self.led_configs)
         
-        
-        
+    
 
         # Loss of signal behavior = keep means if candle stops getting Led frame updates, it will hold the last output
         # literally how it was before in phoenix 5
         # omg phoenix 5 is so much better I freaking hate this library
     def auto_in_progress(self):
-        self.solid_color_control = controls.solid_color(73, 157, 208)
+        self.solid_color_control = controls.SolidColor(0,83,rgbw_color.RGBWColor(red=53, green=157, blue=87))
 #         """ Sets LEDS to indicate driver has no control over robot """
 #         self.candle.setLEDs(73, 157, 208)  # Naural Blue
 
