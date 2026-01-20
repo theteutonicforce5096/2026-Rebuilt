@@ -13,8 +13,11 @@ class VisionCamera():
             Rotation3d.fromDegrees(0, 0, 180),
         )
 
+        # For districts in Wisconsin, AndyMark fields are used.
+        # For regionals in the U.S., Welded fields are used.
+        # REMEMBER TO CHANGE THIS DEPENDING ON COMPETITION TYPE!
         self.pose_est = PhotonPoseEstimator(
-            AprilTagFieldLayout.loadField(AprilTagField.k2025ReefscapeWelded),
+            AprilTagFieldLayout.loadField(AprilTagField.k2026RebuiltAndyMark),
             robot_to_camera_translation,
         )
 
