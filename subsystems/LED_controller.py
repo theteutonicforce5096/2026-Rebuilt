@@ -12,6 +12,7 @@ from phoenix6.signals import rgbw_color
 import phoenix6.controls as controls
 from phoenix6.controls import LarsonAnimation
 from phoenix6.controls import FireAnimation
+from phoenix6.controls import EmptyAnimation
 
 
 class LED():
@@ -25,31 +26,73 @@ Controls LEDS 👅👅
         
     def auto_in_progress(self):
         """ Sets LEDS to indicate autonomous is in progress """
-        self.solid_color_control = controls.SolidColor(0,83,rgbw_color.RGBWColor(red=53, green=157, blue=87))
+        self.extinguish()
+        self.solid_color_control = controls.SolidColor(
+            led_start_index=0,
+            led_end_index=83,
+            color=rgbw_color.RGBWColor(red=53, green=157, blue=87)) # Naural Blue
         self.candle.set_control(self.solid_color_control)
-        # Naural Blue
+        
 
     def hopper_full(self):
         """ Sets LEDS to indicate hopper is full """
+        self.extinguish()
         self.animation_control = controls.LarsonAnimation(
-            0, 83, 0, rgbw_color.RGBWColor(red=255, green=242, blue=0), size=5, bounce_mode=True, frame_rate=14)
+            led_start_index=0,
+            led_end_index=83,
+            slot=0,
+            color=rgbw_color.RGBWColor(red=255, green=242, blue=0), # Yellow
+            size=10,
+            bounce_mode=phoenix6.signals.spn_enums.LarsonBounceValue.FRONT,
+            frame_rate=120)
         self.candle.set_control(self.animation_control)
         # ANIMATION SLOT 0 ^^^
 
 
     def shooting(self):
         """ Sets LEDS to indicate robot is shooting """
+        self.extinguish()
         self.animation_control = controls.FireAnimation(
-            0, 83, 2, 1, phoenix6.signals.spn_enums.AnimationDirectionValue.FORWARD, sparking= 0.6, cooling= 0.3, frame_rate= 60 )
+            led_start_index=0,
+            led_end_index=83,
+            slot=2,
+            brightness=1,
+            direction=phoenix6.signals.spn_enums.AnimationDirectionValue.FORWARD,
+            sparking= 0.6,
+            cooling= 0.3,
+            frame_rate= 100 )
         self.candle.set_control(self.animation_control)
         # ANIMATION SLOT 2 ^^^
 
     def five_seconds_left(self):
         """ Sets LEDS to indicate five seconds left before hub active switches """
+        self.extinguish()
         self.animation_control = controls.LarsonAnimation(
-            0, 83, 1, rgbw_color.RGBWColor(red=255, green=0, blue=0), size=10, bounce_mode=True, frame_rate=14)
+            led_start_index=0,
+            led_end_index=83,  
+            slot=1,
+            color=rgbw_color.RGBWColor(red=255, green=0, blue=0), # Red
+            size=14,
+            bounce_mode= phoenix6.signals.spn_enums.LarsonBounceValue.BACK,
+            frame_rate=160)
         self.candle.set_control(self.animation_control)
-       # ANIMATION SLOT 1 ^^^
+        # ANIMATION SLOT 1 ^^^
+
+    def extinguish(self):
+        """ Turns off LEDS """
+        self.solid_color_control = controls.SolidColor(
+            led_start_index=0,
+            led_end_index=83,
+            color=rgbw_color.RGBWColor(red=0, green=0, blue=0))
+        self.animation_control = controls.EmptyAnimation(0)
+        self.candle.set_control(self.animation_control)
+        self.animation_control = controls.EmptyAnimation(1)
+        self.candle.set_control(self.animation_control)
+        self.animation_control = controls.EmptyAnimation(2)
+        self.candle.set_control(self.animation_control)
+        self.candle.set_control(self.solid_color_control)
+        # ANIMATION SLOT 7
+        # OFF ^^^
 
     
         
