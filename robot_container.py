@@ -1,6 +1,6 @@
 import commands2
 
-from subsystems.swerve_drive_constants import SwerveDriveConstants
+from constants.swerve_drive_constants import SwerveDriveConstants
 
 from pathplannerlib.auto import AutoBuilder, PathConstraints
 from pathplannerlib.path import PathPlannerPath, IdealStartingState, GoalEndState
