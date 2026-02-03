@@ -16,11 +16,14 @@ class Hopper:
         self.talon_config = phoenix6.configs.talon_fxs_configs.TalonFXSConfiguration()
         # I got this okay I think I am going to configure this maybe but alsg
         self.talon_config.future_proof_configs = True
-        self.talon_config.motor_output = phoenix6.configs.config_groups.MotorOutputConfigs.
         #TODO: I was in the middle of configuring this you gotta reference talon config each time.
         
     def hopper_on(self):
         self.talon_motor.set(1)
-        self.talon_motor.
+        print("IM MOVING 👅")
+    
+    def hopper_off(self):
+        self.talon_motor.set(0)
+        print("I'm not moving 😔")
 
 
