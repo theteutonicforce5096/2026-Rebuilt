@@ -1,39 +1,30 @@
-from math import tan, cos, radians, sqrt
-from wpimath.geometry import Pose2d
-from wpimath.units import inchesToMeters
+from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration
+from phoenix6.signals import NeutralModeValue
 
-#TODO Maybe add a new shooter physics file
 
-default_y_dis = inchesToMeters(12.5) #TODO get the distance
-# x_dis = math.sqrt(abs(hub_x_pos - Pose2d.X) + abs(hub_y_pos - Pose2d.Y)) 
-    #TODO GET HUB POSITIONS (keep units consistent). 
-    #Q. Does it need to be absolute values?
-    #Q. Will switching sides change anything?
-default_g = -9.8 #m/s^2
-default_θ = 67.5 #degrees
-
-a = 'q = mcΔt' #TODO constant from regression model
-b = 'ΔG = ΔH - TΔS' #TODO constant from regression model
-
-def calc_velocity(x_dis: float, y_dis: float = default_y_dis,
-                        θ: float = default_θ, g: float = default_g):
-    """
-        Fuction for getting ideal velocity.
-        :param x_dis: horizontal distance in meters from target to shooter
-        :type x_dis: float
-        :param y_dis: vertical distance in meters from target to shooter
-        :type y_dis: float
-        :param θ: angle in degrees from horizontal that ball shoots out at
-        :type θ: float
-        :param g: gravitational acceleration in meters per second squared
-        :type g: float
-    """
+class ShooterConstants:
     
-    ideal_velocity = sqrt(
-        (g * (x_dis ** 2)) / 
-        (2 * ((cos(radians(θ))) ** 2)) * (y_dis - (x_dis - tan(radians(θ))))
-    )
+    #TODO fix CAN ID's after finalizing flywheel 
+    FLYWHEEL_CAN_ID = 50
+    FLYWHEEL_INTAKE_CAN_ID = 61
     
-    #Calibrated velocity for ball to actually shoot out at
-    cal_initial_velocity = (a * ideal_velocity) + b
-    return cal_initial_velocity
+    #TODO Tune. ADD CURRENT LIMITS. Check if any need to be inverted, and check if coast or brake. 
+    #TODO: For current limits: Torque current? Stator & supply? 
+    
+    #Shoot Motor Configs (TalonFXS)
+    talonfxs_configs = TalonFXSConfiguration()
+    # talonfxs_configs.slot0.k_s = 2.5
+    # talonfxs_configs.slot0.k_v = 0
+    # talonfxs_configs.slot0.k_p = 5
+    # talonfxs_configs.slot0.k_i = 0
+    # talonfxs_configs.slot0.k_d = 0
+    talonfxs_configs.motor_output.neutral_mode = NeutralModeValue.COAST
+    
+    #FWIntake Motor Configs (TalonFX)
+    talonfx_configs = TalonFXConfiguration()
+    # talonfx_configs.slot0.k_s = .1
+    # talonfx_configs.slot0.k_v = .12
+    # talonfx_configs.slot0.k_p = .11
+    # talonfx_configs.slot0.k_i = 0
+    # talonfx_configs.slot0.k_d = 0
+    talonfx_configs.motor_output.neutral_mode = NeutralModeValue.BRAKE
