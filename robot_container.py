@@ -1,6 +1,7 @@
 import commands2
 
 from constants.swerve_drive_constants import SwerveDriveConstants
+from constants.physics import shoot_speed, calc_velocity, flywheel_intake_speed, calc_x_dis
 
 # from pathplannerlib.auto import AutoBuilder, PathConstraints
 # from pathplannerlib.path import PathPlannerPath, IdealStartingState, GoalEndState
@@ -67,11 +68,8 @@ class RobotContainer:
         )
         
         self.controller.rightTrigger().onTrue(
-            self.shooter.runOnce(lambda: self.shooter.calculated_shot())
-        )
-    
-        self.controller.x().onTrue(
-            self.shooter.runOnce(lambda: self.shooter.test_shot())
+            self.shooter.runOnce(lambda: self.shooter.shoot(
+                shoot_speed(calc_velocity(calc_x_dis())), flywheel_intake_speed()))
         )
         
         self.controller.leftTrigger().onTrue(

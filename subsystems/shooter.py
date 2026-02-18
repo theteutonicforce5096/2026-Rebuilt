@@ -37,20 +37,17 @@ class Shooter(Subsystem):
         self.flywheel_motor.set(0)
         self.flywheel_intake_motor.set(0)
         
-        
 #TODO How should the flywheel intake motor be run? (value in physics file)
-    def calculated_shot(self, initial_velocity, flywheel_intake_velocity):
-        self.flywheel_intake_motor.set_control(self.flywheel_intake_velocity_torque.with_velocity(flywheel_intake_velocity))
-        self.flywheel_motor.set_control(self.flywheel_velocity_torque.with_velocity(initial_velocity))
-        
-    def test_shot(self, test_velocity, flywheel_intake_velocity):
-        self.flywheel_intake_motor.set_control(self.flywheel_intake_velocity_torque.with_velocity(flywheel_intake_velocity))
-        self.flywheel_motor.set_control(self.flywheel_velocity_torque.with_velocity(test_velocity))
+    def shoot(self, initial_velocity_rps, flywheel_intake_velocity_rps):
+        self.flywheel_motor.set_control(self.flywheel_velocity_torque.with_velocity(initial_velocity_rps))
+        self.flywheel_intake_motor.set_control(self.flywheel_intake_velocity_torque.with_velocity(flywheel_intake_velocity_rps))
+
         
     def stop(self):
-        self.flywheel_intake_motor.set_control(self.flywheel_intake_velocity_torque.with_velocity(0))
         self.flywheel_motor.set_control(self.flywheel_velocity_torque.with_velocity(0))
-        # self.flywheel_intake_motor.set(0)
+        self.flywheel_intake_motor.set_control(self.flywheel_intake_velocity_torque.with_velocity(0))
         # self.flywheel_motor.set(0)
+        # self.flywheel_intake_motor.set(0)
+
 
         
