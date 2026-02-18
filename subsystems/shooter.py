@@ -12,7 +12,7 @@ class Shooter(Subsystem):
         
         self.flywheel_motor = TalonFXS(ShooterConstants.FLYWHEEL_CAN_ID)
         self.flywheel_intake_motor = TalonFX(ShooterConstants.FLYWHEEL_INTAKE_CAN_ID)
-        #self.shoot_motor_encoder = CANcoder()
+        self.shoot_motor_encoder = CANcoder()
         
     #Apply configurations from Shooter Constants
         self.flywheel_motor.configurator.apply(ShooterConstants.talonfxs_configs)
@@ -20,6 +20,7 @@ class Shooter(Subsystem):
         
     #Velocity PID Control
         self.flywheel_velocity_torque = VelocityTorqueCurrentFOC(0).with_slot(0)
+        self.flywheel_intake_velocity_torque = VelocityTorqueCurrentFOC(0).with_slot(1)
         
         # self.controller = self.motor.getClosedLoopController()
         # self.controller.setSetpoint()
@@ -37,15 +38,19 @@ class Shooter(Subsystem):
         self.flywheel_intake_motor.set(0)
         
         
-#TODO How should the flywheel intake motor be run?
-    def calculated_shot(self, initial_velocity):
+#TODO How should the flywheel intake motor be run? (value in physics file)
+    def calculated_shot(self, initial_velocity, flywheel_intake_velocity):
+        self.flywheel_intake_motor.set_control(self.flywheel_intake_velocity_torque.with_velocity(flywheel_intake_velocity))
         self.flywheel_motor.set_control(self.flywheel_velocity_torque.with_velocity(initial_velocity))
         
-    def test_shot(self, test_velocity):
+    def test_shot(self, test_velocity, flywheel_intake_velocity):
+        self.flywheel_intake_motor.set_control(self.flywheel_intake_velocity_torque.with_velocity(flywheel_intake_velocity))
         self.flywheel_motor.set_control(self.flywheel_velocity_torque.with_velocity(test_velocity))
         
     def stop(self):
-        self.flywheel_intake_motor.set(0)
+        self.flywheel_intake_motor.set_control(self.flywheel_intake_velocity_torque.with_velocity(0))
         self.flywheel_motor.set_control(self.flywheel_velocity_torque.with_velocity(0))
+        # self.flywheel_intake_motor.set(0)
+        # self.flywheel_motor.set(0)
 
         

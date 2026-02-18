@@ -3,15 +3,15 @@ from wpimath.geometry import Pose2d
 from wpimath.units import inchesToMeters
 
 default_y_dis = inchesToMeters(12.5) #TODO get the distance
-# x_dis = math.sqrt(abs(hub_x_pos - Pose2d.X) + abs(hub_y_pos - Pose2d.Y)) 
+#x_dis = sqrt(abs(hub_x_pos - Pose2d.X) + abs(hub_y_pos - Pose2d.Y)) 
     #TODO GET HUB POSITIONS (keep units consistent). 
     #Q. Does it need to be absolute values?
     #Q. Will switching sides change anything?
 default_g = -9.8 #m/s^2
 default_θ = 67.5 #degrees
 
-a = 'q = mcΔt' #TODO constant from regression model
-b = 'ΔG = ΔH - TΔS' #TODO constant from regression model
+a = 1 #TODO constant from regression model
+b = 1 #TODO constant from regression model
 
 r = inchesToMeters(7) #TODO flywheel radius in meters (I'm not sure what part of the flywheel I'm supposed to measure to)
 
@@ -41,12 +41,16 @@ def calc_velocity(x_dis: float, y_dis: float = default_y_dis,
 #puts calibrated velocity in rotations per second to use
 def shoot_speed(cal_initial_velocity):
     initial_velocity = (cal_initial_velocity / 
-                        2 * pi * r)
+                        (2 * pi * r))
     return initial_velocity
 
 #ideal velocity in rps for testing to get constants from a regression model
 def test_shoot_speed(ideal_velocity):
     test_velocity = (ideal_velocity / 
-                     2 * pi * r)
+                     (2 * pi * r))
     return test_velocity
 
+#TODO Get a good intake velocity 
+def flywheel_intake_speed():
+    flywheel_intake_velocity = 2 #rps
+    return flywheel_intake_velocity

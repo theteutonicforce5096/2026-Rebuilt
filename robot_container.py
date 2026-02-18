@@ -65,7 +65,18 @@ class RobotContainer:
         self.controller.b().onTrue(
             self.shooter.runOnce(lambda: self.shooter.stop_intake())
         )
+        
+        self.controller.rightTrigger().onTrue(
+            self.shooter.runOnce(lambda: self.shooter.calculated_shot())
+        )
     
+        self.controller.x().onTrue(
+            self.shooter.runOnce(lambda: self.shooter.test_shot())
+        )
+        
+        self.controller.leftTrigger().onTrue(
+            self.shooter.runOnce(lambda: self.shooter.stop())
+        )
 
         # reef_waypoints = PathPlannerPath.waypointsFromPoses(
         #     [
