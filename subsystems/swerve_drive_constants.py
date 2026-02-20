@@ -9,16 +9,18 @@ class SwerveDriveConstants:
     """
     
     # Robot configuration
-    robot_length = 0.832 # Length of the robot in meters
-    robot_width = 0.832 # Width of the robot in meters
+    robot_length = 0.838 # Length of the robot in meters
+    robot_width = 0.838 # Width of the robot in meters
 
     # Max speeds of drivetrain
     max_linear_speed = 5.63 # Max linear speed in meters per second
     max_angular_rate = 15.27 # Max angular velocity in radians per second 
 
     # Variables for alignment to speaker
+    '''We don't need this'''
     reef_spacing = 0.1 # Distance in meters the robot needs to be away from reef for alignment to Reef
     coral_offset = 0.1651 # Distance in meters from AprilTag to coral post on either side
+    '''We don't need this'''
 
     # The steer motor uses any SwerveModule.SteerRequestType control request with the
     # output type specified by SwerveModuleConstants.SteerMotorClosedLoopOutput
@@ -147,8 +149,8 @@ class SwerveDriveConstants:
     _front_left_steer_motor_inverted = True
     _front_left_encoder_inverted = False
 
-    _front_left_x_pos: units.meter = inchesToMeters(9.825)
-    _front_left_y_pos: units.meter = inchesToMeters(9.825)
+    _front_left_x_pos: units.meter = inchesToMeters(9.125)
+    _front_left_y_pos: units.meter = inchesToMeters(9.125)
 
     # Front Right
     _front_right_drive_motor_id = 11
@@ -158,8 +160,8 @@ class SwerveDriveConstants:
     _front_right_steer_motor_inverted = True
     _front_right_encoder_inverted = False
 
-    _front_right_x_pos: units.meter = inchesToMeters(9.825)
-    _front_right_y_pos: units.meter = inchesToMeters(-9.825)
+    _front_right_x_pos: units.meter = inchesToMeters(9.125)
+    _front_right_y_pos: units.meter = inchesToMeters(-9.125)
 
     # Back Left
     _back_left_drive_motor_id = 12
@@ -169,8 +171,8 @@ class SwerveDriveConstants:
     _back_left_steer_motor_inverted = True
     _back_left_encoder_inverted = False
 
-    _back_left_x_pos: units.meter = inchesToMeters(-9.825)
-    _back_left_y_pos: units.meter = inchesToMeters(9.825)
+    _back_left_x_pos: units.meter = inchesToMeters(-9.125)
+    _back_left_y_pos: units.meter = inchesToMeters(9.125)
 
     # Back Right
     _back_right_drive_motor_id = 13
@@ -180,8 +182,8 @@ class SwerveDriveConstants:
     _back_right_steer_motor_inverted = True
     _back_right_encoder_inverted = False
 
-    _back_right_x_pos: units.meter = inchesToMeters(-9.825)
-    _back_right_y_pos: units.meter = inchesToMeters(-9.825)
+    _back_right_x_pos: units.meter = inchesToMeters(-9.125)
+    _back_right_y_pos: units.meter = inchesToMeters(-9.125)
 
     front_left = _constants_creator.create_module_constants(
         _front_left_steer_motor_id,
@@ -249,9 +251,9 @@ class SwerveDriveConstants:
                 clazz.back_right,
             ],
             clazz.max_linear_speed,
-            clazz.max_angular_rate,
-            clazz.robot_length,
-            clazz.robot_width,
-            clazz.reef_spacing,
-            clazz.coral_offset
+            clazz.max_angular_rate
+            # clazz.robot_length,
+            # clazz.robot_width,
+            # clazz.reef_spacing,
+            # clazz.coral_offset
         )

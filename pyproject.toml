@@ -25,7 +25,7 @@ components = [
 requires = [
     "phoenix6",
     "robotpy-pathplannerlib",
-    "photonlibpy==2026.1.1rc4"
+    "photonlibpy"
 ]
 
 # Enables Isolated Test Mode

@@ -1,5 +1,6 @@
 # FRC Specific Files
 ctre_sim/
+logs/
 networktables.json
 simgui-ds.json
 simgui-window.json

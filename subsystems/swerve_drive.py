@@ -25,7 +25,7 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
     """
 
     def __init__(self, drive_motor_type, steer_motor_type, encoder_type, drivetrain_constants, modules,
-                 max_linear_speed, max_angular_rate, robot_length, robot_width, reef_spacing, coral_offset):
+                 max_linear_speed, max_angular_rate):
         """
         Constructor for initializing swerve drivetrain using the specified constants.
 
@@ -43,14 +43,6 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
         :type max_linear_speed: float
         :param max_angular_rate: Max angular velocity of drivetrain in radians per second. 
         :type max_angular_rate: float
-        :param robot_length: Length of the robot in meters.
-        :type robot_length: float
-        :param robot_width: Width of the robot in meters.
-        :type robot_width: float
-        :param reef_spacing: Distance in meters the robot needs to be away from reef for alignment to Reef
-        :type reef_spacing: float
-        :param coral_offset: Distance in meters from AprilTag to coral post on either side
-        :type coral_offset: float
         """
 
         # Initialize parent classes
@@ -65,13 +57,12 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
         self.max_linear_speed = max_linear_speed
         self.max_angular_rate = max_angular_rate
 
-        self.x_align_controller = ProfiledPIDController(0.5, 0, 0, TrapezoidProfile.Constraints(0.5, 0.1))
-        self.y_align_controller = ProfiledPIDController(0.5, 0, 0, TrapezoidProfile.Constraints(0.5, 0.1))
-        self.rot_align_controller = ProfiledPIDController(0.1, 0, 0, TrapezoidProfile.Constraints(.05, .1))
-
-        self.robot_to_camera = Transform3d(
-            Translation3d(-0.3175, 0.009525, 0.46355),
-            Rotation3d.fromDegrees(0, 0, 180),
+        # Create Apply Robot Speeds Request for PathPlanner
+        self.apply_robot_speeds_request = (
+            swerve.requests.ApplyRobotSpeeds()
+            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
+            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
+            .with_desaturate_wheel_speeds(True)
         )
 
         AutoBuilder.configure(
@@ -92,10 +83,6 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
             lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue) == DriverStation.Alliance.kRed,
             self
         )
-
-        # Create Field2d Widget and add it to Shuffleboard
-        self.field2d = Field2d()
-        Shuffleboard.getTab("Autonomous").add(f"Estimated Pose", self.field2d).withSize(4, 2)
 
         # Create request for controlling swerve drive
         # https://www.chiefdelphi.com/t/motion-magic-velocity-control-for-drive-motors-in-phoenix6-swerve-drive-api/483669/6
@@ -124,14 +111,6 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
         self.strafe_speed_limiter = SlewRateLimiter(self.max_linear_speed * 4, -self.max_linear_speed * 4)
         self.rotation_speed_limiter = SlewRateLimiter(self.max_angular_rate * 4, -self.max_angular_rate * 4)
 
-        # Create Apply Robot Speeds Request for PathPlanner
-        self.apply_robot_speeds_request = (
-            swerve.requests.ApplyRobotSpeeds()
-            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-            .with_desaturate_wheel_speeds(True)
-        )
-
     def periodic(self):
         """
         Update pose of the robot in network tables periodically.
@@ -144,9 +123,6 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
                 utils.fpga_to_current_time(timestamp),
                 (1.0, 1.0, math.pi / 4)
             )
-        
-        # Update pose of robot in Field 2d Widget
-        self.field2d.setRobotPose(self.get_state().pose)
 
     def reset_slew_rate_limiters(self):
         """
