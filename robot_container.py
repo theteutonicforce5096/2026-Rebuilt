@@ -60,20 +60,21 @@ class RobotContainer:
         # )
 
         self.controller.a().onTrue(
-            self.shooter.runOnce(lambda: self.shooter.run_intake())
+            self.shooter.runOnce(self.shooter, lambda: self.shooter.run_intake())
         )
         
         self.controller.b().onTrue(
-            self.shooter.runOnce(lambda: self.shooter.stop_intake())
+            self.shooter.runOnce(self.shooter, lambda: self.shooter.stop_intake())
         )
         
+        # might have to switch to defered command if not updating at run time
         self.controller.rightTrigger().onTrue(
-            self.shooter.runOnce(lambda: self.shooter.shoot(
+            self.shooter.runOnce(self.shooter, lambda: self.shooter.shoot(
                 shoot_speed(calc_velocity(calc_x_dis())), flywheel_intake_speed()))
         )
         
         self.controller.leftTrigger().onTrue(
-            self.shooter.runOnce(lambda: self.shooter.stop())
+            self.shooter.runOnce(self.shooter, lambda: self.shooter.stop())
         )
 
         # reef_waypoints = PathPlannerPath.waypointsFromPoses(

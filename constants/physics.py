@@ -13,11 +13,12 @@ default_b = 0 #TODO constant from regression model
 
 def calc_x_dis():
     #Positions from the perspective looking out from the player stations, the back left corner is (0,0)
-        #Q. Does it need to be absolute values?
-        #Q. Will switching sides change anything?
+        #Q. Does it need to be absolute values?     no since they are both squared
+        #Q. Will switching sides change anything?   we need different hub positions for each side
+        # TODO this function will be replace by a value passed by the drive train code
     hub_x_pos = inchesToMeters(158.84)
     hub_y_pos = inchesToMeters(182.11)
-    x_dis = sqrt(abs(hub_x_pos - Pose2d.X) + abs(hub_y_pos - Pose2d.Y)) 
+    x_dis = sqrt((hub_x_pos - Pose2d.X)**2 + (hub_y_pos - Pose2d.Y)**2) 
     return x_dis
 
 def calc_velocity(x_dis: float, y_dis: float = default_y_dis,

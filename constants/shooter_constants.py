@@ -5,8 +5,8 @@ from phoenix6.signals import NeutralModeValue
 class ShooterConstants:
     
     #TODO fix CAN ID's after finalizing flywheel 
-    FLYWHEEL_CAN_ID = 50
-    FLYWHEEL_INTAKE_CAN_ID = 61
+    FLYWHEEL_CAN_ID = 30
+    FLYWHEEL_INTAKE_CAN_ID = 31
     
     #TODO Tune. Check current limits. Check if any need to be inverted, and check if coast or brake. 
     
