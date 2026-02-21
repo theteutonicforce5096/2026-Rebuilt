@@ -2,14 +2,13 @@ from math import tan, cos, radians, sqrt, pi
 from wpimath.geometry import Pose2d
 from wpimath.units import inchesToMeters
 
-default_y_dis = inchesToMeters(12.5) #TODO confirm height of robot
-default_r = inchesToMeters(7) #flywheel radius in meters
+default_y_dis = inchesToMeters(12.5) #TODO confirm height of robot #Hub height is 120.36 in.
+default_r = inchesToMeters(2) #flywheel radius in meters
 default_g = -9.8 #m/s^2
 default_θ = 67.5 #degrees
 
 default_a = 1 #TODO constant from regression model
 default_b = 0 #TODO constant from regression model
-
 
 def calc_x_dis():
     #Positions from the perspective looking out from the player stations, the back left corner is (0,0)
@@ -63,6 +62,6 @@ def shoot_speed(cal_initial_velocity_mps, r: float = default_r):
 
 #TODO Get a good intake velocity 
 def flywheel_intake_speed():
-    flywheel_intake_velocity_rps = 2 #rps
+    flywheel_intake_velocity_rps = 5 #rps
     return flywheel_intake_velocity_rps
 #67
