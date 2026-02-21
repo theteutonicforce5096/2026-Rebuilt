@@ -1,28 +1,28 @@
 import commands2
 
-from subsystems.swerve_drivetrain_constants import SwerveDrivetrainConstants
+from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
+from constants.shooter_constants import ShooterConstants
 
+from pathplannerlib.auto import AutoBuilder
 class RobotContainer:
     def __init__(self):
-        # Initialize drivetrain subsystem
+        # Create drivetrain subsystem
         self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
 
-        # Initialize controller
+        # Create shooter subsystem
+        self.drivetrain = ShooterConstants.create_shooter()
+
+        # Create controller
         self.controller = commands2.button.CommandXboxController(0)
         
         # Define max speed variables
         self.max_linear_speed = SwerveDrivetrainConstants.max_linear_speed
         self.max_angular_rate = SwerveDrivetrainConstants.max_angular_rate
 
-        # self._logger = Telemetry(self.max_linear_speed)
-        # self.drivetrain.register_telemetry(
-        #     lambda state: self._logger.telemeterize(state)
-        # )
-
-    def set_commands_auto(self):
+    def create_commands_auto(self):
         pass
 
-    def set_commands_teleop(self):   
+    def create_commands_teleop(self):   
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain.set_forward_perspective()
         
@@ -44,3 +44,6 @@ class RobotContainer:
                 lambda: self.controller.getRightX()
             ) 
         )
+
+    def create_commands_test(self):
+        pass

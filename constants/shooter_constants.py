@@ -1,33 +1,59 @@
-from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration
-from phoenix6.signals import NeutralModeValue
+from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
+from phoenix6 import signals
 
+from subsystems.shooter import Shooter
 
 class ShooterConstants:
-    
-    #TODO fix CAN ID's after finalizing flywheel 
-    FLYWHEEL_CAN_ID = 30
-    FLYWHEEL_INTAKE_CAN_ID = 31
-    
-    #TODO Tune. Check current limits. Check if any need to be inverted, and check if coast or brake. 
-    
-    #Shoot Motor Configs (TalonFXS)
-    talonfxs_configs = TalonFXSConfiguration()
-    # talonfxs_configs.slot0.k_s = 2.5
-    # talonfxs_configs.slot0.k_v = 0
-    # talonfxs_configs.slot0.k_p = 5
-    # talonfxs_configs.slot0.k_i = 0
-    # talonfxs_configs.slot0.k_d = 0
-    talonfxs_configs.motor_output.neutral_mode = NeutralModeValue.COAST
-    talonfxs_configs.current_limits.stator_current_limit = 80
-    talonfxs_configs.current_limits.stator_current_limit_enable = True
-    
-    #FWIntake Motor Configs (TalonFX)
-    talonfx_configs = TalonFXConfiguration()
-    # talonfx_configs.slot1.k_s = 2.5
-    # talonfx_configs.slot1.k_v = 0
-    # talonfx_configs.slot1.k_p = 5
-    # talonfx_configs.slot1.k_i = 0
-    # talonfx_configs.slot1.k_d = 0
-    talonfx_configs.motor_output.neutral_mode = NeutralModeValue.BRAKE
-    talonfx_configs.current_limits.stator_current_limit = 80
-    talonfxs_configs.current_limits.stator_current_limit_enable = True
+    """
+    Constants for Shooter Subsystem
+    """
+
+    # CAN IDs
+    _flywheel_motor_id = 30
+    _flywheel_intake_motor_id = 31
+    _flywheel_encoder_id = 32
+
+    #Flywheel Motor Configs (NEO VORTEX - TalonFXS)
+    _flywheel_motor_configs = TalonFXSConfiguration()
+    _flywheel_motor_configs.slot0.k_s = 2.5
+    _flywheel_motor_configs.slot0.k_v = 0
+    _flywheel_motor_configs.slot0.k_p = 5
+    _flywheel_motor_configs.slot0.k_i = 0
+    _flywheel_motor_configs.slot0.k_d = 0
+    _flywheel_motor_configs.motor_output.neutral_mode = signals.NeutralModeValue.COAST
+    _flywheel_motor_configs.current_limits.stator_current_limit = 100
+    _flywheel_motor_configs.current_limits.stator_current_limit_enable = True
+    _flywheel_motor_configs.external_feedback.feedback_remote_sensor_id = _flywheel_encoder_id
+    _flywheel_motor_configs.external_feedback.external_feedback_sensor_source = signals.FeedbackSensorSourceValue.FUSED_CANCODER
+    _flywheel_motor_configs.external_feedback.sensor_to_mechanism_ratio = 1.0
+    _flywheel_motor_configs.external_feedback.rotor_to_sensor_ratio = 1.0
+
+    #Flywheel Intake Motor Configs (Falcon 500 - TalonFX)
+    _flywheel_intake_motor_configs = TalonFXConfiguration()
+    _flywheel_intake_motor_configs.slot0.k_s = 2.5
+    _flywheel_intake_motor_configs.slot0.k_v = 0
+    _flywheel_intake_motor_configs.slot0.k_p = 5
+    _flywheel_intake_motor_configs.slot0.k_i = 0
+    _flywheel_intake_motor_configs.slot0.k_d = 0
+    _flywheel_intake_motor_configs.motor_output.neutral_mode = signals.NeutralModeValue.COAST
+    _flywheel_intake_motor_configs.current_limits.stator_current_limit = 50
+    _flywheel_intake_motor_configs.current_limits.stator_current_limit_enable = True
+
+    #Flywheel Encoder Configs (WCP ThroughBore Encoder - CANcoder)
+    _flywheel_encoder_configs = CANcoderConfiguration()
+    _flywheel_encoder_configs.magnet_sensor.sensor_direction = signals.SensorDirectionValue.COUNTER_CLOCKWISE_POSITIVE
+
+    @classmethod
+    def create_shooter(cls) -> Shooter:
+        """
+        Creates a Shooter subsystem instance.
+        """
+
+        return Shooter(
+            cls._flywheel_motor_id,
+            cls._flywheel_intake_motor_id,
+            cls._flywheel_encoder_id,
+            cls._flywheel_motor_configs,
+            cls._flywheel_intake_motor_configs,
+            cls._flywheel_encoder_configs
+        )
