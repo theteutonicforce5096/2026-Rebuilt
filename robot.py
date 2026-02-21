@@ -16,20 +16,21 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         
     def autonomousInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
-        self.container.configure_button_bindings_auto()
+        self.container.set_commands_auto()
 
     def autonomousExit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
 
     def teleopInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
-        self.container.configure_button_bindings_teleop()
+        self.container.set_commands_teleop()
 
     def teleopExit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
     
     def testInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
+        self.container.set_commands_test()
 
     def testExit(self):
         commands2.CommandScheduler.getInstance().cancelAll()

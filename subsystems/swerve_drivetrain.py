@@ -1,25 +1,21 @@
 from typing import Callable
-import math
+from math import copysign
 
-from commands2 import Subsystem
+from commands2 import Subsystem, WaitCommand
 
-from phoenix6 import swerve, utils
+from phoenix6 import swerve, hardware, configs
 
-from wpilib import DriverStation, Field2d
-
-from wpilib.shuffleboard import Shuffleboard
+from wpilib import DriverStation
 
 from wpimath.filter import SlewRateLimiter
-from wpimath.geometry import Transform3d, Translation3d, Rotation3d, Rotation2d
-from wpimath.controller import ProfiledPIDController
-from wpimath.trajectory import TrapezoidProfile
+from wpimath.geometry import Rotation2d
 
 from pathplannerlib.auto import AutoBuilder, RobotConfig
 from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
 
 from subsystems.camera import VisionCamera
 
-class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
+class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
     """
     Class for controlling swerve drive.
     """
@@ -51,38 +47,16 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
                                          drivetrain_constants, modules)
         
         # Create Limelight instance and configure default values
-        self.camera = VisionCamera()
+        #self.camera = VisionCamera()
         
         # Create max speeds variables
         self.max_linear_speed = max_linear_speed
         self.max_angular_rate = max_angular_rate
 
-        # Create Apply Robot Speeds Request for PathPlanner
-        self.apply_robot_speeds_request = (
-            swerve.requests.ApplyRobotSpeeds()
-            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-            .with_desaturate_wheel_speeds(True)
-        )
-
-        AutoBuilder.configure(
-            lambda: self.get_state().pose,
-            self.reset_pose,
-            lambda: self.get_state().speeds,
-            lambda speeds, feedforwards: self.set_control(
-                self.apply_robot_speeds_request
-                .with_speeds(speeds)
-                .with_wheel_force_feedforwards_x(feedforwards.robotRelativeForcesXNewtons)
-                .with_wheel_force_feedforwards_y(feedforwards.robotRelativeForcesYNewtons)
-            ),
-            PPHolonomicDriveController(
-                PIDConstants(5.0, 0.0, 0.0),
-                PIDConstants(5.0, 0.0, 0.0)
-            ),
-            RobotConfig.fromGUISettings(),
-            lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue) == DriverStation.Alliance.kRed,
-            self
-        )
+        # Create slew rate limiters for limiting robot acceleration
+        self.straight_speed_limiter = SlewRateLimiter(self.max_linear_speed * 5)
+        self.strafe_speed_limiter = SlewRateLimiter(self.max_linear_speed * 5)
+        self.rotation_speed_limiter = SlewRateLimiter(self.max_angular_rate * 10)
 
         # Create request for controlling swerve drive
         # https://www.chiefdelphi.com/t/motion-magic-velocity-control-for-drive-motors-in-phoenix6-swerve-drive-api/483669/6
@@ -96,33 +70,56 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
             .with_desaturate_wheel_speeds(True)
         )
 
-        self.slow_mode_field_centric_request = (
+        self.max_speed_mode_field_centric_request = (
             swerve.requests.FieldCentric()
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-            .with_deadband(self.max_linear_speed * 0.025)
-            .with_rotational_deadband(self.max_angular_rate * 0.025)
+            .with_deadband(self.max_linear_speed * 0.1) # Recalculate
+            .with_rotational_deadband(self.max_angular_rate * 0.1) # Recalculate
             .with_desaturate_wheel_speeds(True)
         )
 
-        # Create slew rate limiters for limiting robot acceleration
-        self.straight_speed_limiter = SlewRateLimiter(self.max_linear_speed * 4, -self.max_linear_speed * 4)
-        self.strafe_speed_limiter = SlewRateLimiter(self.max_linear_speed * 4, -self.max_linear_speed * 4)
-        self.rotation_speed_limiter = SlewRateLimiter(self.max_angular_rate * 4, -self.max_angular_rate * 4)
+        # # Create Apply Robot Speeds Request for PathPlanner
+        # self.apply_robot_speeds_request = (
+        #     swerve.requests.ApplyRobotSpeeds()
+        #     .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
+        #     .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
+        #     .with_desaturate_wheel_speeds(True)
+        # )
+
+        # AutoBuilder.configure(
+        #     lambda: self.get_state().pose,
+        #     self.reset_pose,
+        #     lambda: self.get_state().speeds,
+        #     lambda speeds, feedforwards: self.set_control(
+        #         self.apply_robot_speeds_request
+        #         .with_speeds(speeds)
+        #         .with_wheel_force_feedforwards_x(feedforwards.robotRelativeForcesXNewtons)
+        #         .with_wheel_force_feedforwards_y(feedforwards.robotRelativeForcesYNewtons)
+        #     ),
+        #     PPHolonomicDriveController(
+        #         PIDConstants(5.0, 0.0, 0.0),
+        #         PIDConstants(5.0, 0.0, 0.0)
+        #     ),
+        #     RobotConfig.fromGUISettings(),
+        #     lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue) == DriverStation.Alliance.kRed,
+        #     self
+        # )
 
     def periodic(self):
         """
         Update pose of the robot in network tables periodically.
         """
+        pass
 
-        robot_pose, timestamp = self.camera.get_vision_measurement()
-        if robot_pose and timestamp:
-            self.add_vision_measurement(
-                robot_pose.toPose2d(),
-                utils.fpga_to_current_time(timestamp),
-                (1.0, 1.0, math.pi / 4)
-            )
+        # robot_pose, timestamp = self.camera.get_vision_measurement()
+        # if robot_pose and timestamp:
+        #     self.add_vision_measurement(
+        #         robot_pose.toPose2d(),
+        #         utils.fpga_to_current_time(timestamp),
+        #         (1.0, 1.0, math.pi / 4)
+        #     )
 
     def reset_slew_rate_limiters(self):
         """
@@ -170,17 +167,17 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
         
         if left_trigger_pressed and right_trigger_pressed:
             operator_drive_request = (
-                self.slow_mode_field_centric_request.with_velocity_x(
+                self.max_speed_mode_field_centric_request.with_velocity_x(
                     self.straight_speed_limiter.calculate(
-                        -(forward_speed * abs(forward_speed * 1)) * self.max_linear_speed
+                        -copysign((forward_speed)**2, forward_speed) * self.max_linear_speed
                     )
                 ).with_velocity_y(
                     self.strafe_speed_limiter.calculate(
-                        -(strafe_speed * abs(strafe_speed * 1)) * self.max_linear_speed
+                        -copysign((strafe_speed)**2, strafe_speed) * self.max_linear_speed
                     )
                 ).with_rotational_rate(
                     self.rotation_speed_limiter.calculate(
-                        -(rotation_speed * abs(rotation_speed * 1)) * self.max_angular_rate
+                        -copysign((rotation_speed)**2, rotation_speed) * self.max_angular_rate
                     )
                 )
             )
@@ -188,15 +185,15 @@ class SwerveDrive(Subsystem, swerve.SwerveDrivetrain):
             operator_drive_request = (
                 self.default_mode_field_centric_request.with_velocity_x(
                     self.straight_speed_limiter.calculate(
-                        -(forward_speed * abs(forward_speed * 0.25)) * self.max_linear_speed
+                        -copysign((forward_speed * 0.75)**2, forward_speed) * self.max_linear_speed
                     )
                 ).with_velocity_y(
                     self.strafe_speed_limiter.calculate(
-                        -(strafe_speed * abs(strafe_speed * 0.25)) * self.max_linear_speed
+                        -copysign((strafe_speed * 0.75)**2, strafe_speed) * self.max_linear_speed
                     )
                 ).with_rotational_rate(
                     self.rotation_speed_limiter.calculate(
-                        -(rotation_speed * abs(rotation_speed * 0.25)) * self.max_angular_rate
+                        -copysign((rotation_speed * 0.75)**2, rotation_speed) * self.max_angular_rate
                     )
                 )
             )
