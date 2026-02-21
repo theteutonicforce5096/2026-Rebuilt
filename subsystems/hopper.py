@@ -7,16 +7,32 @@ import phoenix6.controls
 import phoenix6.hardware
 import phoenix6.configs
 import phoenix6.signals
+import rev 
+import commands2
+from commands2 import Subsystem
+from commands2.cmd import print_
 
-class Hopper:
 
-    def __init__(self):
+
+class Hopper(commands2.Subsystem): # <-- Telling subsystem that its part of it too
+
+    def __init__(self, CAN_ID):
+        # Note to Riley:
+        # The reason we need Subsystem.__init__ is because 
+        # it needs to know the parent class's setup code and 
+        # that commands 2 knows that Hopper exists
+        Subsystem.__init__(self) 
+    
+        # # Idek if we need spark max I'm going to be completely honest like genuinely
+        # self.Neo550_1 = rev.SparkMax.MotorType.kBrushless
+        # self.Neo_configs = rev.SparkMax.configure()
+        # self.Neo550_1(self.Neo_configs)
+
         # The device and canbus will have to be changed when I have more information
         self.talon_motor = phoenix6.hardware.TalonFXS(device_id=0,canbus='rio')
         self.talon_config = phoenix6.configs.talon_fxs_configs.TalonFXSConfiguration()
-        # I got this okay I think I am going to configure this maybe but alsg
-        self.talon_config.future_proof_configs = True
-        #TODO: I was in the middle of configuring this you gotta reference talon config each time.
+        
+
         
     def hopper_on(self):
         self.talon_motor.set(1)
