@@ -2,6 +2,7 @@ import commands2
 
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
+from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_intake_speed
 
 from pathplannerlib.auto import AutoBuilder
 class RobotContainer:
@@ -10,7 +11,7 @@ class RobotContainer:
         self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
 
         # Create shooter subsystem
-        self.drivetrain = ShooterConstants.create_shooter()
+        self.shooter = ShooterConstants.create_shooter()
 
         # Create controller
         self.controller = commands2.button.CommandXboxController(0)
@@ -43,6 +44,17 @@ class RobotContainer:
                 lambda: self.controller.getLeftX(),
                 lambda: self.controller.getRightX()
             ) 
+        )
+
+        # Set button bindings for shooter
+        self.controller.rightTrigger().onTrue(
+            self.shooter.runOnce(self.shooter, lambda: self.shooter.shoot(
+                shoot_speed(calc_velocity(calc_x_dis())), flywheel_intake_speed()
+            ))
+        )
+
+        self.controller.leftTrigger().onTrue(
+            self.shooter.runOnce(self.shooter, lambda: self.shooter.stop())
         )
 
     def create_commands_test(self):

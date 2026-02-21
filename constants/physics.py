@@ -24,7 +24,7 @@ def calc_velocity(x_dis: float, y_dis: float = default_y_dis,
                         θ: float = default_θ, g: float = default_g,
                         a: float = default_a, b: float = default_b):
     """
-        Fuction for getting ideal velocity.
+        Fuction for getting ideal velocity. 
         :param x_dis: horizontal distance in meters from target to shooter
         :type x_dis: float
         :param y_dis: vertical distance in meters from target to shooter
@@ -45,20 +45,20 @@ def calc_velocity(x_dis: float, y_dis: float = default_y_dis,
     )
     
     #Calibrated velocity for ball to actually shoot out at (in meters per second)
+    #for testing, set a = 1, b = 0
     cal_initial_velocity_mps = (a * ideal_velocity_mps) + b
     return cal_initial_velocity_mps
 
-#puts calibrated velocity in rotations per second to use
-#for testing, set a = 1, b = 0
+#target velocity puts calibrated velocity in rotations per second
 def shoot_speed(cal_initial_velocity_mps, r: float = default_r):
     """
         Function to get shoot velocity in rotations per second (rps)
         :param r: flywheel radius in meters
         :type r: float
     """
-    initial_velocity_rps = (cal_initial_velocity_mps / 
+    target_velocity = (cal_initial_velocity_mps / 
                         (2 * pi * r))
-    return initial_velocity_rps
+    return target_velocity
 
 #TODO Get a good intake velocity 
 def flywheel_intake_speed():

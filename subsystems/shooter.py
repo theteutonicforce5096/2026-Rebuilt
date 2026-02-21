@@ -4,6 +4,8 @@ from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcod
 from phoenix6.hardware import TalonFX, TalonFXS, CANcoder
 from phoenix6.controls import VelocityTorqueCurrentFOC
 
+from commands2 import SequentialCommandGroup, WaitUntilCommand
+
 class Shooter(Subsystem):
     """
     Class for controlling shooter.
@@ -46,28 +48,21 @@ class Shooter(Subsystem):
         # Create Velocity TorqueCurrentFOC request
         self.velocity_pid_request = VelocityTorqueCurrentFOC(velocity = 0)
         
-#testing
-    def run_intake(self):
-        self.flywheel_motor.set(.1)
-        self.flywheel_intake_motor.set(.5)
-        
-    def stop_intake(self):
-        self.flywheel_motor.set(0)
-        self.flywheel_intake_motor.set(0)
-        
 #TODO How should the flywheel intake motor be run? (value in physics file)
-    def shoot(self, initial_velocity_rps, flywheel_intake_velocity_rps):
-        self.flywheel_motor.set_control(
-            self.velocity_pid_request.with_velocity(initial_velocity_rps)
-        )
-        self.flywheel_intake_motor.set_control(
-            self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps)
-        )
-
+    def shoot(self, target_velocity, flywheel_intake_velocity_rps):
+        SequentialCommandGroup(
+            self.runOnce(lambda: self.flywheel_motor.set_control(
+                self.velocity_pid_request.with_velocity(target_velocity)
+            )),
+            WaitUntilCommand(lambda: self.flywheel_motor.get_velocity().is_near(target_velocity, 0.25)),
+            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+                self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps)
+            ))
+        ).schedule()
         
     def stop(self):
-        self.flywheel_motor.set_control(self.flywheel_velocity_torque.with_velocity(0))
-        self.flywheel_intake_motor.set_control(self.flywheel_intake_velocity_torque.with_velocity(0))
+        self.flywheel_motor.set_control(self.velocity_pid_request.with_velocity(0))
+        self.flywheel_intake_motor.set_control(self.velocity_pid_request.with_velocity(0))
         # self.flywheel_motor.set(0)
         # self.flywheel_intake_motor.set(0)
 
