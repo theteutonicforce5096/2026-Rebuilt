@@ -201,7 +201,7 @@
   ],
   "SwerveOptions": {
     "Gyro": {
-      "Id": 5,
+      "Id": 4,
       "Name": "Pigeon 2",
       "Model": "Pigeon 2 vers. S",
       "CANbus": "61CF6F9450374E5320202047424510FF",
@@ -227,6 +227,6 @@
     "HasVerifiedDrive": true,
     "IsValidConfiguration": true
   },
-  "TeamNumber": 0,
+  "TeamNumber": 5096,
   "schema_version": "1"
 }

@@ -21,11 +21,11 @@ class SwerveDrivetrainConstants:
     # output type specified by SwerveModuleConstants.SteerMotorClosedLoopOutput
     _steer_gains = (
         configs.Slot0Configs()
-        .with_k_p(140)
+        .with_k_p(100) #140
         .with_k_i(0)
-        .with_k_d(2.5)
-        .with_k_s(0)
-        .with_k_v(0)
+        .with_k_d(0.5) #2.5
+        .with_k_s(0.1)
+        .with_k_v(1.91)
         .with_k_a(0)
         .with_static_feedforward_sign(
             signals.StaticFeedforwardSignValue.USE_CLOSED_LOOP_SIGN
@@ -45,7 +45,7 @@ class SwerveDrivetrainConstants:
 
     # The closed-loop output type to use for the steer motors;
     # This affects the PID/FF gains for the steer motors
-    _steer_closed_loop_output = swerve.ClosedLoopOutputType.TORQUE_CURRENT_FOC
+    _steer_closed_loop_output = swerve.ClosedLoopOutputType.VOLTAGE
 
     # The closed-loop output type to use for the drive motors;
     # This affects the PID/FF gains for the drive motors
@@ -110,7 +110,7 @@ class SwerveDrivetrainConstants:
     _invert_left_side = False
     _invert_right_side = True
 
-    _pigeon_id = 5
+    _pigeon_id = 4
 
     # These are only used for simulation
     _steer_inertia: units.kilogram_square_meter = 0.01
@@ -155,12 +155,11 @@ class SwerveDrivetrainConstants:
         .with_drive_friction_voltage(_drive_friction_voltage)
     )
 
-
     # Front Left
     _front_left_drive_motor_id = 10
     _front_left_steer_motor_id = 20
     _front_left_encoder_id = 0
-    _front_left_encoder_offset: units.rotation = -0.249267578125
+    _front_left_encoder_offset: units.rotation = -0.249755859375
     _front_left_steer_motor_inverted = True
     _front_left_encoder_inverted = False
 
@@ -171,7 +170,7 @@ class SwerveDrivetrainConstants:
     _front_right_drive_motor_id = 11
     _front_right_steer_motor_id = 21
     _front_right_encoder_id = 1
-    _front_right_encoder_offset: units.rotation = -0.214599609375
+    _front_right_encoder_offset: units.rotation = -0.224853515625
     _front_right_steer_motor_inverted = True
     _front_right_encoder_inverted = False
 
@@ -182,7 +181,7 @@ class SwerveDrivetrainConstants:
     _back_left_drive_motor_id = 12
     _back_left_steer_motor_id = 22
     _back_left_encoder_id = 2
-    _back_left_encoder_offset: units.rotation = -0.08642578125
+    _back_left_encoder_offset: units.rotation = -0.102294921875
     _back_left_steer_motor_inverted = True
     _back_left_encoder_inverted = False
 
@@ -193,7 +192,7 @@ class SwerveDrivetrainConstants:
     _back_right_drive_motor_id = 13
     _back_right_steer_motor_id = 23
     _back_right_encoder_id = 3
-    _back_right_encoder_offset: units.rotation = 0.337158203125
+    _back_right_encoder_offset: units.rotation = 0.330078125
     _back_right_steer_motor_inverted = True
     _back_right_encoder_inverted = False
 
