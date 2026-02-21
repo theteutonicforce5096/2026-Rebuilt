@@ -24,6 +24,7 @@ components = [
 # is equivalent to a line in requirements.txt)
 requires = [
     "phoenix6",
+    "robotpy-rev",
     "robotpy-pathplannerlib",
     "photonlibpy"
 ]
