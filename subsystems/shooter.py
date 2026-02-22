@@ -52,8 +52,6 @@ class Shooter(Subsystem):
         # Create VelocityVoltage request
         self.velocity_pid_request = VelocityVoltage(velocity = 0)
         
-        #TODO Network Table Stuffs
-        
         # What to publish over networktables for shooter
         self._network_table_instance = NetworkTableInstance.getDefault()
         
@@ -63,7 +61,7 @@ class Shooter(Subsystem):
         self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed (percent)").subscribe(.5)
         self.desired_ball_speed_sub.get()
         self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent)").publish()
-        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent)").subscribe(.5)
+        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent)").subscribe(.25)
         self.desired_flywheel_intake_speed_sub.get()
         
 #TODO How should the flywheel intake motor be run? (value in physics file)
@@ -104,5 +102,26 @@ class Shooter(Subsystem):
         # self.flywheel_motor.set(0)
         # self.flywheel_intake_motor.set(0)
 
-
+    def stop_networktable(self):
+        SequentialCommandGroup(
+            self.runOnce(lambda: self.flywheel_motor.set_control(
+                self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * 113 * .75))),
+            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+                self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * 106 * .75))),
+            WaitCommand(.25),
+            self.runOnce(lambda: self.flywheel_motor.set_control(
+                self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * 113 * .5))),
+            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+                self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * 106 * .5))),
+            WaitCommand(.25),
+            self.runOnce(lambda: self.flywheel_motor.set_control(
+                self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * 113 * .25))),
+            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+                self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * 106 * .25))),
+            WaitCommand(.25),
+            self.runOnce(lambda: self.flywheel_motor.set_control(
+                self.velocity_pid_request.with_velocity(0))),
+            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+                self.velocity_pid_request.with_velocity(0)))
+        ).schedule()
         

@@ -49,7 +49,7 @@ class RobotContainer:
         )
 
         # # Set button bindings for shooter
-        # # TODO: Chng 
+        # # TODO: Make parallel deadline group for brake mode, etc.
         # self.controller.rightTrigger().onTrue(
         #     commands2.ParallelDeadlineGroup(
         #         self.drivetrain.auto_shoot(self.shooter)
@@ -78,15 +78,21 @@ class RobotContainer:
         #Max rps of flywheel (neo vortex) = 113
         #Max rps of flywheel intake (falcon 500) = 106
         #We convert the percents to rps
-        self.controller.a().onTrue(
+        self.controller.x().onTrue(
             self.shooter.runOnce(
                 lambda: self.shooter.shoot(
-                    0.5 * 113, 
-                    0.25 * 106)
-                    # self.shooter.desired_ball_speed_sub.get() * 113, 
-                    # self.shooter.desired_flywheel_intake_speed_sub.get() * 106)
+                    # 0.5 * 113, 
+                    # 0.25 * 106)
+                    self.shooter.desired_ball_speed_sub.get() * 113, 
+                    self.shooter.desired_flywheel_intake_speed_sub.get() * 106)
                 )
             )
+        
+        self.controller.b().onTrue(
+            self.shooter.runOnce(
+                lambda: self.shooter.stop_networktable()
+            )
+        )
 
     def create_commands_test(self):
         self.drive_request = (

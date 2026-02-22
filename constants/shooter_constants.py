@@ -30,9 +30,9 @@ class ShooterConstants:
     _flywheel_motor_configs.external_feedback.with_rotor_to_sensor_ratio(1.0)
     _flywheel_motor_configs.slot0.k_s = 0.22
     _flywheel_motor_configs.slot0.k_v = 0.105
-    _flywheel_motor_configs.slot0.k_p = 0
+    _flywheel_motor_configs.slot0.k_p = 0.5
     _flywheel_motor_configs.slot0.k_i = 0
-    _flywheel_motor_configs.slot0.k_d = 0
+    _flywheel_motor_configs.slot0.k_d = 0.01
 
     #Flywheel Intake Motor Configs (Falcon 500 - TalonFX)
     _flywheel_intake_motor_configs = TalonFXConfiguration()
@@ -42,7 +42,7 @@ class ShooterConstants:
     _flywheel_intake_motor_configs.current_limits.with_stator_current_limit_enable(True)
     _flywheel_intake_motor_configs.slot0.k_s = 0.23
     _flywheel_intake_motor_configs.slot0.k_v = 0.1125
-    _flywheel_intake_motor_configs.slot0.k_p = 0
+    _flywheel_intake_motor_configs.slot0.k_p = 0.25
     _flywheel_intake_motor_configs.slot0.k_i = 0
     _flywheel_intake_motor_configs.slot0.k_d = 0
 

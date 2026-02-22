@@ -58,6 +58,10 @@ def calc_velocity(x_dis: float, y_dis: float = default_y_dis,
     cal_initial_velocity_mps = (a * ideal_velocity_mps) + b
     return cal_initial_velocity_mps
 
+#Calibration Notes:
+#50 rps for 58 inches (Hub front to robot front)
+#60 rps for 11 ft (Hub front to robot back)
+
 #target velocity puts calibrated velocity in rotations per second
 def shoot_speed(cal_initial_velocity_mps, r: float = default_r):
     """
@@ -69,8 +73,7 @@ def shoot_speed(cal_initial_velocity_mps, r: float = default_r):
                         (2 * pi * r))
     return target_velocity
 
-#TODO Get a good intake velocity 
+#If you are converting a percent, multiply by 106
 def flywheel_intake_speed():
-    flywheel_intake_velocity_rps = 5 #rps
+    flywheel_intake_velocity_rps = 26.5 #rps
     return flywheel_intake_velocity_rps
-#67
