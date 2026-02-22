@@ -58,22 +58,22 @@ class RobotContainer:
         # #     )
         # # )
         
-        self.controller.rightTrigger().onTrue(
-            self.shooter.runOnce(
-                lambda: self.shooter.shoot(
-                    shoot_speed(
-                        calc_velocity(
-                            calc_x_dis(
-                                self.drivetrain.get_state().pose.X(), 
-                                self.drivetrain.get_state().pose.Y()))), 
-                    flywheel_intake_speed()
-                ))
-        )
+        # self.controller.rightTrigger().onTrue(
+        #     self.shooter.runOnce(
+        #         lambda: self.shooter.shoot(
+        #             shoot_speed(
+        #                 calc_velocity(
+        #                     calc_x_dis(
+        #                         self.drivetrain.get_state().pose.X(), 
+        #                         self.drivetrain.get_state().pose.Y()))), 
+        #             flywheel_intake_speed()
+        #         ))
+        # )
 
-        self.controller.leftTrigger().onTrue(
-            self.shooter.runOnce(
-                lambda: self.shooter.stop())
-        )
+        # self.controller.leftTrigger().onTrue(
+        #     self.shooter.runOnce(
+        #         lambda: self.shooter.stop())
+        # )
         
         #Max rps of flywheel (neo vortex) = 113
         #Max rps of flywheel intake (falcon 500) = 106

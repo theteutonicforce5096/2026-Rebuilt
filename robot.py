@@ -30,7 +30,7 @@ class RebuiltRobot(commands2.TimedCommandRobot):
     
     def testInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
-        self.container.create_commands_test
+        self.container.create_commands_test()
 
     def testExit(self):
         commands2.CommandScheduler.getInstance().cancelAll()

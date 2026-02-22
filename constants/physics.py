@@ -59,6 +59,8 @@ def calc_velocity(x_dis: float, y_dis: float = default_y_dis,
     return cal_initial_velocity_mps
 
 #Calibration Notes:
+#these were kinda inconsistent
+#TODO this info is useless cuz PID is cooked
 #50 rps for 58 inches (Hub front to robot front)
 #60 rps for 11 ft (Hub front to robot back)
 
@@ -73,6 +75,7 @@ def shoot_speed(cal_initial_velocity_mps, r: float = default_r):
                         (2 * pi * r))
     return target_velocity
 
+#TODO find better value
 #If you are converting a percent, multiply by 106
 def flywheel_intake_speed():
     flywheel_intake_velocity_rps = 26.5 #rps

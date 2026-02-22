@@ -64,7 +64,7 @@ class Shooter(Subsystem):
         self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent)").subscribe(.25)
         self.desired_flywheel_intake_speed_sub.get()
         
-#TODO How should the flywheel intake motor be run? (value in physics file)
+        #TODO is_near is not working well. Likely because of oscilation (fix PID tuning)
     def shoot(self, target_velocity, flywheel_intake_velocity_rps):
         SequentialCommandGroup(
             self.runOnce(lambda: self.flywheel_motor.set_control(
@@ -76,31 +76,28 @@ class Shooter(Subsystem):
             ))
         ).schedule()
         
-    def stop(self, target_velocity, flywheel_intake_velocity_rps):
-        SequentialCommandGroup(
-            self.runOnce(lambda: self.flywheel_motor.set_control(
-                self.velocity_pid_request.with_velocity(target_velocity * .75))),
-            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-                self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .75))),
-            WaitCommand(.25),
-            self.runOnce(lambda: self.flywheel_motor.set_control(
-                self.velocity_pid_request.with_velocity(target_velocity * .5))),
-            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-                self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .5))),
-            WaitCommand(.25),
-            self.runOnce(lambda: self.flywheel_motor.set_control(
-                self.velocity_pid_request.with_velocity(target_velocity * .25))),
-            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-                self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .25))),
-            WaitCommand(.25),
-            self.runOnce(lambda: self.flywheel_motor.set_control(
-                self.velocity_pid_request.with_velocity(0))),
-            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-                self.velocity_pid_request.with_velocity(0)))
-        ).schedule()
-        
-        # self.flywheel_motor.set(0)
-        # self.flywheel_intake_motor.set(0)
+    # def stop(self, target_velocity, flywheel_intake_velocity_rps):
+    #     SequentialCommandGroup(
+    #         self.runOnce(lambda: self.flywheel_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(target_velocity * .75))),
+    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .75))),
+    #         WaitCommand(.25),
+    #         self.runOnce(lambda: self.flywheel_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(target_velocity * .5))),
+    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .5))),
+    #         WaitCommand(.25),
+    #         self.runOnce(lambda: self.flywheel_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(target_velocity * .25))),
+    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .25))),
+    #         WaitCommand(.25),
+    #         self.runOnce(lambda: self.flywheel_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(0))),
+    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(0)))
+    #     ).schedule()
 
     def stop_networktable(self):
         SequentialCommandGroup(
