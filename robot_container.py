@@ -1,17 +1,16 @@
 import commands2
+from commands2 import WaitCommand
+
+from phoenix6 import swerve
 
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
 from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_intake_speed
 
-from pathplannerlib.auto import AutoBuilder
 class RobotContainer:
     def __init__(self):
         # Create drivetrain subsystem
         self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
-
-        # Create shooter subsystem
-        self.shooter = ShooterConstants.create_shooter()
 
         # Create controller
         self.controller = commands2.button.CommandXboxController(0)
@@ -19,6 +18,9 @@ class RobotContainer:
         # Define max speed variables
         self.max_linear_speed = SwerveDrivetrainConstants.max_linear_speed
         self.max_angular_rate = SwerveDrivetrainConstants.max_angular_rate
+                     
+        # Create shooter subsystem
+        self.shooter = ShooterConstants.create_shooter()
 
     def create_commands_auto(self):
         pass
@@ -79,9 +81,44 @@ class RobotContainer:
         self.controller.a().onTrue(
             self.shooter.runOnce(
                 lambda: self.shooter.shoot(
-                    self.shooter.desired_ball_speed_sub.get() * 113), 
-                    self.shooter.desired_flywheel_intake_speed_sub.get() * 106)
+                    0.5 * 113, 
+                    0.25 * 106)
+                    # self.shooter.desired_ball_speed_sub.get() * 113, 
+                    # self.shooter.desired_flywheel_intake_speed_sub.get() * 106)
+                )
             )
 
     def create_commands_test(self):
-        pass
+        self.drive_request = (
+            swerve.requests.RobotCentric()
+            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
+            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
+            .with_deadband(self.max_linear_speed * 0.05)
+            .with_rotational_deadband(self.max_angular_rate * 0.05)
+            .with_desaturate_wheel_speeds(True)
+        )
+
+        self.controller.y().onTrue(
+            self.drivetrain.runOnce(
+                self.drivetrain.set_control(
+                    self.drive_request.with_velocity_x(1)
+                )
+            ).andThen(
+                WaitCommand(0.75)
+            ).andThen(
+                self.drivetrain.runOnce(self.drive_request)
+            )
+        )
+
+        self.controller.a().onTrue(
+            self.drivetrain.runOnce(
+                self.drivetrain.set_control(
+                    self.drive_request.with_velocity_x(-1)
+                )
+            ).andThen(
+                WaitCommand(0.75)
+            ).andThen(
+                self.drivetrain.runOnce(self.drive_request)
+            )
+        )
+

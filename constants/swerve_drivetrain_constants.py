@@ -85,9 +85,9 @@ class SwerveDrivetrainConstants:
     # Configs for the Pigeon 2
     _pigeon_configs = configs.Pigeon2Configuration().with_mount_pose(
         configs.MountPoseConfigs()
-        .with_mount_pose_yaw(-82.1805419921875)
-        .with_mount_pose_pitch(0.3210149109363556)
-        .with_mount_pose_roll(0.3210149109363556)
+        .with_mount_pose_yaw(0.050153765827417374)
+        .with_mount_pose_pitch(1.0930490493774414)
+        .with_mount_pose_roll(1.7595006227493286)
     )
 
     # CAN bus that the devices are located on;

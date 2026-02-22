@@ -1,25 +1,27 @@
 from commands2 import Subsystem
 from commands2 import SequentialCommandGroup, WaitUntilCommand, WaitCommand
 
+from phoenix6 import CANBus
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
 from phoenix6.hardware import TalonFX, TalonFXS, CANcoder
-from phoenix6.controls import VelocityTorqueCurrentFOC
+from phoenix6.controls import VelocityVoltage
 
 from ntcore import NetworkTableInstance
-from wpilib import SmartDashboard
 
 class Shooter(Subsystem):
     """
     Class for controlling shooter.
     """
 
-    def __init__(self, flywheel_motor_id: int, flywheel_intake_motor_id: int, flywheel_encoder_id: int,
-                 flywheel_motor_configs: TalonFXSConfiguration, 
+    def __init__(self, canbus: CANBus, flywheel_motor_id: int, flywheel_intake_motor_id: int, 
+                 flywheel_encoder_id: int, flywheel_motor_configs: TalonFXSConfiguration, 
                  flywheel_intake_motor_configs: TalonFXConfiguration,
                  flywheel_encoder_configs: CANcoderConfiguration):
         """
         Constructor for initializing shooter using the specified constants.
 
+        :param canbus: CANBus instance that electronics are on
+        :type canbus: phoenix6.CANBus
         :param flywheel_motor_id: CAN ID of the flywheel motor
         :type flywheel_motor_id: int
         :param flywheel_intake_motor_id: CAN ID of the flywheel intake motor
@@ -36,19 +38,19 @@ class Shooter(Subsystem):
 
         # Initialize parent classes
         Subsystem.__init__(self)
-        
+
         # Create motors and encoder
-        self.flywheel_motor = TalonFXS(flywheel_motor_id)
-        self.flywheel_intake_motor = TalonFX(flywheel_intake_motor_id)
-        self.flywheel_encoder = CANcoder(flywheel_encoder_id)
+        self.flywheel_motor = TalonFXS(flywheel_motor_id, canbus)
+        self.flywheel_intake_motor = TalonFX(flywheel_intake_motor_id, canbus)
+        self.flywheel_encoder = CANcoder(flywheel_encoder_id, canbus)
         
         # Apply motor and encoder configs
         self.flywheel_motor.configurator.apply(flywheel_motor_configs)
         self.flywheel_intake_motor.configurator.apply(flywheel_intake_motor_configs)
         self.flywheel_encoder.configurator.apply(flywheel_encoder_configs)
         
-        # Create Velocity TorqueCurrentFOC request
-        self.velocity_pid_request = VelocityTorqueCurrentFOC(velocity = 0)
+        # Create VelocityVoltage request
+        self.velocity_pid_request = VelocityVoltage(velocity = 0)
         
         #TODO Network Table Stuffs
         
@@ -58,10 +60,10 @@ class Shooter(Subsystem):
         # Shooter state
         self._shooter_table = self._network_table_instance.getTable("Shooter State")
         self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed (percent)").publish() 
-        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed (percent)").subscribe(2)
+        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed (percent)").subscribe(.5)
         self.desired_ball_speed_sub.get()
         self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent)").publish()
-        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent)").subscribe(5)
+        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent)").subscribe(.5)
         self.desired_flywheel_intake_speed_sub.get()
         
 #TODO How should the flywheel intake motor be run? (value in physics file)

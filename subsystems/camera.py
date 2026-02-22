@@ -6,11 +6,11 @@ from wpimath.geometry import Transform3d, Translation3d, Rotation3d
 
 class VisionCamera():
     def __init__(self):
-        self.back_camera = PhotonCamera("back_camera")
+        self.back_camera = PhotonCamera("front_camera")
 
         robot_to_camera_translation = Transform3d(
-            Translation3d(-0.3175, 0.009525, 0.46355),
-            Rotation3d.fromDegrees(0, 0, 180),
+            Translation3d(0.3175, 0.26035, 0.511175),
+            Rotation3d.fromDegrees(0, -88.5, 0),
         )
 
         # For districts in Wisconsin, AndyMark fields are used.
@@ -22,8 +22,17 @@ class VisionCamera():
         )
 
     def get_vision_measurement(self):
-        pose = self.pose_est.estimateCoprocMultiTagPose(self.back_camera.getLatestResult())
-        if pose:
-            return pose.estimatedPose, pose.timestampSeconds
+        results = self.back_camera.getAllUnreadResults()
+
+        pose = None
+        for result in results:
+            num_targets = len(result.getTargets())
+            if num_targets > 1:
+                pose = self.pose_est.estimateCoprocMultiTagPose(result)
+            elif num_targets == 1:
+                pose = self.pose_est.estimateLowestAmbiguityPose(result)                
+
+        if pose != None:
+            return pose.estimatedPose.toPose2d(), pose.timestampSeconds
         else: 
             return None, None

@@ -1,9 +1,11 @@
 from typing import Callable
-from math import copysign
+from math import copysign, pi
 
-from commands2 import Subsystem, WaitCommand
+from commands2 import Subsystem
 
-from phoenix6 import swerve, hardware, configs
+import ntcore
+
+from phoenix6 import swerve, utils
 
 from wpilib import DriverStation
 
@@ -47,7 +49,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                                          drivetrain_constants, modules)
         
         # Create Limelight instance and configure default values
-        #self.camera = VisionCamera()
+        self.camera = VisionCamera()
         
         # Create max speeds variables
         self.max_linear_speed = max_linear_speed
@@ -107,19 +109,36 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         #     self
         # )
 
+        self.inst = ntcore.NetworkTableInstance.getDefault()
+        self.pose_est_table = self.inst.getTable("Pose Esimation")
+        
+        self.fused_pose_est = self.pose_est_table.getDoubleArrayTopic("Fused Robot Pose").publish()
+        self.fused_pose_est_pub = self.pose_est_table.getStringTopic("Field2d").publish()
+
+        self.vision_pose_est = self.pose_est_table.getDoubleArrayTopic("Vision Robot Pose").publish()
+        self.vision_pose_est_pub = self.pose_est_table.getStringTopic("Field2d").publish()
+
     def periodic(self):
         """
         Update pose of the robot in network tables periodically.
         """
-        pass
 
-        # robot_pose, timestamp = self.camera.get_vision_measurement()
-        # if robot_pose and timestamp:
-        #     self.add_vision_measurement(
-        #         robot_pose.toPose2d(),
-        #         utils.fpga_to_current_time(timestamp),
-        #         (1.0, 1.0, math.pi / 4)
-        #     )
+        robot_pose, timestamp = self.camera.get_vision_measurement()
+        if robot_pose and timestamp:
+            self.add_vision_measurement(
+                robot_pose,
+                utils.fpga_to_current_time(timestamp),
+                (1.0, 1.0, pi / 8)
+            )
+
+            vision_pose_array = [robot_pose.x, robot_pose.y, robot_pose.rotation().degrees()]
+            self.vision_pose_est.set(vision_pose_array)
+
+        current_state = self.get_state()
+
+        # Telemeterize the poses to Field2d
+        fused_pose_array = [current_state.pose.x, current_state.pose.y, current_state.pose.rotation().degrees()]
+        self.fused_pose_est.set(fused_pose_array)
 
     def reset_slew_rate_limiters(self):
         """
