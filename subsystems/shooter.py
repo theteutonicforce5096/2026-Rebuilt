@@ -1,10 +1,12 @@
 from commands2 import Subsystem
+from commands2 import SequentialCommandGroup, WaitUntilCommand
 
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
 from phoenix6.hardware import TalonFX, TalonFXS, CANcoder
 from phoenix6.controls import VelocityTorqueCurrentFOC
 
-from commands2 import SequentialCommandGroup, WaitUntilCommand
+from ntcore import NetworkTableInstance
+from wpilib import SmartDashboard
 
 class Shooter(Subsystem):
     """
@@ -48,6 +50,20 @@ class Shooter(Subsystem):
         # Create Velocity TorqueCurrentFOC request
         self.velocity_pid_request = VelocityTorqueCurrentFOC(velocity = 0)
         
+        #TODO Network Table Stuffs
+        
+        # What to publish over networktables for shooter
+        self._network_table_instance = NetworkTableInstance.getDefault()
+        
+        # Shooter state
+        self._shooter_table = self._network_table_instance.getTable("Shooter State")
+        self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed (m/sec)").publish() 
+        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed (m/sec)").subscribe(2)
+        self.desired_ball_speed_sub.get()
+        self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (rps)").publish()
+        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (rps)").subscribe(5)
+        self.desired_flywheel_intake_speed_sub.get()
+                
 #TODO How should the flywheel intake motor be run? (value in physics file)
     def shoot(self, target_velocity, flywheel_intake_velocity_rps):
         SequentialCommandGroup(

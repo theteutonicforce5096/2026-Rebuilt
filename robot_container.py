@@ -2,7 +2,8 @@ import commands2
 
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
-from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_intake_speed
+from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_intake_speed, default_r
+from math import pi
 
 from pathplannerlib.auto import AutoBuilder
 class RobotContainer:
@@ -46,15 +47,40 @@ class RobotContainer:
             ) 
         )
 
-        # Set button bindings for shooter
+        # # Set button bindings for shooter
+        # # TODO: Chng 
+        # self.controller.rightTrigger().onTrue(
+        #     commands2.ParallelDeadlineGroup(
+        #         self.drivetrain.auto_shoot(self.shooter)
+        #     ).until(
+        #         lambda: self.controller.getHID().getBButton()
+        # #     )
+        # # )
+        
         self.controller.rightTrigger().onTrue(
-            self.shooter.runOnce(self.shooter, lambda: self.shooter.shoot(
-                shoot_speed(calc_velocity(calc_x_dis())), flywheel_intake_speed()
-            ))
+            self.shooter.runOnce(self.shooter, 
+                lambda: self.shooter.shoot(
+                    shoot_speed(
+                        calc_velocity(
+                            calc_x_dis(
+                                self.drivetrain.get_state().pose.X(), 
+                                self.drivetrain.get_state().pose.Y()))), 
+                    flywheel_intake_speed()
+                ))
         )
 
         self.controller.leftTrigger().onTrue(
-            self.shooter.runOnce(self.shooter, lambda: self.shooter.stop())
+            self.shooter.runOnce(self.shooter, 
+                lambda: self.shooter.stop())
+        )
+        
+        #TODO idk if this works -.-
+        self.controller.a().onTrue(
+            self.shooter.runOnce(self.shooter, 
+                lambda: self.shooter.shoot(
+                    self.shooter.desired_ball_speed_sub.get() / (2 * pi * default_r), 
+                    self.shooter.desired_flywheel_intake_speed_sub.get())
+            )
         )
 
     def create_commands_test(self):

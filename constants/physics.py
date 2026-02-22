@@ -1,8 +1,9 @@
 from math import tan, cos, radians, sqrt, pi
 from wpimath.geometry import Pose2d
 from wpimath.units import inchesToMeters
+from wpilib import DriverStation
 
-default_y_dis = inchesToMeters(12.5) #TODO confirm height of robot #Hub height is 120.36 in.
+default_y_dis = inchesToMeters(99.11) #120.36 in. (hub height) - 21.25 in. (flywheel height)
 default_r = inchesToMeters(2) #flywheel radius in meters
 default_g = -9.8 #m/s^2
 default_θ = 67.5 #degrees
@@ -10,14 +11,22 @@ default_θ = 67.5 #degrees
 default_a = 1 #TODO constant from regression model
 default_b = 0 #TODO constant from regression model
 
-def calc_x_dis():
-    #Positions from the perspective looking out from the player stations, the back left corner is (0,0)
-        #Q. Does it need to be absolute values?     no since they are both squared
-        #Q. Will switching sides change anything?   we need different hub positions for each side
-        # TODO this function will be replace by a value passed by the drive train code
-    hub_x_pos = inchesToMeters(158.84)
-    hub_y_pos = inchesToMeters(182.11)
-    x_dis = sqrt((hub_x_pos - Pose2d.X)**2 + (hub_y_pos - Pose2d.Y)**2) 
+def calc_x_dis(x_pose, y_pose): 
+    #Bottom left of field map (blue on left) is (0,0)
+    alliance_color = DriverStation.getAlliance()
+    if alliance_color is not None:
+        if alliance_color == DriverStation.Alliance.kBlue:
+            hub_x_pos = inchesToMeters(182.11)
+            hub_y_pos = inchesToMeters(158.84)
+        else:
+            hub_x_pos = inchesToMeters(469.11)
+            hub_y_pos = inchesToMeters(158.84)
+            
+#Shooter is 7.95 inches to the right of the pigeon
+#Shooter is 7.78 inches behind the pigeon
+    x_dis = sqrt(
+        (hub_x_pos - (x_pose + inchesToMeters(7.78)))**2 + 
+        (hub_y_pos - (y_pose - inchesToMeters(7.95)))**2)
     return x_dis
 
 def calc_velocity(x_dis: float, y_dis: float = default_y_dis,
