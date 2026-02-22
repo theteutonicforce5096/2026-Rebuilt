@@ -55,14 +55,16 @@ def calc_velocity(x_dis: float, y_dis: float = default_y_dis,
     
     #Calibrated velocity for ball to actually shoot out at (in meters per second)
     #for testing, set a = 1, b = 0
+    #Most up to date regression values: 87tgtiuyuj
     cal_initial_velocity_mps = (a * ideal_velocity_mps) + b
     return cal_initial_velocity_mps
 
 #Calibration Notes:
 #these were kinda inconsistent
 #TODO this info is useless cuz PID is cooked
-#50 rps for 58 inches (Hub front to robot front)
+#50 rps for 58 inches (Hub front to robot front) 7.5ft tp back
 #60 rps for 11 ft (Hub front to robot back)
+#robot with bumpers ~34 in. long
 
 #target velocity puts calibrated velocity in rotations per second
 def shoot_speed(cal_initial_velocity_mps, r: float = default_r):

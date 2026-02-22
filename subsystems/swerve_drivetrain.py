@@ -122,23 +122,23 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         """
         Update pose of the robot in network tables periodically.
         """
+        pass
+        # robot_pose, timestamp = self.camera.get_vision_measurement()
+        # if robot_pose and timestamp:
+        #     self.add_vision_measurement(
+        #         robot_pose,
+        #         utils.fpga_to_current_time(timestamp),
+        #         (1.0, 1.0, pi / 8)
+        #     )
 
-        robot_pose, timestamp = self.camera.get_vision_measurement()
-        if robot_pose and timestamp:
-            self.add_vision_measurement(
-                robot_pose,
-                utils.fpga_to_current_time(timestamp),
-                (1.0, 1.0, pi / 8)
-            )
+        #     vision_pose_array = [robot_pose.x, robot_pose.y, robot_pose.rotation().degrees()]
+        #     self.vision_pose_est.set(vision_pose_array)
 
-            vision_pose_array = [robot_pose.x, robot_pose.y, robot_pose.rotation().degrees()]
-            self.vision_pose_est.set(vision_pose_array)
+        # current_state = self.get_state()
 
-        current_state = self.get_state()
-
-        # Telemeterize the poses to Field2d
-        fused_pose_array = [current_state.pose.x, current_state.pose.y, current_state.pose.rotation().degrees()]
-        self.fused_pose_est.set(fused_pose_array)
+        # # Telemeterize the poses to Field2d
+        # fused_pose_array = [current_state.pose.x, current_state.pose.y, current_state.pose.rotation().degrees()]
+        # self.fused_pose_est.set(fused_pose_array)
 
     def reset_slew_rate_limiters(self):
         """

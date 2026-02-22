@@ -9,15 +9,15 @@ from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_i
 
 class RobotContainer:
     def __init__(self):
-        # Create drivetrain subsystem
-        self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
-
         # Create controller
         self.controller = commands2.button.CommandXboxController(0)
         
         # Define max speed variables
         self.max_linear_speed = SwerveDrivetrainConstants.max_linear_speed
         self.max_angular_rate = SwerveDrivetrainConstants.max_angular_rate
+
+        # Create drivetrain subsystem
+        self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
                      
         # Create shooter subsystem
         self.shooter = ShooterConstants.create_shooter()

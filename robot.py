@@ -10,6 +10,11 @@ class RebuiltRobot(commands2.TimedCommandRobot):
     
     def robotInit(self):
         self.container = RobotContainer()
+        # init_robot_command = commands2.SequentialCommandGroup(
+        #     commands2.WaitCommand(1),
+        #     commands2.InstantCommand(lambda: self.container.robot_init())
+        # )
+        # init_robot_command.schedule()
     
     def robotPeriodic(self):
         commands2.CommandScheduler.getInstance().run()

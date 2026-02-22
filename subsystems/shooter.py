@@ -57,11 +57,11 @@ class Shooter(Subsystem):
         
         # Shooter state
         self._shooter_table = self._network_table_instance.getTable("Shooter State")
-        self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed (percent)").publish() 
-        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed (percent)").subscribe(.5)
+        self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed (percent in decimal)").publish() 
+        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed (percent in decimal)").subscribe(.5)
         self.desired_ball_speed_sub.get()
-        self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent)").publish()
-        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent)").subscribe(.25)
+        self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent in decimal)").publish()
+        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent in decimal)").subscribe(.25)
         self.desired_flywheel_intake_speed_sub.get()
         
         #TODO is_near is not working well. Likely because of oscilation (fix PID tuning)
