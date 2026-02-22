@@ -15,18 +15,20 @@ class ShooterConstants:
 
     #Flywheel Motor Configs (NEO VORTEX - TalonFXS)
     _flywheel_motor_configs = TalonFXSConfiguration()
+    _flywheel_motor_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.VORTEX_JST)
+    _flywheel_motor_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
+    _flywheel_motor_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
+    _flywheel_motor_configs.current_limits.with_stator_current_limit(100)
+    _flywheel_motor_configs.current_limits.with_stator_current_limit_enable(True)
+    _flywheel_motor_configs.external_feedback.with_feedback_remote_sensor_id(_flywheel_encoder_id)
+    _flywheel_motor_configs.external_feedback.with_external_feedback_sensor_source(signals.FeedbackSensorSourceValue.FUSED_CANCODER)
+    _flywheel_motor_configs.external_feedback.with_sensor_to_mechanism_ratio(1.0)
+    _flywheel_motor_configs.external_feedback.with_rotor_to_sensor_ratio(1.0)
     _flywheel_motor_configs.slot0.k_s = 2.5
     _flywheel_motor_configs.slot0.k_v = 0
     _flywheel_motor_configs.slot0.k_p = 5
     _flywheel_motor_configs.slot0.k_i = 0
     _flywheel_motor_configs.slot0.k_d = 0
-    _flywheel_motor_configs.motor_output.neutral_mode = signals.NeutralModeValue.COAST
-    _flywheel_motor_configs.current_limits.stator_current_limit = 100
-    _flywheel_motor_configs.current_limits.stator_current_limit_enable = True
-    _flywheel_motor_configs.external_feedback.feedback_remote_sensor_id = _flywheel_encoder_id
-    _flywheel_motor_configs.external_feedback.external_feedback_sensor_source = signals.FeedbackSensorSourceValue.FUSED_CANCODER
-    _flywheel_motor_configs.external_feedback.sensor_to_mechanism_ratio = 1.0
-    _flywheel_motor_configs.external_feedback.rotor_to_sensor_ratio = 1.0
 
     #Flywheel Intake Motor Configs (Falcon 500 - TalonFX)
     _flywheel_intake_motor_configs = TalonFXConfiguration()
@@ -35,9 +37,9 @@ class ShooterConstants:
     _flywheel_intake_motor_configs.slot0.k_p = 5
     _flywheel_intake_motor_configs.slot0.k_i = 0
     _flywheel_intake_motor_configs.slot0.k_d = 0
-    _flywheel_intake_motor_configs.motor_output.neutral_mode = signals.NeutralModeValue.COAST
-    _flywheel_intake_motor_configs.current_limits.stator_current_limit = 50
-    _flywheel_intake_motor_configs.current_limits.stator_current_limit_enable = True
+    _flywheel_intake_motor_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
+    _flywheel_intake_motor_configs.current_limits.with_stator_current_limit(50)
+    _flywheel_intake_motor_configs.current_limits.with_stator_current_limit_enable(True)
 
     #Flywheel Encoder Configs (WCP ThroughBore Encoder - CANcoder)
     _flywheel_encoder_configs = CANcoderConfiguration()

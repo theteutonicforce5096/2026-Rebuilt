@@ -2,8 +2,7 @@ import commands2
 
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
-from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_intake_speed, default_r
-from math import pi
+from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_intake_speed
 
 from pathplannerlib.auto import AutoBuilder
 class RobotContainer:
@@ -58,7 +57,7 @@ class RobotContainer:
         # # )
         
         self.controller.rightTrigger().onTrue(
-            self.shooter.runOnce(self.shooter, 
+            self.shooter.runOnce(
                 lambda: self.shooter.shoot(
                     shoot_speed(
                         calc_velocity(
@@ -70,18 +69,19 @@ class RobotContainer:
         )
 
         self.controller.leftTrigger().onTrue(
-            self.shooter.runOnce(self.shooter, 
+            self.shooter.runOnce(
                 lambda: self.shooter.stop())
         )
         
-        #TODO idk if this works -.-
+        #Max rps of flywheel (neo vortex) = 113
+        #Max rps of flywheel intake (falcon 500) = 106
+        #We convert the percents to rps
         self.controller.a().onTrue(
-            self.shooter.runOnce(self.shooter, 
+            self.shooter.runOnce(
                 lambda: self.shooter.shoot(
-                    self.shooter.desired_ball_speed_sub.get() / (2 * pi * default_r), 
-                    self.shooter.desired_flywheel_intake_speed_sub.get())
+                    self.shooter.desired_ball_speed_sub.get() * 113), 
+                    self.shooter.desired_flywheel_intake_speed_sub.get() * 106)
             )
-        )
 
     def create_commands_test(self):
         pass

@@ -1,5 +1,5 @@
 from commands2 import Subsystem
-from commands2 import SequentialCommandGroup, WaitUntilCommand
+from commands2 import SequentialCommandGroup, WaitUntilCommand, WaitCommand
 
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
 from phoenix6.hardware import TalonFX, TalonFXS, CANcoder
@@ -57,13 +57,13 @@ class Shooter(Subsystem):
         
         # Shooter state
         self._shooter_table = self._network_table_instance.getTable("Shooter State")
-        self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed (m/sec)").publish() 
-        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed (m/sec)").subscribe(2)
+        self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed (percent)").publish() 
+        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed (percent)").subscribe(2)
         self.desired_ball_speed_sub.get()
-        self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (rps)").publish()
-        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (rps)").subscribe(5)
+        self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent)").publish()
+        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent)").subscribe(5)
         self.desired_flywheel_intake_speed_sub.get()
-                
+        
 #TODO How should the flywheel intake motor be run? (value in physics file)
     def shoot(self, target_velocity, flywheel_intake_velocity_rps):
         SequentialCommandGroup(
@@ -76,9 +76,29 @@ class Shooter(Subsystem):
             ))
         ).schedule()
         
-    def stop(self):
-        self.flywheel_motor.set_control(self.velocity_pid_request.with_velocity(0))
-        self.flywheel_intake_motor.set_control(self.velocity_pid_request.with_velocity(0))
+    def stop(self, target_velocity, flywheel_intake_velocity_rps):
+        SequentialCommandGroup(
+            self.runOnce(lambda: self.flywheel_motor.set_control(
+                self.velocity_pid_request.with_velocity(target_velocity * .75))),
+            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+                self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .75))),
+            WaitCommand(.25),
+            self.runOnce(lambda: self.flywheel_motor.set_control(
+                self.velocity_pid_request.with_velocity(target_velocity * .5))),
+            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+                self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .5))),
+            WaitCommand(.25),
+            self.runOnce(lambda: self.flywheel_motor.set_control(
+                self.velocity_pid_request.with_velocity(target_velocity * .25))),
+            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+                self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .25))),
+            WaitCommand(.25),
+            self.runOnce(lambda: self.flywheel_motor.set_control(
+                self.velocity_pid_request.with_velocity(0))),
+            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+                self.velocity_pid_request.with_velocity(0)))
+        ).schedule()
+        
         # self.flywheel_motor.set(0)
         # self.flywheel_intake_motor.set(0)
 
