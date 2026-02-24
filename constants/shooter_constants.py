@@ -16,6 +16,9 @@ class ShooterConstants:
     _flywheel_intake_motor_id = 31
     _flywheel_encoder_id = 32
 
+    # Number of times to attempt to configure each device
+    _num_config_attempts = 10
+
 #TODO Big oscillation thing. Try to test without encoder. Encoder may be causing oscillation. 
 #Oscillation detected when doing feedforward tuning on NEO VORTEX, but not when doing Falcon 500
     #Flywheel Motor Configs (NEO VORTEX - TalonFXS)
@@ -65,5 +68,6 @@ class ShooterConstants:
             cls._flywheel_encoder_id,
             cls._flywheel_motor_configs,
             cls._flywheel_intake_motor_configs,
-            cls._flywheel_encoder_configs
+            cls._flywheel_encoder_configs,
+            cls._num_config_attempts
         )

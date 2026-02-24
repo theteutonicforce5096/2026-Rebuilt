@@ -10,12 +10,15 @@ class SwerveDrivetrainConstants:
     """
 
     # Robot configuration
-    robot_length = 0.838 # Length of the robot in meters
-    robot_width = 0.838 # Width of the robot in meters
+    _robot_length = 0.838 # Length of the robot in meters
+    _robot_width = 0.838 # Width of the robot in meters
 
     # Max speeds of drivetrain
-    max_linear_speed = 5.25 # Max linear speed in meters per second
-    max_angular_rate = 12.5 # Max angular velocity in radians per second 
+    _max_linear_speed = 5.25 # Max linear speed in meters per second
+    _max_angular_rate = 12.5 # Max angular velocity in radians per second 
+
+    # Number of times to attempt to configure each device
+    _num_config_attempts = 10
 
     # The steer motor uses any SwerveModule.SteerRequestType control request with the
     # output type specified by SwerveModuleConstants.SteerMotorClosedLoopOutput
@@ -261,6 +264,7 @@ class SwerveDrivetrainConstants:
                 cls.back_left, 
                 cls.back_right,
             ],
-            cls.max_linear_speed,
-            cls.max_angular_rate
+            cls._num_config_attempts,
+            cls._max_linear_speed,
+            cls._max_angular_rate
         )

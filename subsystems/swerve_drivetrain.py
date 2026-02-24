@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Any
 from math import copysign, pi
 
 from commands2 import Subsystem
@@ -22,27 +22,34 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
     Class for controlling swerve drive.
     """
 
-    def __init__(self, drive_motor_type, steer_motor_type, encoder_type, drivetrain_constants, modules,
-                 max_linear_speed, max_angular_rate):
+    def __init__(self, drive_motor_type: Any, steer_motor_type: Any, encoder_type: Any, 
+                 drivetrain_constants: swerve.SwerveDrivetrainConstants, 
+                 modules: list[swerve.SwerveModuleConstants],
+                 num_config_attempts: int, max_linear_speed: float, max_angular_rate: float):
         """
         Constructor for initializing swerve drivetrain using the specified constants.
 
         :param drive_motor_type: Type of the drive motor
-        :type drive_motor_type: type
+        :type drive_motor_type: Any
         :param steer_motor_type: Type of the steer motor
-        :type steer_motor_type: type
+        :type steer_motor_type: Any
         :param encoder_type: Type of the azimuth encoder
-        :type encoder_type: type
+        :type encoder_type: Any
         :param drivetrain_constants: Drivetrain-wide constants for the swerve drive
-        :type drivetrain_constants: swerve.SwerveDrivetrainConstants
+        :type drivetrain_constants: phoenix6.swerve.SwerveDrivetrainConstants
         :param modules: Constants for each specific module
-        :type modules: list[swerve.SwerveModuleConstants]
+        :type modules: list[phoenix6.swerve.SwerveModuleConstants]
+        :param num_config_attempts: Number of times to attempt to configure each device
+        :type num_config_attempts: int
         :param max_linear_speed: Max linear speed of drivetrain in meters per second. 
         :type max_linear_speed: float
         :param max_angular_rate: Max angular velocity of drivetrain in radians per second. 
         :type max_angular_rate: float
         """
 
+        # Redefine the number of config attempts to try in phoenix6.swerve.swerve_drivetrain API
+        swerve.swerve_drivetrain._NUM_CONFIG_ATTEMPTS = num_config_attempts
+        
         # Initialize parent classes
         Subsystem.__init__(self)
         swerve.SwerveDrivetrain.__init__(self, drive_motor_type, steer_motor_type, encoder_type, 

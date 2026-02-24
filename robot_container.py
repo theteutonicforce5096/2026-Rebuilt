@@ -13,8 +13,8 @@ class RobotContainer:
         self.controller = commands2.button.CommandXboxController(0)
         
         # Define max speed variables
-        self.max_linear_speed = SwerveDrivetrainConstants.max_linear_speed
-        self.max_angular_rate = SwerveDrivetrainConstants.max_angular_rate
+        self.max_linear_speed = SwerveDrivetrainConstants._max_linear_speed
+        self.max_angular_rate = SwerveDrivetrainConstants._max_angular_rate
 
         # Create drivetrain subsystem
         self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()

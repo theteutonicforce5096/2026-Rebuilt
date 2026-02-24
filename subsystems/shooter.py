@@ -1,10 +1,11 @@
 from commands2 import Subsystem
-from commands2 import SequentialCommandGroup, WaitUntilCommand, WaitCommand
+from commands2 import SequentialCommandGroup, WaitUntilCommand, WaitCommand, PrintCommand
 
 from phoenix6 import CANBus
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
 from phoenix6.hardware import TalonFX, TalonFXS, CANcoder
 from phoenix6.controls import VelocityVoltage
+from phoenix6.status_code import StatusCode
 
 from ntcore import NetworkTableInstance
 
@@ -16,7 +17,8 @@ class Shooter(Subsystem):
     def __init__(self, canbus: CANBus, flywheel_motor_id: int, flywheel_intake_motor_id: int, 
                  flywheel_encoder_id: int, flywheel_motor_configs: TalonFXSConfiguration, 
                  flywheel_intake_motor_configs: TalonFXConfiguration,
-                 flywheel_encoder_configs: CANcoderConfiguration):
+                 flywheel_encoder_configs: CANcoderConfiguration,
+                 num_config_attempts: int):
         """
         Constructor for initializing shooter using the specified constants.
 
@@ -34,6 +36,8 @@ class Shooter(Subsystem):
         :type flywheel_intake_motor_configs: phoenix6.configs.TalonFXConfiguration
         :param flywheel_encoder_configs: Configs for the flywheel encoder
         :type flywheel_encoder_configs: phoenix6.configs.CANcoderConfiguration
+        :param num_config_attempts: Number of times to attempt to configure each device
+        :type num_config_attempts: int
         """
 
         # Initialize parent classes
@@ -45,9 +49,9 @@ class Shooter(Subsystem):
         self.flywheel_encoder = CANcoder(flywheel_encoder_id, canbus)
         
         # Apply motor and encoder configs
-        self.flywheel_motor.configurator.apply(flywheel_motor_configs)
-        self.flywheel_intake_motor.configurator.apply(flywheel_intake_motor_configs)
-        self.flywheel_encoder.configurator.apply(flywheel_encoder_configs)
+        self._configure_device(self.flywheel_motor, flywheel_motor_configs, num_config_attempts)
+        self._configure_device(self.flywheel_intake_motor, flywheel_intake_motor_configs, num_config_attempts)
+        self._configure_device(self.flywheel_encoder, flywheel_encoder_configs, num_config_attempts)
         
         # Create VelocityVoltage request
         self.velocity_pid_request = VelocityVoltage(velocity = 0)
@@ -63,6 +67,28 @@ class Shooter(Subsystem):
         self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent in decimal)").publish()
         self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent in decimal)").subscribe(.25)
         self.desired_flywheel_intake_speed_sub.get()
+        
+    def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
+                          configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
+                          num_attempts: int) -> None:
+        """
+        Configures a CTRE motor controller or CANcoder with the specified configs, 
+        retrying up to num_attempts times if the configuration fails.
+        
+        :param device: The CTRE motor controller or CANcoder to configure
+        :type device: phoenix6.hardware.TalonFX | phoenix6.hardware.TalonFXS | phoenix6.hardware.CANcoder
+        :param configs: The configuration to apply to the device
+        :type configs: phoenix6.configs.TalonFXConfiguration | phoenix6.configs.TalonFXSConfiguration | 
+        phoenix6.configs.CANcoderConfiguration
+        :param num_attempts: Number of times to attempt to configure each device
+        :type num_attempts: int
+        """
+        for _ in range(num_attempts):
+            status_code: StatusCode = device.configurator.apply(configs)
+            if status_code.is_ok():
+                break
+        if not status_code.is_ok():
+            PrintCommand(f"Device with CAN ID {device.device_id} failed to config with error: {status_code.name}").schedule()
         
         #TODO is_near is not working well. Likely because of oscilation (fix PID tuning)
     def shoot(self, target_velocity, flywheel_intake_velocity_rps):
