@@ -2,6 +2,7 @@ import commands2
 from commands2 import WaitCommand
 
 from phoenix6 import swerve
+from wpilib import DriverStation
 
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
@@ -9,6 +10,12 @@ from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_i
 
 class RobotContainer:
     def __init__(self):
+        # Create drivetrain subsystem
+        self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
+                     
+        # Create shooter subsystem
+        self.shooter = ShooterConstants.create_shooter()
+
         # Create controller
         self.controller = commands2.button.CommandXboxController(0)
         
@@ -16,18 +23,20 @@ class RobotContainer:
         self.max_linear_speed = SwerveDrivetrainConstants._max_linear_speed
         self.max_angular_rate = SwerveDrivetrainConstants._max_angular_rate
 
-        # Create drivetrain subsystem
-        self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
-                     
-        # Create shooter subsystem
-        self.shooter = ShooterConstants.create_shooter()
+        # idle = swerve.requests.Idle()
+        # commands2.button.Trigger(DriverStation.isDisabled).whileTrue(
+        #     self.drivetrain.run(lambda: idle).ignoringDisable(True)
+        # )
 
     def create_commands_auto(self):
         pass
 
     def create_commands_teleop(self):   
         # Set the forward perspective of the robot for field oriented driving
-        self.drivetrain.set_forward_perspective()
+        self.drivetrain._set_forward_perspective()
+
+        # Set starting pose for testing auto shooting
+        # self.drivetrain.reset_odometry(Pose2d(0, 0, Rotation2d.fromDegrees(0)))
         
         # Reset slew rate limiters for controlling acceleration
         self.drivetrain.reset_slew_rate_limiters()
@@ -48,15 +57,32 @@ class RobotContainer:
             ) 
         )
 
-        # # Set button bindings for shooter
-        # # TODO: Make parallel deadline group for brake mode, etc.
-        # self.controller.rightTrigger().onTrue(
-        #     commands2.ParallelDeadlineGroup(
-        #         self.drivetrain.auto_shoot(self.shooter)
-        #     ).until(
-        #         lambda: self.controller.getHID().getBButton()
-        # #     )
-        # # )
+        # Estimated button bindings for shooter (subject to change):
+        #     - Left trigger: Shoot at calculated speed based on distance to target
+        #     - X button: Shoot at speeds specified by network tables
+        #     - B button: Stop shooting no matter what mode is being used
+        #     - A button: Auto move button (figure out to where later)
+        #     - Y button: Cancel auto move command
+
+        # # TODO: Add in shooter functions and check if this even works????
+        # self.controller.leftTrigger().onTrue(
+        #     commands2.ParallelRaceGroup(
+        #         commands2.SequentialCommandGroup(
+        #             commands2.DeferredCommand(lambda: self.drivetrain._auto_align_to_hub(self.shooter),
+        #                                       self.drivetrain), 
+        #             commands2.ParallelDeadlineGroup(
+        #                 commands2.DeferredCommand(
+        #                     lambda: self.shooter.auto_shoot_distance(
+        #                         self.drivetrain.get_distance_to_hub()
+        #                     )
+        #                 ), self.shooter
+        #             ).until(lambda: self.shooter.no_change_amps()),
+        #             self.drivetrain.set_brake_mode()
+        #         )
+        #     ,
+        #     commands2.WaitUntilCommand(lambda: self.controller.getHID().getBButton())
+        #     )
+        # )
         
         # self.controller.rightTrigger().onTrue(
         #     self.shooter.runOnce(
@@ -75,26 +101,27 @@ class RobotContainer:
         #         lambda: self.shooter.stop())
         # )
         
-        #Max rps of flywheel (neo vortex) = 113
-        #Max rps of flywheel intake (falcon 500) = 106
-        #We convert the percents to rps
-        self.controller.x().onTrue(
-            self.shooter.runOnce(
-                lambda: self.shooter.shoot(
-                    # 0.5 * 113, 
-                    # 0.25 * 106)
-                    self.shooter.desired_ball_speed_sub.get() * 113, 
-                    self.shooter.desired_flywheel_intake_speed_sub.get() * 106)
-                )
-            )
+        # #Max rps of flywheel (neo vortex) = 113
+        # #Max rps of flywheel intake (falcon 500) = 106
+        # #We convert the percents to rps
+        # self.controller.x().onTrue(
+        #     self.shooter.runOnce(
+        #         lambda: self.shooter.shoot(
+        #             # 0.5 * 113, 
+        #             # 0.25 * 106)
+        #             self.shooter.desired_ball_speed_sub.get() * 113, 
+        #             self.shooter.desired_flywheel_intake_speed_sub.get() * 106)
+        #         )
+        #     )
         
-        self.controller.b().onTrue(
-            self.shooter.runOnce(
-                lambda: self.shooter.stop_networktable()
-            )
-        )
+        # self.controller.b().onTrue(
+        #     self.shooter.runOnce(
+        #         lambda: self.shooter.stop_networktable()
+        #     )
+        # )
 
     def create_commands_test(self):
+        # https://v6.docs.ctr-electronics.com/en/latest/docs/api-reference/mechanisms/swerve/swerve-requests.html#swerve-requests-with-direct-control
         self.drive_request = (
             swerve.requests.RobotCentric()
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
@@ -127,4 +154,3 @@ class RobotContainer:
                 self.drivetrain.runOnce(self.drive_request)
             )
         )
-

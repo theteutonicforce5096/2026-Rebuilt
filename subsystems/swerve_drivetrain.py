@@ -1,5 +1,5 @@
 from typing import Callable, Any
-from math import copysign, pi
+from math import copysign, pi, atan2
 
 from commands2 import Subsystem
 
@@ -11,6 +11,7 @@ from wpilib import DriverStation
 
 from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Rotation2d
+from wpimath.units import inchesToMeters
 
 from pathplannerlib.auto import AutoBuilder, RobotConfig
 from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
@@ -56,26 +57,37 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                                          drivetrain_constants, 500.0, modules)
         
         # Create Limelight instance and configure default values
-        self.camera = VisionCamera()
+        # self.camera = VisionCamera()
         
         # Create max speeds variables
         self.max_linear_speed = max_linear_speed
         self.max_angular_rate = max_angular_rate
+
+        ### TODO: Move this to constants file, have swerve drive and vision camera class take this as input
+        self.field_type = "AndyMark" # Welded for regionals
+
+        # Create hub position variables
+        self.hub_x_pos = None
+        self.hub_y_pos = None
+
+        # Create current alliance variable
+        self.current_alliance = None 
+        self._set_forward_perspective()
 
         # Create slew rate limiters for limiting robot acceleration
         self.straight_speed_limiter = SlewRateLimiter(self.max_linear_speed * 5)
         self.strafe_speed_limiter = SlewRateLimiter(self.max_linear_speed * 5)
         self.rotation_speed_limiter = SlewRateLimiter(self.max_angular_rate * 10)
 
-        # Create request for controlling swerve drive
+        # Create requests for controlling swerve drive
         # https://www.chiefdelphi.com/t/motion-magic-velocity-control-for-drive-motors-in-phoenix6-swerve-drive-api/483669/6
         self.default_mode_field_centric_request = (
             swerve.requests.FieldCentric()
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-            .with_deadband(self.max_linear_speed * 0.05)
-            .with_rotational_deadband(self.max_angular_rate * 0.05)
+            .with_deadband(self.max_linear_speed * 0.01) # Controller deadband of approximately 0.05
+            .with_rotational_deadband(self.max_angular_rate * 0.03) # Controller deadband of approximately 0.05
             .with_desaturate_wheel_speeds(True)
         )
 
@@ -84,9 +96,23 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-            .with_deadband(self.max_linear_speed * 0.1) # Recalculate
-            .with_rotational_deadband(self.max_angular_rate * 0.1) # Recalculate
+            .with_deadband(self.max_linear_speed * 0.01) # Controller deadband of 0.05
+            .with_rotational_deadband(self.max_angular_rate * 0.04) # Controller deadband of 0.05
             .with_desaturate_wheel_speeds(True)
+        )
+
+        self.rotate_robot_request = (
+            swerve.requests.FieldCentricFacingAngle()
+            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
+            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
+            .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
+            .with_heading_pid(1, 0, 0)
+        )
+
+        self.brake_mode_request = (
+            swerve.requests.SwerveDriveBrake()
+            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
+            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
         )
 
         # # Create Apply Robot Speeds Request for PathPlanner
@@ -160,19 +186,48 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         self.strafe_speed_limiter.reset(current_state.speeds.vy)
         self.rotation_speed_limiter.reset(current_state.speeds.omega)
 
-    def set_forward_perspective(self):
+    def _set_forward_perspective(self):
         """
         Set forward perspective of the robot for field oriented drive.
         """
 
         alliance_color = DriverStation.getAlliance()
-        if alliance_color is not None:
+        if alliance_color == DriverStation.Alliance.kRed:
+            # Red alliance sees forward as 180 degrees (toward blue alliance wall)
+            self.set_operator_perspective_forward(Rotation2d.fromDegrees(180))  
+            self.current_alliance = DriverStation.Alliance.kRed                
+        else:
+            # If alliance color is not detected or alliance is blue, default to/set blue alliance perspective
+            # Blue alliance sees forward as 0 degrees (toward red alliance wall)
+            self.set_operator_perspective_forward(Rotation2d.fromDegrees(0))
+            self.current_alliance = DriverStation.Alliance.kBlue
+
+            self._set_hub_position(self.field_type, self.current_alliance)
+    
+    def _set_hub_position(self, field_type: str, alliance_color: DriverStation.Alliance):
+        """
+        Set the hub position variables based on the field type and alliance color.
+
+        :param field_type: The type of field being used; either "AndyMark" or "Welded"
+        :type field_type: str
+        :param alliance_color: The alliance color of the robot; either DriverStation.Alliance.kBlue or DriverStation.Alliance.kRed
+        :type alliance_color: DriverStation.Alliance
+        """
+
+        if field_type == "AndyMark":
             if alliance_color == DriverStation.Alliance.kBlue:
-                # Blue alliance sees forward as 0 degrees (toward red alliance wall)
-                self.set_operator_perspective_forward(Rotation2d.fromDegrees(0))
+                self.hub_x_pos = inchesToMeters(181.56)
+                self.hub_y_pos = inchesToMeters(158.32)
             else:
-                # Red alliance sees forward as 180 degrees (toward blue alliance wall)
-                self.set_operator_perspective_forward(Rotation2d.fromDegrees(180))  
+                self.hub_x_pos = inchesToMeters(468.56)
+                self.hub_y_pos = inchesToMeters(158.32)
+        else:
+            if alliance_color == DriverStation.Alliance.kBlue:
+                self.hub_x_pos = inchesToMeters(182.11)
+                self.hub_y_pos = inchesToMeters(158.84)
+            else:
+                self.hub_x_pos = inchesToMeters(469.11)
+                self.hub_y_pos = inchesToMeters(158.84)
 
     def _get_operator_drive_request(self, left_trigger_pressed: bool, right_trigger_pressed: bool,
                                    forward_speed: float, strafe_speed: float, rotation_speed: float):
@@ -195,15 +250,15 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             operator_drive_request = (
                 self.max_speed_mode_field_centric_request.with_velocity_x(
                     self.straight_speed_limiter.calculate(
-                        -copysign((forward_speed)**2, forward_speed) * self.max_linear_speed
+                        -copysign((forward_speed) ** 2, forward_speed) * self.max_linear_speed
                     )
                 ).with_velocity_y(
                     self.strafe_speed_limiter.calculate(
-                        -copysign((strafe_speed)**2, strafe_speed) * self.max_linear_speed
+                        -copysign((strafe_speed) ** 2, strafe_speed) * self.max_linear_speed
                     )
                 ).with_rotational_rate(
                     self.rotation_speed_limiter.calculate(
-                        -copysign((rotation_speed)**2, rotation_speed) * self.max_angular_rate
+                        -copysign((rotation_speed) ** 2, rotation_speed) * self.max_angular_rate
                     )
                 )
             )
@@ -211,15 +266,15 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             operator_drive_request = (
                 self.default_mode_field_centric_request.with_velocity_x(
                     self.straight_speed_limiter.calculate(
-                        -copysign((forward_speed * 0.75)**2, forward_speed) * self.max_linear_speed
+                        -copysign(forward_speed ** 2, forward_speed) * (self.max_linear_speed * 0.75)
                     )
                 ).with_velocity_y(
                     self.strafe_speed_limiter.calculate(
-                        -copysign((strafe_speed * 0.75)**2, strafe_speed) * self.max_linear_speed
+                        -copysign(strafe_speed **2, strafe_speed) * (self.max_linear_speed * 0.75)
                     )
                 ).with_rotational_rate(
                     self.rotation_speed_limiter.calculate(
-                        -copysign((rotation_speed * 0.75)**2, rotation_speed) * self.max_angular_rate
+                        -copysign(rotation_speed ** 2, rotation_speed) * (self.max_angular_rate * 0.75)
                     )
                 )
             )
@@ -248,7 +303,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         in terms of percent of max angular speed where clockwise is positive. 
         :type rotation_speed: Callable[[], float]
         """
-
+        
         return self.run(
             lambda: self.set_control(
                 self._get_operator_drive_request(
@@ -259,5 +314,38 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                     rotation_speed()
                 )
             )
+        )
+
+    def _auto_align_to_hub(self):
+        """
+        Rotate the robot to the optimal angle relative to a target.
+
+        :param target_pose: Pose of the target to rotate towards.
+        :type target_pose: utils.Pose2d
+        :param rotation_threshold: Threshold in degrees for considering the robot to be facing the optimal angle.
+        :type rotation_threshold: float
+        """
+
+        current_pose = self.get_state().pose
+
+        # Get the optimal angle from the robot to the target
+        optimal_angle = atan2(self.hub_y_pos - current_pose.y, self.hub_x_pos - current_pose.x)
+
+        return self.run(
+            lambda: self.set_control(
+                self.rotate_robot_request.with_target_direction(
+                    Rotation2d(optimal_angle)
+                )
+            )
+        ).until(
+            lambda: abs(self.get_state().pose.rotation().degrees() - optimal_angle) < 0.5
+        )
+    
+    def set_brake_mode(self):
+        """
+        Set the drivetrain to brake mode.
+        """
+        return self.run(
+            lambda: self.set_control(self.brake_mode_request)
         )
         

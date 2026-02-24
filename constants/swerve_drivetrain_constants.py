@@ -15,7 +15,7 @@ class SwerveDrivetrainConstants:
 
     # Max speeds of drivetrain
     _max_linear_speed = 5.25 # Max linear speed in meters per second
-    _max_angular_rate = 12.5 # Max angular velocity in radians per second 
+    _max_angular_rate = 16 # Max angular velocity in radians per second 
 
     # Number of times to attempt to configure each device
     _num_config_attempts = 10
