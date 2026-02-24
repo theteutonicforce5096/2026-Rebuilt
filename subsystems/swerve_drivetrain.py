@@ -53,7 +53,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # Initialize parent classes
         Subsystem.__init__(self)
         swerve.SwerveDrivetrain.__init__(self, drive_motor_type, steer_motor_type, encoder_type, 
-                                         drivetrain_constants, modules)
+                                         drivetrain_constants, 500.0, modules)
         
         # Create Limelight instance and configure default values
         self.camera = VisionCamera()

@@ -56,11 +56,11 @@ class Shooter(Subsystem):
         self._configure_device(self.flywheel_intake_motor, flywheel_intake_motor_configs, num_config_attempts)
         self._configure_device(self.flywheel_encoder, flywheel_encoder_configs, num_config_attempts)
 
-        # Increase encoder update frequency to 4 hertz to improve velocity PID on flywheel motor
+        # Increase encoder update frequency to 1000 hertz to improve velocity PID on flywheel motor
         self.flywheel_encoder.get_velocity().set_update_frequency(flywheel_encoder_vel_update_frequency)
         
         # Create VelocityVoltage request
-        self.velocity_pid_request = VelocityVoltage(velocity = 0)
+        self.velocity_pid_request = VelocityVoltage(velocity = 0, use_timesync = True).with_update_freq_hz(0.0)
         
         # What to publish over networktables for shooter
         self._network_table_instance = NetworkTableInstance.getDefault()
