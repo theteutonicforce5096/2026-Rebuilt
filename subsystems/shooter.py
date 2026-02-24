@@ -18,7 +18,7 @@ class Shooter(Subsystem):
                  flywheel_encoder_id: int, flywheel_motor_configs: TalonFXSConfiguration, 
                  flywheel_intake_motor_configs: TalonFXConfiguration,
                  flywheel_encoder_configs: CANcoderConfiguration,
-                 num_config_attempts: int):
+                 num_config_attempts: int, flywheel_encoder_vel_update_frequency: float):
         """
         Constructor for initializing shooter using the specified constants.
 
@@ -38,6 +38,9 @@ class Shooter(Subsystem):
         :type flywheel_encoder_configs: phoenix6.configs.CANcoderConfiguration
         :param num_config_attempts: Number of times to attempt to configure each device
         :type num_config_attempts: int
+        :param flywheel_encoder_vel_update_frequency: Update frequency in hertz for the flywheel encoder's 
+        velocity measurement; Minimum is 4 hertz
+        :type flywheel_encoder_vel_update_frequency: float
         """
 
         # Initialize parent classes
@@ -52,6 +55,9 @@ class Shooter(Subsystem):
         self._configure_device(self.flywheel_motor, flywheel_motor_configs, num_config_attempts)
         self._configure_device(self.flywheel_intake_motor, flywheel_intake_motor_configs, num_config_attempts)
         self._configure_device(self.flywheel_encoder, flywheel_encoder_configs, num_config_attempts)
+
+        # Increase encoder update frequency to 4 hertz to improve velocity PID on flywheel motor
+        self.flywheel_encoder.get_velocity().set_update_frequency(flywheel_encoder_vel_update_frequency)
         
         # Create VelocityVoltage request
         self.velocity_pid_request = VelocityVoltage(velocity = 0)
