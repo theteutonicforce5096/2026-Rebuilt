@@ -73,8 +73,15 @@ class SwerveDrivetrainConstants:
     # Initial configs for the drive and steer motors and the azimuth encoder; these cannot be null.
     # Some configs will be overwritten; check the `with_*_initial_configs()` API documentation.
     # https://api.ctr-electronics.com/phoenix6/latest/python/autoapi/phoenix6/swerve/swerve_module_constants/index.html#phoenix6.swerve.swerve_module_constants.SwerveModuleConstants.drive_motor_initial_configs
-    _drive_initial_configs = configs.TalonFXConfiguration()
-    _steer_initial_configs = configs.TalonFXConfiguration().with_current_limits(
+    _drive_initial_configs = configs.TalonFXConfiguration().with_motor_output(
+        configs.MotorOutputConfigs()
+        .with_neutral_mode(signals.NeutralModeValue.BRAKE)
+    )
+
+    _steer_initial_configs = configs.TalonFXConfiguration().with_motor_output(
+        configs.MotorOutputConfigs()
+        .with_neutral_mode(signals.NeutralModeValue.BRAKE)
+    ).with_current_limits(
         configs.CurrentLimitsConfigs()
         # Swerve azimuth does not require much torque output, so we can set a relatively low
         # stator current limit to help avoid brownouts without impacting performance.

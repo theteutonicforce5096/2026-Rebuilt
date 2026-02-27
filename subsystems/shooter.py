@@ -4,7 +4,7 @@ from commands2 import SequentialCommandGroup, WaitUntilCommand, WaitCommand, Pri
 from phoenix6 import CANBus
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
 from phoenix6.hardware import TalonFX, TalonFXS, CANcoder
-from phoenix6.controls import VelocityVoltage
+from phoenix6.controls import VelocityVoltage, VoltageOut
 from phoenix6.status_code import StatusCode
 
 from ntcore import NetworkTableInstance
@@ -61,6 +61,8 @@ class Shooter(Subsystem):
         
         # Create VelocityVoltage request
         self.velocity_pid_request = VelocityVoltage(velocity = 0, use_timesync = True).with_update_freq_hz(0.0)
+
+        self.voltage_request = VoltageOut(output = 0, use_timesync = True).with_update_freq_hz(0.0)
         
         # What to publish over networktables for shooter
         self._network_table_instance = NetworkTableInstance.getDefault()
@@ -107,6 +109,13 @@ class Shooter(Subsystem):
                 self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps)
             ))
         ).schedule()
+    
+    def set_voltage(self, motor: TalonFX | TalonFXS, voltage, duration):
+        return self.run(
+            lambda: motor.set_control(
+                self.voltage_request.with_output(voltage)
+            )
+        ).withTimeout(duration)
         
     # def stop(self, target_velocity, flywheel_intake_velocity_rps):
     #     SequentialCommandGroup(

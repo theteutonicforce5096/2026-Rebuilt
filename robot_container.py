@@ -1,7 +1,7 @@
 import commands2
 from commands2 import WaitCommand
 
-from phoenix6 import swerve
+from phoenix6 import swerve, SignalLogger
 from wpilib import DriverStation
 
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
@@ -121,36 +121,79 @@ class RobotContainer:
         # )
 
     def create_commands_test(self):
-        # https://v6.docs.ctr-electronics.com/en/latest/docs/api-reference/mechanisms/swerve/swerve-requests.html#swerve-requests-with-direct-control
-        self.drive_request = (
-            swerve.requests.RobotCentric()
-            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-            .with_deadband(self.max_linear_speed * 0.05)
-            .with_rotational_deadband(self.max_angular_rate * 0.05)
-            .with_desaturate_wheel_speeds(True)
+        self.shooter.flywheel_motor.get_velocity().set_update_frequency(1000.0)
+        self.shooter.flywheel_intake_motor.get_velocity().set_update_frequency(1000.0)
+        self.shooter.flywheel_motor.get_motor_voltage().set_update_frequency(1000.0)
+        self.shooter.flywheel_intake_motor.get_motor_voltage().set_update_frequency(1000.0)
+
+        self.controller.a().onTrue(
+            commands2.SequentialCommandGroup(
+                self.shooter.runOnce(
+                    lambda: SignalLogger.start()
+                ),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 0.5, 1),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 1.0, 1),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 1.5, 1),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 2.0, 1),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 3.0, 2.0),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 6.0, 2.0),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 9.0, 2.0),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 12.0, 5.0),
+                self.shooter.runOnce(
+                    lambda: SignalLogger.stop()
+                )
+            )
         )
 
         self.controller.y().onTrue(
-            self.drivetrain.runOnce(
-                self.drivetrain.set_control(
-                    self.drive_request.with_velocity_x(1)
+            commands2.SequentialCommandGroup(
+                self.shooter.runOnce(
+                    lambda: SignalLogger.start()
+                ),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 0.5, 1.0),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 1.0, 1.0),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 1.5, 1.0),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 2.0, 1.0),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 3.0, 2.0),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 6.0, 2.0),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 9.0, 2.0),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 12.0, 5.0),
+                self.shooter.runOnce(
+                    lambda: SignalLogger.stop()
                 )
-            ).andThen(
-                WaitCommand(0.75)
-            ).andThen(
-                self.drivetrain.runOnce(self.drive_request)
             )
         )
 
-        self.controller.a().onTrue(
-            self.drivetrain.runOnce(
-                self.drivetrain.set_control(
-                    self.drive_request.with_velocity_x(-1)
-                )
-            ).andThen(
-                WaitCommand(0.75)
-            ).andThen(
-                self.drivetrain.runOnce(self.drive_request)
-            )
-        )
+        # # https://v6.docs.ctr-electronics.com/en/latest/docs/api-reference/mechanisms/swerve/swerve-requests.html#swerve-requests-with-direct-control
+        # self.drive_request = (
+        #     swerve.requests.RobotCentric()
+        #     .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
+        #     .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
+        #     .with_deadband(self.max_linear_speed * 0.05)
+        #     .with_rotational_deadband(self.max_angular_rate * 0.05)
+        #     .with_desaturate_wheel_speeds(True)
+        # )
+
+        # self.controller.y().onTrue(
+        #     self.drivetrain.runOnce(
+        #         self.drivetrain.set_control(
+        #             self.drive_request.with_velocity_x(1)
+        #         )
+        #     ).andThen(
+        #         WaitCommand(0.75)
+        #     ).andThen(
+        #         self.drivetrain.runOnce(self.drive_request)
+        #     )
+        # )
+
+        # self.controller.a().onTrue(
+        #     self.drivetrain.runOnce(
+        #         self.drivetrain.set_control(
+        #             self.drive_request.with_velocity_x(-1)
+        #         )
+        #     ).andThen(
+        #         WaitCommand(0.75)
+        #     ).andThen(
+        #         self.drivetrain.runOnce(self.drive_request)
+        #     )
+        # )

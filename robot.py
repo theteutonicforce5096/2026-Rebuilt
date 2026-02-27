@@ -3,8 +3,6 @@ import wpilib
 
 from robot_container import RobotContainer
 
-import cProfile
-
 class RebuiltRobot(commands2.TimedCommandRobot):
     """
     2026 Robot for Team 5096.

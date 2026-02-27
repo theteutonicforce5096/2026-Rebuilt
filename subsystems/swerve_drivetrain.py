@@ -5,9 +5,9 @@ from commands2 import Subsystem
 
 import ntcore
 
-from phoenix6 import swerve, utils
+from phoenix6 import swerve, utils, hardware
 
-from wpilib import DriverStation
+from wpilib import DriverStation, RobotBase
 
 from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Rotation2d
@@ -50,11 +50,12 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
         # Redefine the number of config attempts to try in phoenix6.swerve.swerve_drivetrain API
         swerve.swerve_drivetrain._NUM_CONFIG_ATTEMPTS = num_config_attempts
+        swerve.swerve_module._NUM_CONFIG_ATTEMPTS = num_config_attempts
         
         # Initialize parent classes
         Subsystem.__init__(self)
         swerve.SwerveDrivetrain.__init__(self, drive_motor_type, steer_motor_type, encoder_type, 
-                                         drivetrain_constants, 500.0, modules)
+                                         drivetrain_constants, modules)
         
         # Create Limelight instance and configure default values
         # self.camera = VisionCamera()
@@ -62,6 +63,16 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # Create max speeds variables
         self.max_linear_speed = max_linear_speed
         self.max_angular_rate = max_angular_rate
+        
+        # if RobotBase.isSimulation() == False:
+        #     devices = []
+        #     for num in range(4):
+        #         module = self.get_module(num)
+        #         devices.append(module.drive_motor)
+        #         devices.append(module.steer_motor)
+        #         devices.append(module.encoder)
+
+        #     hardware.ParentDevice.optimize_bus_utilization_for_all(devices)
 
         ### TODO: Move this to constants file, have swerve drive and vision camera class take this as input
         self.field_type = "AndyMark" # Welded for regionals
