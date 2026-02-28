@@ -64,6 +64,33 @@ class RobotContainer:
         #     - A button: Auto move button (figure out to where later)
         #     - Y button: Cancel auto move command
 
+        self.controller.a().onTrue(
+            self.drivetrain.runOnce(
+                lambda: self.drivetrain.auto_align_to_hub(self.shooter)
+            ).until(
+                lambda: self.controller.getHID().getBButton()
+            )
+        )
+
+        # TODO: Add in shooter functions and check if this even works????
+        self.controller.leftTrigger().onTrue(
+            commands2.ParallelDeadlineGroup(
+                commands2.WaitUntilCommand(lambda: self.controller.getHID().getBButton()),
+                commands2.SequentialCommandGroup(
+                    self.drivetrain.runOnce(
+                        lambda: self.drivetrain.auto_align_to_hub(self.shooter)
+                    ),
+                    commands2.ParallelCommandGroup(
+                        self.shooter.shoot(
+                            self.shooter.desired_ball_speed_sub.get() * 113,
+                            self.shooter.desired_flywheel_intake_speed_sub.get() * 106
+                        ),
+                        self.drivetrain.set_brake_mode()
+                    )
+                )
+            )
+        )
+
         # # TODO: Add in shooter functions and check if this even works????
         # self.controller.leftTrigger().onTrue(
         #     commands2.ParallelRaceGroup(

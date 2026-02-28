@@ -327,7 +327,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             )
         )
 
-    def _auto_align_to_hub(self):
+    def auto_align_to_hub(self):
         """
         Rotate the robot to the optimal angle relative to a target.
 

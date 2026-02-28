@@ -1,5 +1,5 @@
 from commands2 import Subsystem
-from commands2 import SequentialCommandGroup, WaitUntilCommand, WaitCommand, PrintCommand
+from commands2 import ParallelCommandGroup, SequentialCommandGroup, WaitCommand, PrintCommand, WaitUntilCommand
 
 from phoenix6 import CANBus
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
@@ -67,14 +67,14 @@ class Shooter(Subsystem):
         # What to publish over networktables for shooter
         self._network_table_instance = NetworkTableInstance.getDefault()
         
-        # # Shooter state
-        # self._shooter_table = self._network_table_instance.getTable("Shooter State")
-        # self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed (percent in decimal)").publish() 
-        # self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed (percent in decimal)").subscribe(.5)
-        # self.desired_ball_speed_sub.get()
-        # self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent in decimal)").publish()
-        # self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent in decimal)").subscribe(.25)
-        # self.desired_flywheel_intake_speed_sub.get()
+        # Shooter state
+        self._shooter_table = self._network_table_instance.getTable("Shooter State")
+        self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed (percent in decimal)").publish() 
+        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed (percent in decimal)").subscribe(.5)
+        self.desired_ball_speed_sub.get()
+        self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent in decimal)").publish()
+        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent in decimal)").subscribe(.25)
+        self.desired_flywheel_intake_speed_sub.get()
         
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
@@ -99,16 +99,28 @@ class Shooter(Subsystem):
             PrintCommand(f"Device with CAN ID {device.device_id} failed to config with error: {status_code.name}").schedule()
         
         #TODO is_near is not working well. Likely because of oscilation (fix PID tuning)
-    def shoot(self, target_velocity, flywheel_intake_velocity_rps):
-        SequentialCommandGroup(
-            self.runOnce(lambda: self.flywheel_motor.set_control(
-                self.velocity_pid_request.with_velocity(target_velocity)
-            )),
-            WaitUntilCommand(lambda: self.flywheel_motor.get_velocity().is_near(target_velocity, 0.25)),
-            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-                self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps)
-            ))
-        ).schedule()
+    def shoot(self, flywheel_target_velocity, intake_motor_velocity):
+        return SequentialCommandGroup(
+            self.run(
+                lambda: self.flywheel_motor.set_control(
+                    self.velocity_pid_request.with_velocity(flywheel_target_velocity)
+                )
+            ),
+            WaitUntilCommand(
+                lambda: self.flywheel_motor.get_velocity().is_near(flywheel_target_velocity, 0.25)
+            ), 
+            self.run(
+                lambda: self.set_flywheel_velocities(flywheel_target_velocity, intake_motor_velocity)
+            )
+        )
+    
+    def set_flywheel_velocities(self,flywheel_target_velocity, intake_motor_velocity):
+        self.flywheel_motor.set_control(
+            self.velocity_pid_request.with_velocity(flywheel_target_velocity)
+        )
+        self.flywheel_intake_motor.set_control(
+            self.velocity_pid_request.with_velocity(intake_motor_velocity)
+        )
     
     def set_voltage(self, motor: TalonFX | TalonFXS, voltage, duration):
         return self.run(
