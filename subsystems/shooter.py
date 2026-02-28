@@ -60,7 +60,7 @@ class Shooter(Subsystem):
         self.flywheel_encoder.get_velocity().set_update_frequency(flywheel_encoder_vel_update_frequency)
         
         # Create VelocityVoltage request
-        self.velocity_pid_request = VelocityVoltage(velocity = 0, use_timesync = True).with_update_freq_hz(0.0)
+        self.velocity_pid_request = VelocityVoltage(velocity = 0)
 
         self.voltage_request = VoltageOut(output = 0, use_timesync = True).with_update_freq_hz(0.0)
         
@@ -69,11 +69,11 @@ class Shooter(Subsystem):
         
         # Shooter state
         self._shooter_table = self._network_table_instance.getTable("Shooter State")
-        self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed (percent in decimal)").publish() 
-        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed (percent in decimal)").subscribe(.5)
+        self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed in Rotations per Second").publish() 
+        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed in Rotations per Second").subscribe(.5)
         self.desired_ball_speed_sub.get()
-        self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent in decimal)").publish()
-        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed (percent in decimal)").subscribe(.25)
+        self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").publish()
+        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").subscribe(.25)
         self.desired_flywheel_intake_speed_sub.get()
         
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
@@ -101,7 +101,7 @@ class Shooter(Subsystem):
         #TODO is_near is not working well. Likely because of oscilation (fix PID tuning)
     def shoot(self, flywheel_target_velocity, intake_motor_velocity):
         return SequentialCommandGroup(
-            self.run(
+            self.runOnce(
                 lambda: self.flywheel_motor.set_control(
                     self.velocity_pid_request.with_velocity(flywheel_target_velocity)
                 )
@@ -109,7 +109,7 @@ class Shooter(Subsystem):
             WaitUntilCommand(
                 lambda: self.flywheel_motor.get_velocity().is_near(flywheel_target_velocity, 0.25)
             ), 
-            self.run(
+            self.runOnce(
                 lambda: self.set_flywheel_velocities(flywheel_target_velocity, intake_motor_velocity)
             )
         )
@@ -129,28 +129,28 @@ class Shooter(Subsystem):
             )
         ).withTimeout(duration)
         
-    # def stop(self, target_velocity, flywheel_intake_velocity_rps):
-    #     SequentialCommandGroup(
-    #         self.runOnce(lambda: self.flywheel_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(target_velocity * .75))),
-    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .75))),
-    #         WaitCommand(.25),
-    #         self.runOnce(lambda: self.flywheel_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(target_velocity * .5))),
-    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .5))),
-    #         WaitCommand(.25),
-    #         self.runOnce(lambda: self.flywheel_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(target_velocity * .25))),
-    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .25))),
-    #         WaitCommand(.25),
-    #         self.runOnce(lambda: self.flywheel_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(0))),
-    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(0)))
-    #     ).schedule()
+    def stop(self):
+        SequentialCommandGroup(
+            # self.runOnce(lambda: self.flywheel_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(target_velocity * .75))),
+            # self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .75))),
+            # WaitCommand(.25),
+            # self.runOnce(lambda: self.flywheel_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(target_velocity * .5))),
+            # self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .5))),
+            # WaitCommand(.25),
+            # self.runOnce(lambda: self.flywheel_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(target_velocity * .25))),
+            # self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .25))),
+            # WaitCommand(.25),
+            self.runOnce(lambda: self.flywheel_motor.set_control(
+                self.velocity_pid_request.with_velocity(0))),
+            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+                self.velocity_pid_request.with_velocity(0)))
+        ).schedule()
 
     # def stop_networktable(self):
     #     SequentialCommandGroup(

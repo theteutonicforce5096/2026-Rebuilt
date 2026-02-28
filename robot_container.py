@@ -3,6 +3,8 @@ from commands2 import WaitCommand
 
 from phoenix6 import swerve, SignalLogger
 from wpilib import DriverStation
+from wpimath.geometry import Pose2d, Rotation2d
+from wpimath.units import inchesToMeters
 
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
@@ -28,15 +30,17 @@ class RobotContainer:
         #     self.drivetrain.run(lambda: idle).ignoringDisable(True)
         # )
 
+        # Set starting pose for testing auto shooting
+        self.drivetrain.reset_pose(
+            Pose2d(inchesToMeters(181.56- 23.51) - 3, inchesToMeters(158.32), Rotation2d.fromDegrees(0))
+        )
+
     def create_commands_auto(self):
         pass
 
     def create_commands_teleop(self):   
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain._set_forward_perspective()
-
-        # Set starting pose for testing auto shooting
-        # self.drivetrain.reset_odometry(Pose2d(0, 0, Rotation2d.fromDegrees(0)))
         
         # Reset slew rate limiters for controlling acceleration
         self.drivetrain.reset_slew_rate_limiters()
@@ -64,32 +68,40 @@ class RobotContainer:
         #     - A button: Auto move button (figure out to where later)
         #     - Y button: Cancel auto move command
 
-        self.controller.a().onTrue(
-            self.drivetrain.runOnce(
-                lambda: self.drivetrain.auto_align_to_hub(self.shooter)
-            ).until(
-                lambda: self.controller.getHID().getBButton()
-            )
-        )
+        # self.controller.a().onTrue(
+        #     self.drivetrain.runOnce(
+        #         lambda: self.drivetrain.auto_align_to_hub()
+        #     ).until(
+        #         lambda: self.controller.getHID().getBButton()
+        #     )
+        # )
 
         # TODO: Add in shooter functions and check if this even works????
-        self.controller.leftTrigger().onTrue(
-            commands2.ParallelDeadlineGroup(
-                commands2.WaitUntilCommand(lambda: self.controller.getHID().getBButton()),
-                commands2.SequentialCommandGroup(
-                    self.drivetrain.runOnce(
-                        lambda: self.drivetrain.auto_align_to_hub(self.shooter)
-                    ),
-                    commands2.ParallelCommandGroup(
-                        self.shooter.shoot(
-                            self.shooter.desired_ball_speed_sub.get() * 113,
-                            self.shooter.desired_flywheel_intake_speed_sub.get() * 106
-                        ),
-                        self.drivetrain.set_brake_mode()
-                    )
+        self.controller.a().onTrue(
+            # commands2.ParallelDeadlineGroup(
+            #     commands2.WaitUntilCommand(lambda: self.controller.getHID().getBButton()),
+            #     commands2.SequentialCommandGroup(
+                    # self.drivetrain.runOnce(
+                    #     lambda: self.drivetrain.auto_align_to_hub()
+                    # ),
+            commands2.ParallelCommandGroup(
+                self.shooter.shoot(
+                    self.shooter.desired_ball_speed_sub.get(),
+                    self.shooter.desired_flywheel_intake_speed_sub.get()
+                ).until(
+                    lambda: self.controller.getHID().getBButton()
+                ).andThen(
+                    lambda: self.shooter.stop()
+                ),
+                self.drivetrain.set_brake_mode().until(
+                    lambda: self.controller.getHID().getBButton()
+                ).andThen(
+                    lambda: self.shooter.stop()
                 )
             )
         )
+        #     )
+        # )
 
         # # TODO: Add in shooter functions and check if this even works????
         # self.controller.leftTrigger().onTrue(
@@ -123,10 +135,10 @@ class RobotContainer:
         #         ))
         # )
 
-        # self.controller.leftTrigger().onTrue(
-        #     self.shooter.runOnce(
-        #         lambda: self.shooter.stop())
-        # )
+        self.controller.x().onTrue(
+            self.shooter.runOnce(
+                lambda: self.shooter.stop())
+        )
         
         # #Max rps of flywheel (neo vortex) = 113
         # #Max rps of flywheel intake (falcon 500) = 106
@@ -147,80 +159,80 @@ class RobotContainer:
         #     )
         # )
 
-    def create_commands_test(self):
-        self.shooter.flywheel_motor.get_velocity().set_update_frequency(1000.0)
-        self.shooter.flywheel_intake_motor.get_velocity().set_update_frequency(1000.0)
-        self.shooter.flywheel_motor.get_motor_voltage().set_update_frequency(1000.0)
-        self.shooter.flywheel_intake_motor.get_motor_voltage().set_update_frequency(1000.0)
+    # def create_commands_test(self):
+    #     self.shooter.flywheel_motor.get_velocity().set_update_frequency(1000.0)
+    #     self.shooter.flywheel_intake_motor.get_velocity().set_update_frequency(1000.0)
+    #     self.shooter.flywheel_motor.get_motor_voltage().set_update_frequency(1000.0)
+    #     self.shooter.flywheel_intake_motor.get_motor_voltage().set_update_frequency(1000.0)
 
-        self.controller.a().onTrue(
-            commands2.SequentialCommandGroup(
-                self.shooter.runOnce(
-                    lambda: SignalLogger.start()
-                ),
-                self.shooter.set_voltage(self.shooter.flywheel_motor, 0.5, 1),
-                self.shooter.set_voltage(self.shooter.flywheel_motor, 1.0, 1),
-                self.shooter.set_voltage(self.shooter.flywheel_motor, 1.5, 1),
-                self.shooter.set_voltage(self.shooter.flywheel_motor, 2.0, 1),
-                self.shooter.set_voltage(self.shooter.flywheel_motor, 3.0, 2.0),
-                self.shooter.set_voltage(self.shooter.flywheel_motor, 6.0, 2.0),
-                self.shooter.set_voltage(self.shooter.flywheel_motor, 9.0, 2.0),
-                self.shooter.set_voltage(self.shooter.flywheel_motor, 12.0, 5.0),
-                self.shooter.runOnce(
-                    lambda: SignalLogger.stop()
-                )
-            )
-        )
+    #     self.controller.a().onTrue(
+    #         commands2.SequentialCommandGroup(
+    #             self.shooter.runOnce(
+    #                 lambda: SignalLogger.start()
+    #             ),
+    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 0.5, 1),
+    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 1.0, 1),
+    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 1.5, 1),
+    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 2.0, 1),
+    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 3.0, 2.0),
+    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 6.0, 2.0),
+    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 9.0, 2.0),
+    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 12.0, 5.0),
+    #             self.shooter.runOnce(
+    #                 lambda: SignalLogger.stop()
+    #             )
+    #         )
+    #     )
 
-        self.controller.y().onTrue(
-            commands2.SequentialCommandGroup(
-                self.shooter.runOnce(
-                    lambda: SignalLogger.start()
-                ),
-                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 0.5, 1.0),
-                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 1.0, 1.0),
-                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 1.5, 1.0),
-                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 2.0, 1.0),
-                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 3.0, 2.0),
-                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 6.0, 2.0),
-                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 9.0, 2.0),
-                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 12.0, 5.0),
-                self.shooter.runOnce(
-                    lambda: SignalLogger.stop()
-                )
-            )
-        )
+    #     self.controller.y().onTrue(
+    #         commands2.SequentialCommandGroup(
+    #             self.shooter.runOnce(
+    #                 lambda: SignalLogger.start()
+    #             ),
+    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 0.5, 1.0),
+    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 1.0, 1.0),
+    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 1.5, 1.0),
+    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 2.0, 1.0),
+    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 3.0, 2.0),
+    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 6.0, 2.0),
+    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 9.0, 2.0),
+    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 12.0, 5.0),
+    #             self.shooter.runOnce(
+    #                 lambda: SignalLogger.stop()
+    #             )
+    #         )
+    #     )
 
-        # # https://v6.docs.ctr-electronics.com/en/latest/docs/api-reference/mechanisms/swerve/swerve-requests.html#swerve-requests-with-direct-control
-        # self.drive_request = (
-        #     swerve.requests.RobotCentric()
-        #     .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-        #     .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-        #     .with_deadband(self.max_linear_speed * 0.05)
-        #     .with_rotational_deadband(self.max_angular_rate * 0.05)
-        #     .with_desaturate_wheel_speeds(True)
-        # )
+    #     # # https://v6.docs.ctr-electronics.com/en/latest/docs/api-reference/mechanisms/swerve/swerve-requests.html#swerve-requests-with-direct-control
+    #     # self.drive_request = (
+    #     #     swerve.requests.RobotCentric()
+    #     #     .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
+    #     #     .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
+    #     #     .with_deadband(self.max_linear_speed * 0.05)
+    #     #     .with_rotational_deadband(self.max_angular_rate * 0.05)
+    #     #     .with_desaturate_wheel_speeds(True)
+    #     # )
 
-        # self.controller.y().onTrue(
-        #     self.drivetrain.runOnce(
-        #         self.drivetrain.set_control(
-        #             self.drive_request.with_velocity_x(1)
-        #         )
-        #     ).andThen(
-        #         WaitCommand(0.75)
-        #     ).andThen(
-        #         self.drivetrain.runOnce(self.drive_request)
-        #     )
-        # )
+    #     # self.controller.y().onTrue(
+    #     #     self.drivetrain.runOnce(
+    #     #         self.drivetrain.set_control(
+    #     #             self.drive_request.with_velocity_x(1)
+    #     #         )
+    #     #     ).andThen(
+    #     #         WaitCommand(0.75)
+    #     #     ).andThen(
+    #     #         self.drivetrain.runOnce(self.drive_request)
+    #     #     )
+    #     # )
 
-        # self.controller.a().onTrue(
-        #     self.drivetrain.runOnce(
-        #         self.drivetrain.set_control(
-        #             self.drive_request.with_velocity_x(-1)
-        #         )
-        #     ).andThen(
-        #         WaitCommand(0.75)
-        #     ).andThen(
-        #         self.drivetrain.runOnce(self.drive_request)
-        #     )
-        # )
+    #     # self.controller.a().onTrue(
+    #     #     self.drivetrain.runOnce(
+    #     #         self.drivetrain.set_control(
+    #     #             self.drive_request.with_velocity_x(-1)
+    #     #         )
+    #     #     ).andThen(
+    #     #         WaitCommand(0.75)
+    #     #     ).andThen(
+    #     #         self.drivetrain.runOnce(self.drive_request)
+    #     #     )
+    #     # )

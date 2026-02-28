@@ -47,7 +47,7 @@ class ShooterConstants:
     _flywheel_intake_motor_configs = TalonFXConfiguration()
     _flywheel_intake_motor_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
     _flywheel_intake_motor_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)
-    _flywheel_intake_motor_configs.motor_output.with_control_timesync_freq_hz(500)
+    # _flywheel_intake_motor_configs.motor_output.with_control_timesync_freq_hz(500)
     _flywheel_intake_motor_configs.current_limits.with_stator_current_limit(60)
     _flywheel_intake_motor_configs.current_limits.with_stator_current_limit_enable(True)
     _flywheel_intake_motor_configs.slot0.with_k_s(0.169)
