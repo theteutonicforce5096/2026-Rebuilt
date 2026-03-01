@@ -18,7 +18,7 @@ class SwerveDrivetrainConstants:
     _max_angular_rate = 16 # Max angular velocity in radians per second 
 
     # Number of times to attempt to configure each device
-    _num_config_attempts = 10
+    _num_config_attempts = 25
 
     # The steer motor uses any SwerveModule.SteerRequestType control request with the
     # output type specified by SwerveModuleConstants.SteerMotorClosedLoopOutput
@@ -85,7 +85,7 @@ class SwerveDrivetrainConstants:
         configs.CurrentLimitsConfigs()
         # Swerve azimuth does not require much torque output, so we can set a relatively low
         # stator current limit to help avoid brownouts without impacting performance.
-        .with_stator_current_limit(60.0)
+        .with_stator_current_limit(40.0) #60
         .with_stator_current_limit_enable(True)
     )
         

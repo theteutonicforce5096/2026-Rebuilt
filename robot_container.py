@@ -1,5 +1,6 @@
 import commands2
 from commands2 import WaitCommand
+from commands2.sysid import SysIdRoutine
 
 from phoenix6 import swerve, SignalLogger
 from wpilib import DriverStation
@@ -78,26 +79,23 @@ class RobotContainer:
 
         # TODO: Add in shooter functions and check if this even works????
         self.controller.a().onTrue(
+            commands2.SequentialCommandGroup(
             # commands2.ParallelDeadlineGroup(
             #     commands2.WaitUntilCommand(lambda: self.controller.getHID().getBButton()),
             #     commands2.SequentialCommandGroup(
                     # self.drivetrain.runOnce(
                     #     lambda: self.drivetrain.auto_align_to_hub()
                     # ),
-            commands2.ParallelCommandGroup(
-                self.shooter.shoot(
-                    self.shooter.desired_ball_speed_sub.get(),
-                    self.shooter.desired_flywheel_intake_speed_sub.get()
-                ).until(
-                    lambda: self.controller.getHID().getBButton()
-                ).andThen(
-                    lambda: self.shooter.stop()
+                commands2.ParallelCommandGroup(
+                    self.shooter.shoot(
+                        self.shooter.desired_ball_speed_sub.get(),
+                        self.shooter.desired_flywheel_intake_speed_sub.get()
+                    ),
+                    self.drivetrain.set_brake_mode().until(
+                        lambda: self.controller.getHID().getBButton()
+                    )
                 ),
-                self.drivetrain.set_brake_mode().until(
-                    lambda: self.controller.getHID().getBButton()
-                ).andThen(
-                    lambda: self.shooter.stop()
-                )
+                self.shooter.runOnce(lambda: self.shooter.stop())
             )
         )
         #     )
@@ -135,10 +133,10 @@ class RobotContainer:
         #         ))
         # )
 
-        self.controller.x().onTrue(
-            self.shooter.runOnce(
-                lambda: self.shooter.stop())
-        )
+        # self.controller.x().onTrue(
+        #     self.shooter.runOnce(
+        #         lambda: self.shooter.stop())
+        # )
         
         # #Max rps of flywheel (neo vortex) = 113
         # #Max rps of flywheel intake (falcon 500) = 106
@@ -159,11 +157,29 @@ class RobotContainer:
         #     )
         # )
 
-    # def create_commands_test(self):
-    #     self.shooter.flywheel_motor.get_velocity().set_update_frequency(1000.0)
-    #     self.shooter.flywheel_intake_motor.get_velocity().set_update_frequency(1000.0)
-    #     self.shooter.flywheel_motor.get_motor_voltage().set_update_frequency(1000.0)
-    #     self.shooter.flywheel_intake_motor.get_motor_voltage().set_update_frequency(1000.0)
+    def create_commands_test(self):
+        self.shooter.flywheel_encoder.get_velocity().set_update_frequency(1000.0)
+
+        self.shooter.flywheel_motor.get_velocity().set_update_frequency(1000.0)
+        self.shooter.flywheel_motor.get_position().set_update_frequency(1000.0)
+        self.shooter.flywheel_motor.get_motor_voltage().set_update_frequency(1000.0)
+
+        self.shooter.flywheel_intake_motor.get_velocity().set_update_frequency(1000.0)
+        self.shooter.flywheel_intake_motor.get_position().set_update_frequency(1000.0)
+        self.shooter.flywheel_intake_motor.get_motor_voltage().set_update_frequency(1000.0)
+
+        # Set the SysId routine to run
+        self.shooter.set_sys_id_routine()
+    
+        # Set button bindings for starting and stopping SignalLogger
+        self.controller.leftBumper().onTrue(commands2.cmd.runOnce(SignalLogger.start))
+        self.controller.rightBumper().onTrue(commands2.cmd.runOnce(SignalLogger.stop))
+
+        # Set button bindings for performing various parts of SysID routine
+        self.controller.y().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kForward))
+        self.controller.a().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kReverse))
+        self.controller.b().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kForward))
+        self.controller.x().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kReverse))
 
     #     self.controller.a().onTrue(
     #         commands2.SequentialCommandGroup(

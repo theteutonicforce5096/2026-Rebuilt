@@ -17,7 +17,7 @@ class ShooterConstants:
     _flywheel_encoder_id = 32
 
     # Number of times to attempt to configure each device
-    _num_config_attempts = 10
+    _num_config_attempts = 5
 
     # Update frequency in hertz for the flywheel encoder's velocity measurement
     flywheel_encoder_vel_update_frequency = 1000.0
@@ -30,8 +30,7 @@ class ShooterConstants:
     _flywheel_motor_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
     _flywheel_motor_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
     _flywheel_motor_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)
-    _flywheel_motor_configs.motor_output.with_control_timesync_freq_hz(500)
-    _flywheel_motor_configs.current_limits.with_stator_current_limit(80)
+    _flywheel_motor_configs.current_limits.with_stator_current_limit(60) #80
     _flywheel_motor_configs.current_limits.with_stator_current_limit_enable(True)
     _flywheel_motor_configs.external_feedback.with_feedback_remote_sensor_id(_flywheel_encoder_id)
     _flywheel_motor_configs.external_feedback.with_external_feedback_sensor_source(signals.FeedbackSensorSourceValue.REMOTE_CANCODER)
@@ -47,7 +46,6 @@ class ShooterConstants:
     _flywheel_intake_motor_configs = TalonFXConfiguration()
     _flywheel_intake_motor_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
     _flywheel_intake_motor_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)
-    # _flywheel_intake_motor_configs.motor_output.with_control_timesync_freq_hz(500)
     _flywheel_intake_motor_configs.current_limits.with_stator_current_limit(60)
     _flywheel_intake_motor_configs.current_limits.with_stator_current_limit_enable(True)
     _flywheel_intake_motor_configs.slot0.with_k_s(0.169)

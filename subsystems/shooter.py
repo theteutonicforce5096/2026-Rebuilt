@@ -1,13 +1,18 @@
 from commands2 import Subsystem
 from commands2 import ParallelCommandGroup, SequentialCommandGroup, WaitCommand, PrintCommand, WaitUntilCommand
 
-from phoenix6 import CANBus
+from phoenix6 import CANBus, SignalLogger
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
 from phoenix6.hardware import TalonFX, TalonFXS, CANcoder
 from phoenix6.controls import VelocityVoltage, VoltageOut
 from phoenix6.status_code import StatusCode
 
+from commands2.sysid import SysIdRoutine 
+from wpilib.sysid import SysIdRoutineLog
+from wpilib import SendableChooser
+
 from ntcore import NetworkTableInstance
+from wpilib.shuffleboard import Shuffleboard
 
 class Shooter(Subsystem):
     """
@@ -62,11 +67,54 @@ class Shooter(Subsystem):
         # Create VelocityVoltage request
         self.velocity_pid_request = VelocityVoltage(velocity = 0)
 
-        self.voltage_request = VoltageOut(output = 0, use_timesync = True).with_update_freq_hz(0.0)
+        self.voltage_request = VoltageOut(output = 0)
         
         # What to publish over networktables for shooter
         self._network_table_instance = NetworkTableInstance.getDefault()
-        
+
+        #Create SysId routine for characterizing flywheel motor
+        self.flywheel_motor_sys_id_routine = SysIdRoutine(
+            SysIdRoutine.Config(
+                rampRate = 0.5,
+                stepVoltage = 9.0,
+                timeout = 30.0,
+                recordState = lambda state: SignalLogger.write_string(
+                    "SysId_Flywheel_Motor_State", SysIdRoutineLog.stateEnumToString(state)
+                )
+            ),
+            SysIdRoutine.Mechanism(
+                lambda output: self.flywheel_motor.set_control(self.voltage_request.with_output(output)),
+                lambda log: None,
+                self,
+            ),
+        )
+
+        #Create SysId routine for characterizing flywheel intake motor
+        self.flywheel_intake_motor_sys_id_routine = SysIdRoutine(
+            SysIdRoutine.Config(
+                rampRate = 0.5,
+                stepVoltage = 9.0,
+                timeout = 30.0,
+                recordState = lambda state: SignalLogger.write_string(
+                    "SysId_Flywheel_Intake_Motor_State", SysIdRoutineLog.stateEnumToString(state)
+                )
+            ),
+            SysIdRoutine.Mechanism(
+                lambda output: self.flywheel_intake_motor.set_control(self.voltage_request.with_output(output)),
+                lambda log: None,
+                self,
+            ),
+        )
+
+        # Create widget for selecting SysId routine and set default value
+        self.sys_id_routine_to_apply = self.flywheel_motor_sys_id_routine
+        self.sys_id_routines = SendableChooser()
+        self.sys_id_routines.setDefaultOption("Flywheel Motor Routine", self.flywheel_motor_sys_id_routine)
+        self.sys_id_routines.addOption("Flywheel Intake Motor Routine", self.flywheel_intake_motor_sys_id_routine)
+
+        # Send widget to Shuffleboard 
+        Shuffleboard.getTab("SysId").add(f"Routines", self.sys_id_routines).withSize(2, 1)
+
         # Shooter state
         self._shooter_table = self._network_table_instance.getTable("Shooter State")
         self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed in Rotations per Second").publish() 
@@ -75,7 +123,7 @@ class Shooter(Subsystem):
         self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").publish()
         self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").subscribe(.25)
         self.desired_flywheel_intake_speed_sub.get()
-        
+
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
                           num_attempts: int) -> None:
@@ -98,6 +146,30 @@ class Shooter(Subsystem):
         if not status_code.is_ok():
             PrintCommand(f"Device with CAN ID {device.device_id} failed to config with error: {status_code.name}").schedule()
         
+    def set_sys_id_routine(self):
+        """
+        Set the SysId Routine to run based off of the routine chosen in Shuffleboard.
+        """
+        self.sys_id_routine_to_apply = self.sys_id_routines.getSelected()
+
+    def sys_id_quasistatic(self, direction: SysIdRoutine.Direction):
+        """
+        Runs the SysId Quasistatic test in the given direction for the routine specified by self.sys_id_routine_to_apply.
+
+        :param direction: Direction of the SysId Quasistatic test
+        :type direction: SysIdRoutine.Direction
+        """
+        return self.sys_id_routine_to_apply.quasistatic(direction)
+
+    def sys_id_dynamic(self, direction: SysIdRoutine.Direction):
+        """
+        Runs the SysId Dynamic test in the given direction for the routine specified by self.sys_id_routine_to_apply.
+
+        :param direction: Direction of the SysId Dynamic test
+        :type direction: SysIdRoutine.Direction
+        """
+        return self.sys_id_routine_to_apply.dynamic(direction)
+    
         #TODO is_near is not working well. Likely because of oscilation (fix PID tuning)
     def shoot(self, flywheel_target_velocity, intake_motor_velocity):
         return SequentialCommandGroup(
@@ -155,19 +227,19 @@ class Shooter(Subsystem):
     # def stop_networktable(self):
     #     SequentialCommandGroup(
     #         self.runOnce(lambda: self.flywheel_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * 113 * .75))),
+    #             self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * .75))),
     #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * 106 * .75))),
+    #             self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * .75))),
     #         WaitCommand(.25),
     #         self.runOnce(lambda: self.flywheel_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * 113 * .5))),
+    #             self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * .5))),
     #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * 106 * .5))),
+    #             self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * .5))),
     #         WaitCommand(.25),
     #         self.runOnce(lambda: self.flywheel_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * 113 * .25))),
+    #             self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * .25))),
     #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
-    #             self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * 106 * .25))),
+    #             self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * .25))),
     #         WaitCommand(.25),
     #         self.runOnce(lambda: self.flywheel_motor.set_control(
     #             self.velocity_pid_request.with_velocity(0))),
