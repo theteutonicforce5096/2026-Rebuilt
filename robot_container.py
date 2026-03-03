@@ -15,7 +15,7 @@ class RobotContainer:
 
         # Initialize hopper 
         self.hopper = Hopper(3)
-        self.pxn_fightstick = commands2.button.CommandJoystick(0)
+        self.controller = commands2.button.CommandXboxController(0)
 
     ''' THIS DOES NOT MATTER IN TERMS OF HOPPER'''
         # # Initialize drivetrain subsystem
@@ -49,11 +49,11 @@ class RobotContainer:
     def configure_button_bindings_teleop(self):
        
         # When button 1 is pressed the hopper is on
-        self.pxn_fightstick.button(1).whileTrue(
+        self.controller.rightBumper().whileTrue(
             self.hopper.run(lambda: self.hopper.hopper_on())
         )
         # When button 1 stops being pressed the hopper is o
-        self.pxn_fightstick.button(1).onFalse(
+        self.controller.rightBumper().whileFalse(
             self.hopper.run(lambda: self.hopper.hopper_off())
         )
         
