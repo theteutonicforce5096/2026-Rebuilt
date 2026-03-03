@@ -33,10 +33,10 @@ class climber(Subsystem): # <-- Telling subsystem that its part of it too
         # The device and canbus will have to be changed when I have more information
         self.talon_motor = TalonFXS(CAN_ID)
         self.talon_config = phoenix6.configs.talon_fxs_configs.TalonFXSConfiguration()
-        
+            
 
-        def intake_running(self):
-            self.talon_motor.set_position(.5)
+    def climber_close(self):
+        self.talon_motor.set_position(.5)
 
-        def intake_stopped(self):
-            self.talon_motor.set_position(.0)
+    def climber_open(self):
+        self.talon_motor.set_position(.0)
