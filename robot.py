@@ -1,5 +1,7 @@
+import time
 import commands2
-import wpilib
+from phoenix6 import SignalLogger
+from wpilib import DriverStation
 
 from robot_container import RobotContainer
 
@@ -9,33 +11,30 @@ class RebuiltRobot(commands2.TimedCommandRobot):
     """
     
     def robotInit(self):
-        self.container = RobotContainer()
-        # init_robot_command = commands2.SequentialCommandGroup(
-        #     commands2.WaitCommand(1),
-        #     commands2.InstantCommand(lambda: self.container.robot_init())
-        # )
-        # init_robot_command.schedule()
-    
+        # Disable Phoenix 6 Auto Signal Logging
+        SignalLogger.enable_auto_logging(False)
+
+        # Sleep for 10 seconds to prevent CANBus motor config errors 
+        # and allow libraries to fully initialize
+        time.sleep(1) 
+
+        # Create robot container
+        self.robot_container = RobotContainer()
+
+        if DriverStation.isFMSAttached():
+            SignalLogger.start()
+
     def robotPeriodic(self):
         commands2.CommandScheduler.getInstance().run()
+
+    def disabledInit(self):
+        commands2.CommandScheduler.getInstance().cancelAll()
         
     def autonomousInit(self):
-        commands2.CommandScheduler.getInstance().cancelAll()
-        self.container.create_commands_auto()
-
-    def autonomousExit(self):
-        commands2.CommandScheduler.getInstance().cancelAll()
+        self.robot_container.create_commands_auto()
 
     def teleopInit(self):
-        commands2.CommandScheduler.getInstance().cancelAll()
-        self.container.create_commands_teleop()
-
-    def teleopExit(self):
-        commands2.CommandScheduler.getInstance().cancelAll()
+        self.robot_container.create_commands_teleop()
     
     def testInit(self):
-        commands2.CommandScheduler.getInstance().cancelAll()
-        self.container.create_commands_test()
-
-    def testExit(self):
-        commands2.CommandScheduler.getInstance().cancelAll()
+        self.robot_container.create_commands_test()

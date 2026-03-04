@@ -1,8 +1,9 @@
+import time
 import commands2
-from commands2 import WaitCommand
+from commands2 import SequentialCommandGroup, WaitCommand
 from commands2.sysid import SysIdRoutine
 
-from phoenix6 import swerve, SignalLogger
+from phoenix6 import swerve, SignalLogger, signals
 from wpilib import DriverStation
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import inchesToMeters
@@ -13,23 +14,18 @@ from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_i
 
 class RobotContainer:
     def __init__(self):
+        # Define max speed variables
+        self.max_linear_speed = SwerveDrivetrainConstants._max_linear_speed
+        self.max_angular_rate = SwerveDrivetrainConstants._max_angular_rate
+
+        # Create controller
+        self.controller = commands2.button.CommandXboxController(0)
+        
         # Create drivetrain subsystem
         self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
                      
         # Create shooter subsystem
         self.shooter = ShooterConstants.create_shooter()
-
-        # Create controller
-        self.controller = commands2.button.CommandXboxController(0)
-        
-        # Define max speed variables
-        self.max_linear_speed = SwerveDrivetrainConstants._max_linear_speed
-        self.max_angular_rate = SwerveDrivetrainConstants._max_angular_rate
-
-        # idle = swerve.requests.Idle()
-        # commands2.button.Trigger(DriverStation.isDisabled).whileTrue(
-        #     self.drivetrain.run(lambda: idle).ignoringDisable(True)
-        # )
 
         # Set starting pose for testing auto shooting
         self.drivetrain.reset_pose(
@@ -50,34 +46,16 @@ class RobotContainer:
         (self.controller.leftBumper() & self.controller.rightBumper()).onTrue(
             self.drivetrain.runOnce(lambda: self.drivetrain.seed_field_centric())
         )
-
-        # Set default command for drivetrain
-        self.drivetrain.setDefaultCommand(
-            self.drivetrain.get_operator_drive_command(
-                lambda: self.controller.getLeftTriggerAxis() > 0.05,
-                lambda: self.controller.getRightTriggerAxis() > 0.05,
-                lambda: self.controller.getLeftY(),
-                lambda: self.controller.getLeftX(),
-                lambda: self.controller.getRightX()
-            ) 
+          
+        self.controller.y().onTrue(
+            commands2.DeferredCommand(
+                self.drivetrain.auto_align_to_hub,
+                self.drivetrain
+            ).until(
+                lambda: self.controller.getHID().getBButton()
+            )
         )
 
-        # Estimated button bindings for shooter (subject to change):
-        #     - Left trigger: Shoot at calculated speed based on distance to target
-        #     - X button: Shoot at speeds specified by network tables
-        #     - B button: Stop shooting no matter what mode is being used
-        #     - A button: Auto move button (figure out to where later)
-        #     - Y button: Cancel auto move command
-
-        # self.controller.a().onTrue(
-        #     self.drivetrain.runOnce(
-        #         lambda: self.drivetrain.auto_align_to_hub()
-        #     ).until(
-        #         lambda: self.controller.getHID().getBButton()
-        #     )
-        # )
-
-        # TODO: Add in shooter functions and check if this even works????
         self.controller.a().onTrue(
             commands2.SequentialCommandGroup(
             # commands2.ParallelDeadlineGroup(
@@ -98,9 +76,29 @@ class RobotContainer:
                 self.shooter.runOnce(lambda: self.shooter.stop())
             )
         )
+
+        # # Set default command for drivetrain
+        # self.drivetrain.setDefaultCommand(
+        #     self.drivetrain.get_operator_drive_command(
+        #         lambda: self.controller.getLeftTriggerAxis() > 0.05,
+        #         lambda: self.controller.getRightTriggerAxis() > 0.05,
+        #         lambda: self.controller.getLeftY(),
+        #         lambda: self.controller.getLeftX(),
+        #         lambda: self.controller.getRightX()
         #     )
         # )
 
+        # # Estimated button bindings for shooter (subject to change):
+        #     - Left trigger: Shoot at calculated speed based on distance to target
+        #     - X button: Shoot at speeds specified by network tables
+        #     - B button: Stop shooting no matter what mode is being used
+        #     - A button: Auto move button (figure out to where later)
+        #     - Y button: Cancel auto move command
+
+        # TODO: Add in shooter functions and check if this even works????
+     
+        #     )
+        # )
         # # TODO: Add in shooter functions and check if this even works????
         # self.controller.leftTrigger().onTrue(
         #     commands2.ParallelRaceGroup(
