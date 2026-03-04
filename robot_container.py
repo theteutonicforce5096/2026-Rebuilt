@@ -4,7 +4,7 @@ from commands2.sysid import SysIdRoutine
 from phoenix6 import SignalLogger
 
 from wpimath.geometry import Pose2d, Rotation2d
-from wpimath.units import inchesToMeters
+from wpimath.units import inchesToMeters, feetToMeters
 
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
@@ -25,9 +25,9 @@ class RobotContainer:
         # Create shooter subsystem
         self.shooter = ShooterConstants.create_shooter()
 
-        # Set starting pose for testing auto shooting
+        # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
         self.drivetrain.reset_pose(
-            Pose2d(inchesToMeters(181.56- 23.51) - 3, inchesToMeters(158.32), Rotation2d.fromDegrees(0))
+            Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(10), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
         )
 
     def create_commands_auto(self):
@@ -35,7 +35,7 @@ class RobotContainer:
 
     def create_commands_teleop(self):   
         # Set the forward perspective of the robot for field oriented driving
-        self.drivetrain._set_forward_perspective()
+        self.drivetrain.set_forward_perspective()
         
         # Reset slew rate limiters for controlling acceleration
         self.drivetrain.reset_slew_rate_limiters()
@@ -43,6 +43,17 @@ class RobotContainer:
         # Set button binding for reseting field centric heading
         (self.controller.leftBumper() & self.controller.rightBumper()).onTrue(
             self.drivetrain.runOnce(lambda: self.drivetrain.seed_field_centric())
+        )
+
+        # Set default command for drivetrain
+        self.drivetrain.setDefaultCommand(
+            self.drivetrain.get_operator_drive_command(
+                lambda: self.controller.getLeftTriggerAxis() > 0.05,
+                lambda: self.controller.getRightTriggerAxis() > 0.05,
+                lambda: self.controller.getLeftY(),
+                lambda: self.controller.getLeftX(),
+                lambda: self.controller.getRightX()
+            )
         )
           
         self.controller.y().onTrue(
@@ -56,12 +67,12 @@ class RobotContainer:
 
         self.controller.a().onTrue(
             commands2.SequentialCommandGroup(
-            # commands2.ParallelDeadlineGroup(
-            #     commands2.WaitUntilCommand(lambda: self.controller.getHID().getBButton()),
-            #     commands2.SequentialCommandGroup(
-                    # self.drivetrain.runOnce(
-                    #     lambda: self.drivetrain.auto_align_to_hub()
-                    # ),
+                commands2.DeferredCommand(
+                    self.drivetrain.auto_align_to_hub,
+                    self.drivetrain
+                ).until(
+                    lambda: self.controller.getHID().getXButton()
+                ),
                 commands2.ParallelCommandGroup(
                     self.shooter.shoot(
                         self.shooter.desired_ball_speed_sub.get(),
@@ -74,17 +85,6 @@ class RobotContainer:
                 self.shooter.runOnce(lambda: self.shooter.stop())
             )
         )
-
-        # # Set default command for drivetrain
-        # self.drivetrain.setDefaultCommand(
-        #     self.drivetrain.get_operator_drive_command(
-        #         lambda: self.controller.getLeftTriggerAxis() > 0.05,
-        #         lambda: self.controller.getRightTriggerAxis() > 0.05,
-        #         lambda: self.controller.getLeftY(),
-        #         lambda: self.controller.getLeftX(),
-        #         lambda: self.controller.getRightX()
-        #     )
-        # )
 
         # # Estimated button bindings for shooter (subject to change):
         #     - Left trigger: Shoot at calculated speed based on distance to target

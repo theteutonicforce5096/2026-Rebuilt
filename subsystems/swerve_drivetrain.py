@@ -11,7 +11,7 @@ from wpilib import DriverStation, RobotBase
 
 from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Rotation2d
-from wpimath.units import inchesToMeters
+from wpimath.units import inchesToMeters, radiansToDegrees
 
 from pathplannerlib.auto import AutoBuilder, RobotConfig
 from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
@@ -49,8 +49,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         """
 
         # Redefine the number of config attempts to try in phoenix6.swerve.swerve_drivetrain API
-        swerve.swerve_drivetrain._NUM_CONFIG_ATTEMPTS = num_config_attempts
-        swerve.swerve_module._NUM_CONFIG_ATTEMPTS = num_config_attempts
+        # swerve.swerve_drivetrain._NUM_CONFIG_ATTEMPTS = num_config_attempts
+        # swerve.swerve_module._NUM_CONFIG_ATTEMPTS = num_config_attempts
         
         # Initialize parent classes
         Subsystem.__init__(self)
@@ -58,7 +58,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                                          drivetrain_constants, modules)
         
         # Create Limelight instance and configure default values
-        # self.camera = VisionCamera()
+        self.camera = VisionCamera()
         
         # Create max speeds variables
         self.max_linear_speed = max_linear_speed
@@ -83,7 +83,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
         # Create current alliance variable
         self.current_alliance = None 
-        self._set_forward_perspective()
+        self.set_forward_perspective()
 
         # Create slew rate limiters for limiting robot acceleration
         self.straight_speed_limiter = SlewRateLimiter(self.max_linear_speed * 5)
@@ -117,7 +117,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
-            .with_heading_pid(1, 0, 0)
+            .with_heading_pid(25, 0, 0)
         )
 
         self.brake_mode_request = (
@@ -172,7 +172,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         #     self.add_vision_measurement(
         #         robot_pose,
         #         utils.fpga_to_current_time(timestamp),
-        #         (1.0, 1.0, pi / 8)
+        #         (1.0, 1.0, 1000 * pi)
         #     )
 
         #     vision_pose_array = [robot_pose.x, robot_pose.y, robot_pose.rotation().degrees()]
@@ -197,7 +197,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         self.strafe_speed_limiter.reset(current_state.speeds.vy)
         self.rotation_speed_limiter.reset(current_state.speeds.omega)
 
-    def _set_forward_perspective(self):
+    def set_forward_perspective(self):
         """
         Set forward perspective of the robot for field oriented drive.
         """
@@ -213,7 +213,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             self.set_operator_perspective_forward(Rotation2d.fromDegrees(0))
             self.current_alliance = DriverStation.Alliance.kBlue
 
-            self._set_hub_position(self.field_type, self.current_alliance)
+        self._set_hub_position(self.field_type, self.current_alliance)
     
     def _set_hub_position(self, field_type: str, alliance_color: DriverStation.Alliance):
         """
@@ -340,16 +340,41 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         current_pose = self.get_state().pose
 
         # Get the optimal angle from the robot to the target
-        optimal_angle = atan2(self.hub_y_pos - current_pose.y, self.hub_x_pos - current_pose.x)
+        optimal_angle = atan2(abs(self.hub_y_pos - current_pose.y), self.hub_x_pos - current_pose.x)
 
-        return self.run(
-            lambda: self.set_control(
-                self.rotate_robot_request.with_target_direction(
-                    Rotation2d(optimal_angle)
-                )
+        if self.current_alliance == DriverStation.Alliance.kRed:
+            optimal_angle -= pi
+
+            return self.run(
+                lambda: self.test_pid(optimal_angle)
+                # lambda: self.set_control(
+                #     self.rotate_robot_request.with_target_direction(
+                #         Rotation2d(optimal_angle)
+                #     )
+                # )
+            ).until(
+                lambda: abs((self.get_state().pose.rotation().degrees() - pi) - optimal_angle) < 1
             )
-        ).until(
-            lambda: abs(self.get_state().pose.rotation().degrees() - optimal_angle) < 0.5
+        
+        else:
+            return self.run(
+                lambda: self.test_pid(optimal_angle)
+                # lambda: self.set_control(
+                #     self.rotate_robot_request.with_target_direction(
+                #         Rotation2d(optimal_angle)
+                #     )
+                # )
+            ).until(
+                lambda: abs(self.get_state().pose.rotation().degrees() - optimal_angle) < 1
+            )
+    
+    def test_pid(self, optimal_angle):
+        print(f"Target: {radiansToDegrees(optimal_angle)}. Current: {self.get_state().pose.rotation().degrees()}")
+
+        self.set_control(
+            self.rotate_robot_request.with_target_direction(
+                Rotation2d(optimal_angle)
+            )
         )
     
     def set_brake_mode(self):
