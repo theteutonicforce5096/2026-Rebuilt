@@ -28,7 +28,7 @@ class ShooterConstants:
     _flywheel_motor_configs = TalonFXSConfiguration()
     _flywheel_motor_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.VORTEX_JST)
     _flywheel_motor_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
-    _flywheel_motor_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
+    _flywheel_motor_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
     _flywheel_motor_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)
     _flywheel_motor_configs.current_limits.with_stator_current_limit(60) #80
     _flywheel_motor_configs.current_limits.with_stator_current_limit_enable(True)
@@ -44,9 +44,9 @@ class ShooterConstants:
 
     # Flywheel Intake Motor Configs (Falcon 500 - TalonFX)
     _flywheel_intake_motor_configs = TalonFXConfiguration()
-    _flywheel_intake_motor_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
+    _flywheel_intake_motor_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
     _flywheel_intake_motor_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)
-    _flywheel_intake_motor_configs.current_limits.with_stator_current_limit(60)
+    _flywheel_intake_motor_configs.current_limits.with_stator_current_limit(40)
     _flywheel_intake_motor_configs.current_limits.with_stator_current_limit_enable(True)
     _flywheel_intake_motor_configs.slot0.with_k_s(0.169)
     _flywheel_intake_motor_configs.slot0.with_k_v(0.118)

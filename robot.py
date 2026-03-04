@@ -1,7 +1,8 @@
 import time
 import commands2
+
+from wpilib import DriverStation, RobotBase
 from phoenix6 import SignalLogger
-from wpilib import DriverStation
 
 from robot_container import RobotContainer
 
@@ -15,8 +16,9 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         SignalLogger.enable_auto_logging(False)
 
         # Sleep for 10 seconds to prevent CANBus motor config errors 
-        # and allow libraries to fully initialize
-        time.sleep(1) 
+        # and allow libraries to fully initialize if not in simulation
+        if not RobotBase.isSimulation():
+            time.sleep(10) 
 
         # Create robot container
         self.robot_container = RobotContainer()
@@ -36,5 +38,9 @@ class RebuiltRobot(commands2.TimedCommandRobot):
     def teleopInit(self):
         self.robot_container.create_commands_teleop()
     
+    def teleopExit(self):
+        if DriverStation.isFMSAttached():
+            SignalLogger.stop()
+
     def testInit(self):
         self.robot_container.create_commands_test()

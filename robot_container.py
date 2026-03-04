@@ -1,10 +1,8 @@
-import time
 import commands2
-from commands2 import SequentialCommandGroup, WaitCommand
 from commands2.sysid import SysIdRoutine
 
-from phoenix6 import swerve, SignalLogger, signals
-from wpilib import DriverStation
+from phoenix6 import SignalLogger
+
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import inchesToMeters
 
