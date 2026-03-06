@@ -1,5 +1,5 @@
 from typing import Callable, Any
-from math import copysign, pi, atan2
+from math import copysign, pi, atan2, cos, sin
 
 from commands2 import Subsystem
 
@@ -117,7 +117,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
-            .with_heading_pid(25, 0, 0)
+            .with_heading_pid(10, 0, 0)
         )
 
         self.brake_mode_request = (
@@ -340,40 +340,34 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         current_pose = self.get_state().pose
 
         # Get the optimal angle from the robot to the target
-        optimal_angle = atan2(abs(self.hub_y_pos - current_pose.y), self.hub_x_pos - current_pose.x)
-
-        if self.current_alliance == DriverStation.Alliance.kRed:
-            optimal_angle -= pi
-
-            return self.run(
-                lambda: self.test_pid(optimal_angle)
-                # lambda: self.set_control(
-                #     self.rotate_robot_request.with_target_direction(
-                #         Rotation2d(optimal_angle)
-                #     )
-                # )
-            ).until(
-                lambda: abs((self.get_state().pose.rotation().degrees() - pi) - optimal_angle) < 1
-            )
         
-        else:
-            return self.run(
-                lambda: self.test_pid(optimal_angle)
-                # lambda: self.set_control(
-                #     self.rotate_robot_request.with_target_direction(
-                #         Rotation2d(optimal_angle)
-                #     )
-                # )
-            ).until(
-                lambda: abs(self.get_state().pose.rotation().degrees() - optimal_angle) < 1
-            )
+        # current_rotation = current_pose.rotateAround
+        # current_rotation = current_pose.rotation().radians()
+        # shooter_offset = inchesToMeters(7.95)*cos(current_rotation) + inchesToMeters(7.95)*sin(current_rotation)
+        
+        # optimal_angle = Rotation2d(self.hub_x_pos + (current_pose.x + shooter_offset), self.hub_y_pos - (current_pose.y + shooter_offset)).radians()
+        if self.current_alliance == DriverStation.Alliance.kRed:
+            optimal_angle = optimal_angle.rotateBy(Rotation2d.fromDegrees(0))
+
+        return self.run(
+            lambda: self.test_pid(optimal_angle)
+            # lambda: self.set_control(
+            #     self.rotate_robot_request.with_target_direction(
+            #         Rotation2d(optimal_angle)
+            #     )
+            # )
+        ).withTimeout(5)
     
-    def test_pid(self, optimal_angle):
-        print(f"Target: {radiansToDegrees(optimal_angle)}. Current: {self.get_state().pose.rotation().degrees()}")
+        # .until(
+        #     lambda: (self.get_state().pose.rotation().degrees() - optimal_angle.degrees()) < 1
+        # )
+        
+    def test_pid(self, optimal_angle: Rotation2d):
+        print(f"Target: {optimal_angle.degrees()}. Current: {self.get_state().pose.rotation().degrees()}")
 
         self.set_control(
             self.rotate_robot_request.with_target_direction(
-                Rotation2d(optimal_angle)
+                optimal_angle
             )
         )
     
@@ -384,4 +378,3 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         return self.run(
             lambda: self.set_control(self.brake_mode_request)
         )
-        
