@@ -47,13 +47,13 @@ class RobotContainer:
         '''THIS DOES NOT MATTER IN TERMS OF INTAKE'''
 
     def configure_button_bindings_teleop(self):
-     
-        self.controller.leftBumper().whileTrue(
-           self.intake.run(lambda: self.intake.intake_running())
-           )
+        
+        self.controller.leftBumper().onTrue(
+            self.intake.runOnce(lambda: self.intake.intake_running())
+            )
 
-        self.controller.leftBumper().whileFalse(
-            self.intake.run(lambda: self.intake.intake_stopped())
+        self.controller.leftBumper().onFalse(
+            self.intake.runOnce(lambda: self.intake.intake_stopped())
             )
 
         

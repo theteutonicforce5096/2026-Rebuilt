@@ -22,22 +22,30 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         # it needs to know the parent class's setup code and 
         # that commands 2 knows that Hopper exists
         Subsystem.__init__(self) 
-    
-        # # Idek if we need spark max I'm going to be completely honest like genuinely
-        # self.Neo550_1 = rev.SparkMax.MotorType.kBrushless
-        # self.Neo_configs = rev.SparkMax.configure()
-        # self.Neo550_1(self.Neo_configs)
 
-        # The device and canbus will have to be changed when I have more information
-        self.talon_motor2 = TalonFXS(80)
-        self.talon_config2 = phoenix6.configs.talon_fxs_configs.TalonFXSConfiguration()
+        # Objects that we need
+        CANBUS = phoenix6.CANBus.roborio()
+        MOTOROUTPUT = phoenix6.configs.config_groups.MotorOutputConfigs()
+        INVERTED = phoenix6.signals.spn_enums.InvertedValue(1)
+        MOTOROUTPUT.inverted = INVERTED
+        
+        # CANID is set to 40
+        self.talon_motor2 = TalonFXS(40, CANBUS)
+        
+        self.talon_config2 = phoenix6.configs.TalonFXSConfiguration()
+        self.talon_config2.commutation.motor_arrangement = phoenix6.signals.MotorArrangementValue(phoenix6.signals.MotorArrangementValue.NEO550_JST)
+        self.talon_config2.motor_output = MOTOROUTPUT
+        # Store the result of the cofig apply to variale
+        self.talon_motor2.configurator.apply(self.talon_config2)
         
 
     def intake_running(self):
-            self.talon_motor2.set(0.5) # Set to 50% power, can be changed later
+        self.talon_motor2.set(0.5) # Set to 50% power, can be changed later
             # print("Intake is running!!!")
+        print("Sanity Check Run")
 
     def intake_stopped(self):
-            self.talon_motor2.set(0) # Stop the motor
+        self.talon_motor2.set(0) # Stop the motor
+        print("Sanity Check Stop")
             
-   
+
