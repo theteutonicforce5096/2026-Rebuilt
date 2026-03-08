@@ -15,6 +15,13 @@ from phoenix6.controls import FireAnimation
 from phoenix6.controls import EmptyAnimation
 
 
+""" 
+TODO: Get game clock 
+- Get values of game clock, we are just going to tell driver when the active hub switches
+- Auto-in-progress method could also be used w/ game clock
+
+"""
+
 class LED():
     """ 
 Controls LEDS 👅👅
