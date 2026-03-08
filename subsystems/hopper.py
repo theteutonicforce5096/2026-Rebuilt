@@ -12,7 +12,13 @@ import commands2
 from commands2 import Subsystem
 from commands2.cmd import print_
 
+""" 
+TODO: 
+- It would be beneficial if we had an order to when which motors turn on so nothing gets stuck
+1. Shooter Intake
+2. Mechanim wheels
 
+"""
 
 class Hopper(commands2.Subsystem): # <-- Telling subsystem that its part of it too
 
