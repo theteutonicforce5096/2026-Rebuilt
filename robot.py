@@ -1,67 +1,41 @@
-'''
-TODO: At the moment, extinquish puts out EVERY LED command; we might need to troubleshoot later
-'''
-
 import commands2
 import wpilib
-import wpilib.drive
-import subsystems.LED_controller as LED_controller
-import robot_container
+from subsystems.LED_controller import LED
 
-class MyRobot(commands2.TimedCommandRobot):
+
+from robot_container import RobotContainer
+
+class RebuiltRobot(commands2.TimedCommandRobot):
+    """
+    2026 Robot for Team 5096.
+    """
+
     def robotInit(self):
-        self.led_controller = LED_controller.LED()
-        self.pxn_fightstick = wpilib.Joystick(0)
-        self.container = robot_container.RobotContainer()
-        """
-       5096 👅👅
-        """
-       
-
+        self.container = RobotContainer()
+    
+    def robotPeriodic(self):
+        commands2.CommandScheduler.getInstance().run()
+        self.container.robotperiodic()
+        
     def autonomousInit(self):
-        pass
-        # commands2.CommandScheduler.getInstance().run()
-        """This function is run once each time the robot enters autonomous mode."""
-       
+        commands2.CommandScheduler.getInstance().cancelAll()
+        self.container.configure_button_bindings_auto()
 
-    def autonomousPeriodic(self):
-        pass
-       
-       
+    def autonomousExit(self):
+        commands2.CommandScheduler.getInstance().cancelAll()
 
     def teleopInit(self):
-        commands2.button.JoystickButton(self.pxn_fightstick, 1).onTrue(
-            commands2.InstantCommand(self.led_controller.auto_in_progress)
-        )
-        commands2.button.JoystickButton(self.pxn_fightstick, 2).onTrue(
-            commands2.InstantCommand(self.led_controller.extinguish)
-        )
-        commands2.button.JoystickButton(self.pxn_fightstick, 3).onTrue(
-            commands2.InstantCommand(self.led_controller.hopper_full)
-        )
-        commands2.button.JoystickButton(self.pxn_fightstick, 4).onTrue(
-            commands2.InstantCommand(self.led_controller.shooting)
-        )
-        commands2.button.JoystickButton(self.pxn_fightstick, 7).onTrue(
-            commands2.InstantCommand(self.led_controller.five_seconds_left)
-        )
-        # commands2.CommandScheduler.getInstance().cancelAll()
-        """This function is called once each time the robot enters teleoperated mode."""
-        
-    def teleopPeriodic(self):
-        pass
-        """This function is called periodically during teleoperated mode."""
-        
+        commands2.CommandScheduler.getInstance().cancelAll()
+        self.container.configure_button_bindings_teleop()
+
+    def teleopExit(self):
+        commands2.CommandScheduler.getInstance().cancelAll()
+    
     def testInit(self):
-        pass
-        # commands2.CommandScheduler.getInstance().cancelAll()
-        """This function is called once each time the robot enters test mode."""
-        
-    def testPeriodic(self):
-        pass
-        # commands2.CommandScheduler.getInstance().cancelAll()
-        """This function is called periodically during test mode."""
-        
+        commands2.CommandScheduler.getInstance().cancelAll()
+
+    def testExit(self):
+        commands2.CommandScheduler.getInstance().cancelAll()
 
 if __name__ == "__main__":
-    wpilib.run(MyRobot)
+    wpilib.run(RebuiltRobot)

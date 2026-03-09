@@ -6,27 +6,24 @@ import wpilib
 import commands2
 import phoenix6
 from phoenix6 import hardware
-from phoenix6.configs.candle_configs import LEDConfigs, CANdleConfiguration
 from phoenix6.hardware import CANdle
 from phoenix6.signals import rgbw_color
 import phoenix6.controls as controls
-from phoenix6.controls import LarsonAnimation
-from phoenix6.controls import FireAnimation
-from phoenix6.controls import EmptyAnimation
+from commands2 import Subsystem
 
 
 """ 
-TODO: Get game clock 
+TODO: 
+- Fully change the code to command based rn it's like not fully there...
 - Get values of game clock, we are just going to tell driver when the active hub switches
 - Auto-in-progress method could also be used w/ game clock
 
 """
 
-class LED():
-    """ 
-Controls LEDS 👅👅
-    """
+class LED(Subsystem):
+
     def __init__(self):
+        Subsystem.__init__(self)
 # Hardware Init
         self.candle = CANdle(3)
         self.rgb = phoenix6.signals
@@ -83,6 +80,7 @@ Controls LEDS 👅👅
             bounce_mode= phoenix6.signals.spn_enums.LarsonBounceValue.BACK,
             frame_rate=160)
         self.candle.set_control(self.animation_control)
+        print("Five seconds left")
         # ANIMATION SLOT 1 ^^^
 
     def extinguish(self):
