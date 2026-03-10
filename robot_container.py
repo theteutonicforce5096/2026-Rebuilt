@@ -55,6 +55,24 @@ class RobotContainer:
         self.controller.leftBumper().onFalse(
             self.intake.runOnce(lambda: self.intake.intake_stopped())
             )
+        
+        self.controller.povDown().onTrue(
+            self.intake.runOnce(lambda: self.intake.arm_down())
+            )
+        
+        self.controller.povDown().onFalse(
+            self.intake.runOnce(lambda: self.intake.arm_stopped())
+            )
+
+        self.controller.povUp().onTrue(
+            self.intake.runOnce(lambda: self.intake.arm_up())
+            )
+
+        self.controller.povUp().onFalse(
+            self.intake.runOnce(lambda: self.intake.arm_stopped())
+            )
+
+
 
         
         
