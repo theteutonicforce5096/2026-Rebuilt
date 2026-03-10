@@ -14,7 +14,7 @@ class RobotContainer:
     def __init__(self):
 
         # Initialize hopper 
-        self.hopper = Hopper(3)
+        self.hopper = Hopper()
         self.controller = commands2.button.CommandXboxController(0)
 
     ''' THIS DOES NOT MATTER IN TERMS OF HOPPER'''
@@ -48,13 +48,19 @@ class RobotContainer:
 
     def configure_button_bindings_teleop(self):
        
-        # When button 1 is pressed the hopper is on
-        self.controller.rightBumper().whileTrue(
-            self.hopper.run(lambda: self.hopper.hopper_on())
+        self.controller.rightBumper().onTrue(
+            self.hopper.runOnce(lambda: self.hopper.mechanim_on(.5))
         )
-        # When button 1 stops being pressed the hopper is o
-        self.controller.rightBumper().whileFalse(
-            self.hopper.run(lambda: self.hopper.hopper_off())
+        self.controller.rightBumper().onFalse(
+            self.hopper.runOnce(lambda: self.hopper.mechanim_off(0))
+        )
+
+        self.controller.rightTrigger().onTrue(
+            self.hopper.runOnce(lambda: self.hopper.agitator_on(.5))
+        )
+
+        self.controller.rightTrigger().onFalse(
+            self.hopper.runOnce(lambda: self.hopper.agitator_off(0))
         )
         
 

@@ -4,7 +4,7 @@ TODO: I am making the hopper and the intake two seperate things so it will make 
 import wpilib
 import phoenix6
 import phoenix6.controls
-import phoenix6.hardware
+from phoenix6.hardware import TalonFX
 import phoenix6.configs
 import phoenix6.signals
 import rev 
@@ -17,35 +17,46 @@ TODO:
 - It would be beneficial if we had an order to when which motors turn on so nothing gets stuck
 1. Shooter Intake
 2. Mechanim wheels
-
+- We need two motors, both motors are talon FX, not sure there would need ot be very much tuning
 """
 
-class Hopper(commands2.Subsystem): # <-- Telling subsystem that its part of it too
+class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
 
-    def __init__(self, CAN_ID):
-        # Note to Riley:
-        # The reason we need Subsystem.__init__ is because 
-        # it needs to know the parent class's setup code and 
-        # that commands 2 knows that Hopper exists
-        Subsystem.__init__(self) 
-    
-        # # Idek if we need spark max I'm going to be completely honest like genuinely
-        # self.Neo550_1 = rev.SparkMax.MotorType.kBrushless
-        # self.Neo_configs = rev.SparkMax.configure()
-        # self.Neo550_1(self.Neo_configs)
+    def __init__(self):
 
-        # The device and canbus will have to be changed when I have more information
-        self.talon_motor = phoenix6.hardware.TalonFXS(device_id=0,canbus='rio')
-        self.talon_config = phoenix6.configs.talon_fxs_configs.TalonFXSConfiguration()
+        Subsystem.__init__(self)
+
+        # Jay is it okay if we make the canbus an object 
+        # CONSTANTS
+        CANBUS = phoenix6.CANBus.roborio()
+        
+        # The mechanim wheels
+        self.mechanim_wheel = TalonFX(41, CANBUS)
+        self.mechanim_config = phoenix6.configs.TalonFXConfiguration()
+        self.mechanim_wheel.configurator.apply(self.mechanim_config)
+
+        # Wheels in the hopper
+        self.agitator_wheel = TalonFX(42, CANBUS)
+        self.agitator_config = phoenix6.configs.TalonFXConfiguration()
+        self.agitator_wheel.configurator.apply(self.agitator_config)
         
 
         
-    def hopper_on(self):
-        self.talon_motor.set(1)
-        print("IM MOVING 👅")
+    def mechanim_on(self, speed):
+        self.mechanim_wheel.set(speed)
+        print("mechanim wheels are moving")
     
-    def hopper_off(self):
-        self.talon_motor.set(0)
-        print("I'm not moving 😔")
+    def mechanim_off(self, speed):
+        self.mechanim_wheel.set(speed)
+        print("mechanim wheels are not moving")
+
+    def agitator_on(self, speed):
+        self.agitator_wheel.set(speed)
+        print("agitator moving")
+    
+    def agitator_off(self, speed):
+        self.agitator_wheel.set(speed)
+        print("agitator is stopped")
+
 
 
