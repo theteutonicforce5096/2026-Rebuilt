@@ -18,6 +18,8 @@ class RobotContainer:
         # Initialize LEDs 
 
         self.led = LED()
+        self.last_time = None
+        # ^^^ I need this for LEDs
 
         # # Initialize drivetrain subsystem
         # self.drivetrain = SwerveDriveConstants.create_drivetrain()
@@ -36,11 +38,14 @@ class RobotContainer:
             self.led.auto_in_progress()
 
         self.MATCHTIME = int(DriverStation.getMatchTime())
-        if DriverStation.isTeleopEnabled():
-            # The numbers are 5 seconds before each phase switch
-            # In theory this should work all the tests passed
-            if self.MATCHTIME in (115, 90, 65, 40, 25): 
-                self.led.five_seconds_left()
+
+        # I need this so the LEDs won't constantly be trying to change to the same animation
+        if self.MATCHTIME != self.last_time:
+            self.last_time = self.MATCHTIME
+            if DriverStation.isTeleopEnabled():
+                # The numbers are 5 seconds before each phase switch
+                if self.MATCHTIME in (115, 90, 65, 40, 25): 
+                    self.led.five_seconds_left()
         
     def configure_button_bindings_auto(self):
         pass
