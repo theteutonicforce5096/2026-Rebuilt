@@ -31,12 +31,12 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
         CANBUS = phoenix6.CANBus.roborio()
         
         # The mechanim wheels
-        self.mechanim_wheel = TalonFX(41, CANBUS)
+        self.mechanim_wheel = TalonFX(50, CANBUS)
         self.mechanim_config = phoenix6.configs.TalonFXConfiguration()
         self.mechanim_wheel.configurator.apply(self.mechanim_config)
 
         # Wheels in the hopper
-        self.agitator_wheel = TalonFX(42, CANBUS)
+        self.agitator_wheel = TalonFX(50, CANBUS)
         self.agitator_config = phoenix6.configs.TalonFXConfiguration()
         self.agitator_wheel.configurator.apply(self.agitator_config)
         
