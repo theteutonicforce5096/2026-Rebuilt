@@ -1,8 +1,13 @@
 import commands2
 from commands2.sysid import SysIdRoutine
+import wpilib
 
 from phoenix6 import SignalLogger
 
+from pathplannerlib.auto import AutoBuilder, PathConstraints
+from pathplannerlib.path import PathPlannerPath, IdealStartingState, GoalEndState
+from pathplannerlib.auto import PathPlannerAuto
+from subsystems.hopper import Hopper
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import inchesToMeters, feetToMeters
 
@@ -10,13 +15,18 @@ from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
 from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_intake_speed
 
+
+
 class RobotContainer:
     def __init__(self):
         # Define max speed variables
         self.max_linear_speed = SwerveDrivetrainConstants._max_linear_speed
         self.max_angular_rate = SwerveDrivetrainConstants._max_angular_rate
 
-        # Create controller
+        # Create hopper 
+        self.hopper = Hopper()
+
+        #Create controller
         self.controller = commands2.button.CommandXboxController(0)
         
         # Create drivetrain subsystem
@@ -152,6 +162,22 @@ class RobotContainer:
         #         lambda: self.shooter.stop_networktable()
         #     )
         # )
+
+        #Button bindings for hopper
+        self.controller.rightBumper().onTrue(
+            self.hopper.runOnce(lambda: self.hopper.mechanim_on(.5))
+        )
+        self.controller.rightBumper().onFalse(
+            self.hopper.runOnce(lambda: self.hopper.mechanim_off(0))
+        )
+
+        self.controller.rightTrigger().onTrue(
+            self.hopper.runOnce(lambda: self.hopper.agitator_on(.5))
+        )
+
+        self.controller.rightTrigger().onFalse(
+            self.hopper.runOnce(lambda: self.hopper.agitator_off(0))
+        )
 
     def create_commands_test(self):
         self.shooter.flywheel_encoder.get_velocity().set_update_frequency(1000.0)
