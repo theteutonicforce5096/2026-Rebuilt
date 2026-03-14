@@ -7,7 +7,10 @@ from phoenix6 import SignalLogger
 from pathplannerlib.auto import AutoBuilder, PathConstraints
 from pathplannerlib.path import PathPlannerPath, IdealStartingState, GoalEndState
 from pathplannerlib.auto import PathPlannerAuto
+
 from subsystems.hopper import Hopper
+from subsystems.intake import Intake
+
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import inchesToMeters, feetToMeters
 
@@ -23,8 +26,11 @@ class RobotContainer:
         self.max_linear_speed = SwerveDrivetrainConstants._max_linear_speed
         self.max_angular_rate = SwerveDrivetrainConstants._max_angular_rate
 
-        # Create hopper 
+        # Initialize hopper 
         self.hopper = Hopper()
+
+        #Initalize intake
+        self.intake = Intake()
 
         #Create controller
         self.controller = commands2.button.CommandXboxController(0)
@@ -178,6 +184,31 @@ class RobotContainer:
         self.controller.rightTrigger().onFalse(
             self.hopper.runOnce(lambda: self.hopper.agitator_off(0))
         )
+
+        #Button bindings for intake
+        self.controller.leftBumper().onTrue(
+            self.intake.runOnce(lambda: self.intake.intake_running())
+            )
+
+        self.controller.leftBumper().onFalse(
+            self.intake.runOnce(lambda: self.intake.intake_stopped())
+            )
+        
+        self.controller.povDown().onTrue(
+            self.intake.runOnce(lambda: self.intake.arm_down())
+            )
+        
+        self.controller.povDown().onFalse(
+            self.intake.runOnce(lambda: self.intake.arm_stopped())
+            )
+
+        self.controller.povUp().onTrue(
+            self.intake.runOnce(lambda: self.intake.arm_up())
+            )
+
+        self.controller.povUp().onFalse(
+            self.intake.runOnce(lambda: self.intake.arm_stopped())
+            )
 
     def create_commands_test(self):
         self.shooter.flywheel_encoder.get_velocity().set_update_frequency(1000.0)
