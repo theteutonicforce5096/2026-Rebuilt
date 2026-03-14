@@ -1,6 +1,7 @@
 import commands2
 from commands2.sysid import SysIdRoutine
 import wpilib
+from wpilib import DriverStation
 
 from phoenix6 import SignalLogger
 
@@ -15,8 +16,8 @@ from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
 from constants.hopper_constants import HopperConstants
 from constants.intake_constants import IntakeConstants
+from subsystems.LED_controller import LED
 from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_intake_speed
-
 
 
 class RobotContainer:
@@ -40,10 +41,29 @@ class RobotContainer:
         #Create intake subsystem
         self.intake = IntakeConstants.create_intake()
 
+        # Initialize LEDs
+        self.led = LED()
+        self.last_time = None
+        # ^^^ I need this for LEDs
+
         # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
         self.drivetrain.reset_pose(
             Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(10), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
         )
+
+    def create_commands_periodic(self):
+        if DriverStation.isAutonomousEnabled():
+            self.led.auto_in_progress()
+
+        self.MATCHTIME = int(DriverStation.getMatchTime())
+
+        # I need this so the LEDs won't constantly be trying to change to the same animation
+        if self.MATCHTIME != self.last_time:
+            self.last_time = self.MATCHTIME
+            if DriverStation.isTeleopEnabled():
+                # The numbers are 5 seconds before each phase switch
+                if self.MATCHTIME in (115, 90, 65, 40, 25): 
+                    self.led.five_seconds_left()
 
     def create_commands_auto(self):
         pass
