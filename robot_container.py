@@ -16,6 +16,8 @@ from wpimath.units import inchesToMeters, feetToMeters
 
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
+from constants.hopper_constants import HopperConstants
+from constants.intake_constants import IntakeConstants
 from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_intake_speed
 
 
@@ -26,12 +28,6 @@ class RobotContainer:
         self.max_linear_speed = SwerveDrivetrainConstants._max_linear_speed
         self.max_angular_rate = SwerveDrivetrainConstants._max_angular_rate
 
-        # Initialize hopper 
-        self.hopper = Hopper()
-
-        #Initalize intake
-        self.intake = Intake()
-
         #Create controller
         self.controller = commands2.button.CommandXboxController(0)
         
@@ -40,6 +36,12 @@ class RobotContainer:
                      
         # Create shooter subsystem
         self.shooter = ShooterConstants.create_shooter()
+
+        #Create hoppper subsystem
+        self.hopper = HopperConstants.create_hopper()
+
+        #Create intake subsystem
+        self.intake = IntakeConstants.create_intake()
 
         # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
         self.drivetrain.reset_pose(

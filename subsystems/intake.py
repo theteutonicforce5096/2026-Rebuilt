@@ -4,8 +4,6 @@ TODO: I am making the hopper and the intake two seperate things so it will make 
 import wpilib
 import phoenix6
 import phoenix6.controls
-from phoenix6.hardware import TalonFXS
-from phoenix6.hardware import TalonFX
 import phoenix6.configs
 import phoenix6.signals
 import rev 
@@ -13,11 +11,41 @@ import commands2
 from commands2 import Subsystem
 from commands2.cmd import print_
 
+from commands2 import PrintCommand
+
+from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration
+from phoenix6.hardware import TalonFX, TalonFXS
+from phoenix6.status_code import StatusCode
+
+from ntcore import NetworkTableInstance
+from wpilib.shuffleboard import Shuffleboard
+
 
 
 class Intake(Subsystem): # <-- Telling subsystem that its part of it too
+    """
+    Class for controlling intake.
+    """
 
-    def __init__(self):
+    def __init__(self, intake_wheel_id: int, intake_arm_id: int, 
+                 intake_wheel_configs: TalonFXSConfiguration, 
+                 intake_arm_configs: TalonFXConfiguration,
+                 num_config_attempts: int):
+        """
+        Constructor for initializing shooter using the specified constants.
+
+        :param intake_wheel_id: CAN ID of the intake wheel
+        :type intake_wheel_id: int
+        :param intake_arm_id: CAN ID of the intake arm
+        :type intake_arm_id: int
+        :param intake_wheel_configs: Configs for the intake wheel
+        :type intake_wheel_configs: phoenix6.configs.TalonFXSConfiguration
+        :param intake_arm_configs: Configs for the intake arm
+        :type intake_arm_configs: phoenix6.configs.TalonFXConfiguration
+        :param num_config_attempts: Number of times to attempt to configure each device
+        :type num_config_attempts: int
+        """
+
         # Note to Riley:
         # The reason we need Subsystem.__init__ is because 
         # it needs to know the parent class's setup code and 
@@ -30,18 +58,39 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         INVERTED = phoenix6.signals.spn_enums.InvertedValue(1)
         MOTOROUTPUT.inverted = INVERTED
         
-        # CANID is set to 40
-        self.intake_wheel = TalonFXS(40, CANBUS)
-        self.wheel_config = phoenix6.configs.TalonFXSConfiguration()
-        self.wheel_config.commutation.motor_arrangement = phoenix6.signals.MotorArrangementValue(phoenix6.signals.MotorArrangementValue.NEO550_JST)
-        self.wheel_config.motor_output = MOTOROUTPUT
-        # Store the result of the cofig apply to variale
-        self.intake_wheel.configurator.apply(self.wheel_config)
+        # Create motors
+        self.intake_wheel = TalonFXS(intake_wheel_id, CANBUS)
+        # self.wheel_config.commutation.motor_arrangement = phoenix6.signals.MotorArrangementValue(phoenix6.signals.MotorArrangementValue.NEO550_JST)
+        # self.wheel_config.motor_output = MOTOROUTPUT
+        self.intake_arm = TalonFX(intake_arm_id, CANBUS)
+
+        # Apply motor configs
+        self._configure_device(self.intake_wheel, intake_wheel_configs, num_config_attempts)
+        self._configure_device(self.intake_arm, intake_arm_configs, num_config_attempts)
+
+        #TODO Add PID for arm
+
+    def _configure_device(self, device: TalonFX | TalonFXS, 
+                          configs: TalonFXConfiguration | TalonFXSConfiguration, 
+                          num_attempts: int) -> None:
+        """
+        Configures a CTRE motor controller with the specified configs, 
+        retrying up to num_attempts times if the configuration fails.
         
-        # We need PID for arm 
-        self.intake_arm = TalonFX(41, CANBUS)
-        self.arm_config = phoenix6.configs.TalonFXConfiguration()
-        self.intake_arm.configurator.apply(self.arm_config)
+        :param device: The CTRE motor controller to configure
+        :type device: phoenix6.hardware.TalonFX | phoenix6.hardware.TalonFXS
+        :param configs: The configuration to apply to the device
+        :type configs: phoenix6.configs.TalonFXConfiguration | phoenix6.configs.TalonFXSConfiguration
+        :param num_attempts: Number of times to attempt to configure each device
+        :type num_attempts: int
+        """
+        for _ in range(num_attempts):
+            status_code: StatusCode = device.configurator.apply(configs)
+            if status_code.is_ok():
+                break
+        if not status_code.is_ok():
+            PrintCommand(f"Device with CAN ID {device.device_id} failed to config with error: {status_code.name}").schedule()
+        
 
     def intake_running(self):
         self.intake_wheel.set(0.5) # Set to 50% power, can be changed later
