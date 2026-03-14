@@ -2,7 +2,8 @@ import commands2
 from commands2.sysid import SysIdRoutine
 import wpilib
 from wpilib import DriverStation
-
+from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
+from phoenix6 import signals
 from phoenix6 import SignalLogger
 
 from pathplannerlib.auto import AutoBuilder, PathConstraints
@@ -91,14 +92,14 @@ class RobotContainer:
             )
         )
           
-        self.controller.y().onTrue(
-            commands2.DeferredCommand(
-                self.drivetrain.auto_align_to_hub,
-                self.drivetrain
-            ).until(
-                lambda: self.controller.getHID().getBButton()
-            )
-        )
+        # self.controller.y().onTrue(
+        #     commands2.DeferredCommand(
+        #         self.drivetrain.auto_align_to_hub,
+        #         self.drivetrain
+        #     ).until(
+        #         lambda: self.controller.getHID().getBButton()
+        #     )
+        # )
 
         self.controller.a().onTrue(
             commands2.SequentialCommandGroup(
@@ -189,49 +190,42 @@ class RobotContainer:
         # )
 
         #Button bindings for hopper
-        self.controller.rightBumper().onTrue(
-            self.hopper.runOnce(lambda: self.hopper.mechanim_on(.5))
-        )
-        self.controller.rightBumper().onFalse(
-            self.hopper.runOnce(lambda: self.hopper.mechanim_off(0))
-        )
+        # self.controller.rightBumper().onTrue(
+        #     commands2.SequentialCommandGroup(
+        #         self.hopper.hop(.25, 1),
+        #         commands2.WaitUntilCommand(
+        #             lambda: self.controller.getHID().getRightBumperButtonReleased()
+        #         ),
+        #         self.hopper.hop(0, 0)
+        #     )
+        # )
 
-        self.controller.rightTrigger().onTrue(
-            self.hopper.runOnce(lambda: self.hopper.agitator_on(.5))
-        )
+        # #Button bindings for intake
+        # self.controller.leftBumper().onTrue(
+        #     self.intake.runOnce(lambda: self.intake.intake_running())
+        #     )
 
-        self.controller.rightTrigger().onFalse(
-            self.hopper.runOnce(lambda: self.hopper.agitator_off(0))
-        )
-
-        #Button bindings for intake
-        self.controller.leftBumper().onTrue(
-            self.intake.runOnce(lambda: self.intake.intake_running())
-            )
-
-        self.controller.leftBumper().onFalse(
-            self.intake.runOnce(lambda: self.intake.intake_stopped())
-            )
+        # self.controller.leftBumper().onFalse(
+        #     self.intake.runOnce(lambda: self.intake.intake_stopped())
+        #     )
         
-        self.controller.povDown().onTrue(
-            self.intake.runOnce(lambda: self.intake.arm_down())
-            )
+        # self.controller.povDown().onTrue(
+        #     self.intake.runOnce(lambda: self.intake.arm_down())
+        #     )
         
-        self.controller.povDown().onFalse(
-            self.intake.runOnce(lambda: self.intake.arm_stopped())
-            )
+        # self.controller.povDown().onFalse(
+        #     self.intake.runOnce(lambda: self.intake.arm_stopped())
+        #     )
 
-        self.controller.povUp().onTrue(
-            self.intake.runOnce(lambda: self.intake.arm_up())
-            )
+        # self.controller.povUp().onTrue(
+        #     self.intake.runOnce(lambda: self.intake.arm_up())
+        #     )
 
-        self.controller.povUp().onFalse(
-            self.intake.runOnce(lambda: self.intake.arm_stopped())
-            )
+        # self.controller.povUp().onFalse(
+        #     self.intake.runOnce(lambda: self.intake.arm_stopped())
+        #     )
 
     def create_commands_test(self):
-        self.shooter.flywheel_encoder.get_velocity().set_update_frequency(1000.0)
-
         self.shooter.flywheel_motor.get_velocity().set_update_frequency(1000.0)
         self.shooter.flywheel_motor.get_position().set_update_frequency(1000.0)
         self.shooter.flywheel_motor.get_motor_voltage().set_update_frequency(1000.0)

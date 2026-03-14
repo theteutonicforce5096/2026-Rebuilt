@@ -19,20 +19,22 @@ class IntakeConstants:
     _num_config_attempts = 5
 
 #TODO IDK IF I INVERTED IT RIGHT fwejoifepoijfewpjoi
-    # Mechanim Wheel Configs (TalonFXS)
+#TODO Determine brake or coast mode and check if any need to be inverted
+    # Intake Wheel Configs (TalonFXS)
     _intake_wheel_configs = TalonFXSConfiguration()
     _intake_wheel_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.NEO550_JST)
     _intake_wheel_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
-    _intake_wheel_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE) 
+    # _intake_wheel_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
+    # _intake_wheel_configs.motor_output.with_inverted(signals.InvertedValue.COUNTER_CLOCKWISE_POSITIVE)
     _intake_wheel_configs.current_limits.with_stator_current_limit(20)
     _intake_wheel_configs.current_limits.with_stator_current_limit_enable(True)
 
-    # Agitator Wheel Configs (TalonFX)
+    # Intake Arm Configs (TalonFX)
     _intake_arm_configs = TalonFXConfiguration()
-    _intake_arm_configs.current_limits.with_stator_current_limit(20)
+    # _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
+    _intake_arm_configs.current_limits.with_stator_current_limit(40)
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
-    # _intake_arm_configs.slot0.with_k_s(0)
-    # _intake_arm_configs.slot0.with_k_v(0)
+    #TODO Add encoder for intake arm
     # _intake_arm_configs.slot0.with_k_p(0)
     # _intake_arm_configs.slot0.with_k_i(0)
     # _intake_arm_configs.slot0.with_k_d(0)
@@ -43,8 +45,8 @@ class IntakeConstants:
         Creates an Intake subsystem instance.
         """
 
-#TODO canbus?
         return Intake(
+            cls._canbus,
             cls._intake_wheel_id,
             cls._intake_arm_id,
             cls._intake_wheel_configs,

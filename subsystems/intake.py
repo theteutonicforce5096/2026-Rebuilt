@@ -11,9 +11,11 @@ import commands2
 from commands2 import Subsystem
 from commands2.cmd import print_
 
-from commands2 import PrintCommand
+from commands2 import PrintCommand, SequentialCommandGroup, DeferredCommand
 
+from phoenix6 import CANBus
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration
+from phoenix6.controls import VelocityVoltage, PositionVoltage
 from phoenix6.hardware import TalonFX, TalonFXS
 from phoenix6.status_code import StatusCode
 
@@ -21,19 +23,20 @@ from ntcore import NetworkTableInstance
 from wpilib.shuffleboard import Shuffleboard
 
 
-
 class Intake(Subsystem): # <-- Telling subsystem that its part of it too
     """
     Class for controlling intake.
     """
 
-    def __init__(self, intake_wheel_id: int, intake_arm_id: int, 
+    def __init__(self, canbus: CANBus, intake_wheel_id: int, intake_arm_id: int, 
                  intake_wheel_configs: TalonFXSConfiguration, 
                  intake_arm_configs: TalonFXConfiguration,
                  num_config_attempts: int):
         """
         Constructor for initializing shooter using the specified constants.
 
+        :param canbus: CANBus instance that electronics are on
+        :type canbus: phoenix6.CANBus
         :param intake_wheel_id: CAN ID of the intake wheel
         :type intake_wheel_id: int
         :param intake_arm_id: CAN ID of the intake arm
@@ -53,22 +56,23 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         Subsystem.__init__(self) 
 
         # Objects that we need
-        CANBUS = phoenix6.CANBus.roborio()
         MOTOROUTPUT = phoenix6.configs.config_groups.MotorOutputConfigs()
         INVERTED = phoenix6.signals.spn_enums.InvertedValue(1)
         MOTOROUTPUT.inverted = INVERTED
         
         # Create motors
-        self.intake_wheel = TalonFXS(intake_wheel_id, CANBUS)
-        # self.wheel_config.commutation.motor_arrangement = phoenix6.signals.MotorArrangementValue(phoenix6.signals.MotorArrangementValue.NEO550_JST)
+        self.intake_wheel = TalonFXS(intake_wheel_id, canbus)
         # self.wheel_config.motor_output = MOTOROUTPUT
-        self.intake_arm = TalonFX(intake_arm_id, CANBUS)
+        self.intake_arm = TalonFX(intake_arm_id, canbus)
+        #TODO Add encoder for arm
 
         # Apply motor configs
         self._configure_device(self.intake_wheel, intake_wheel_configs, num_config_attempts)
         self._configure_device(self.intake_arm, intake_arm_configs, num_config_attempts)
 
-        #TODO Add PID for arm
+        # Create PID control requests
+        # self.velocity_voltage_request = VelocityVoltage(velocity = 0)
+        # self.position_voltage_request = PositionVoltage(position = 0)
 
     def _configure_device(self, device: TalonFX | TalonFXS, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration, 
@@ -91,6 +95,8 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         if not status_code.is_ok():
             PrintCommand(f"Device with CAN ID {device.device_id} failed to config with error: {status_code.name}").schedule()
         
+    # def intake(self, intake_speed):
+    #     self.intake_wheel.set(intake_speed)
 
     def intake_running(self):
         self.intake_wheel.set(0.5) # Set to 50% power, can be changed later

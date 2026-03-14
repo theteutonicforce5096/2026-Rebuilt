@@ -7,12 +7,14 @@ import phoenix6.controls
 import phoenix6.configs
 import phoenix6.signals
 import commands2
-from commands2 import Subsystem
+from commands2 import Subsystem, SequentialCommandGroup
 from commands2.cmd import print_
 
 from commands2 import PrintCommand
 
+from phoenix6 import CANBus
 from phoenix6.configs import TalonFXConfiguration
+from phoenix6.controls import VelocityVoltage
 from phoenix6.hardware import TalonFX
 from phoenix6.status_code import StatusCode
 
@@ -32,13 +34,15 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
     Class for controlling hopper.
     """
 
-    def __init__(self, mechanim_wheel_id: int, agitator_wheel_id: int, 
+    def __init__(self, canbus: CANBus, mechanim_wheel_id: int, agitator_wheel_id: int, 
                  mechanim_wheel_configs: TalonFXConfiguration, 
                  agitator_wheel_configs: TalonFXConfiguration,
                  num_config_attempts: int):
         """
         Constructor for initializing hopper using the specified constants.
 
+        :param canbus: CANBus instance that electronics are on
+        :type canbus: phoenix6.CANBus
         :param mechanim_wheel_id: CAN ID of the mechanim wheel
         :type mechanim_wheel_id: int
         :param agitator_wheel_id: CAN ID of the agitator wheel
@@ -53,18 +57,16 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
 
         Subsystem.__init__(self)
 
-        # Jay is it okay if we make the canbus an object 
-        # CONSTANTS
-        CANBUS = phoenix6.CANBus.roborio()
-        
-        #TODO i think we added more motors or something
         # Create motors
-        self.mechanim_wheel = TalonFX(mechanim_wheel_id, CANBUS) #the mechanim wheels
-        self.agitator_wheel = TalonFX(agitator_wheel_id, CANBUS) #wheels in the hopper
+        self.mechanim_wheel = TalonFX(mechanim_wheel_id, canbus) #the mechanim wheels
+        self.agitator_wheel = TalonFX(agitator_wheel_id, canbus) #wheels in the hopper
         
         # Apply motor configs
         self._configure_device(self.mechanim_wheel, mechanim_wheel_configs, num_config_attempts)
         self._configure_device(self.agitator_wheel, agitator_wheel_configs, num_config_attempts)
+
+        # Create VelocityVoltage request
+        self.velocity_pid_request = VelocityVoltage(velocity = 0)
         
     def _configure_device(self, device: TalonFX, 
                           configs: TalonFXConfiguration, 
@@ -87,22 +89,23 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
         if not status_code.is_ok():
             PrintCommand(f"Device with CAN ID {device.device_id} failed to config with error: {status_code.name}").schedule()
         
-        
-    def mechanim_on(self, speed):
-        self.mechanim_wheel.set(speed)
-        print("mechanim wheels are moving")
-    
-    def mechanim_off(self, speed):
-        self.mechanim_wheel.set(speed)
-        print("mechanim wheels are not moving")
+    def hop(self, mechanim_speed, agitator_speed):
+        return SequentialCommandGroup(
+            self.runOnce(
+                lambda: self.mechanim_wheel.set(mechanim_speed)
+            ),
+            self.runOnce(
+                lambda: self.agitator_wheel.set_control(
+                    self.velocity_pid_request.with_velocity(agitator_speed)
+                )
+            )
+        )
 
-    def agitator_on(self, speed):
-        self.agitator_wheel.set(speed)
-        print("agitator moving")
-    
-    def agitator_off(self, speed):
-        self.agitator_wheel.set(speed)
-        print("agitator is stopped")
+    # def set_mecanum_speed(self, speed):
+    #     self.mechanim_wheel.set(speed)
+
+    # def set_agitator_speed(self, speed):
+    #     self.agitator_wheel.set(speed)
 
 
 
