@@ -28,7 +28,9 @@ class RebuiltRobot(commands2.TimedCommandRobot):
             SignalLogger.start()
 
     def robotPeriodic(self):
-        commands2.CommandScheduler.getInstance().run()
+        #TODO no clue if I'm doing this right
+        # commands2.CommandScheduler.getInstance().run()
+        self.robot_container.create_commands_periodic()
 
     def disabledInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
