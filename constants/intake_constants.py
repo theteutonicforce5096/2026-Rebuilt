@@ -43,8 +43,8 @@ class IntakeConstants:
         Creates an Intake subsystem instance.
         """
 
+#TODO canbus?
         return Intake(
-            cls._canbus,
             cls._intake_wheel_id,
             cls._intake_arm_id,
             cls._intake_wheel_configs,

@@ -8,9 +8,6 @@ from pathplannerlib.auto import AutoBuilder, PathConstraints
 from pathplannerlib.path import PathPlannerPath, IdealStartingState, GoalEndState
 from pathplannerlib.auto import PathPlannerAuto
 
-from subsystems.hopper import Hopper
-from subsystems.intake import Intake
-
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import inchesToMeters, feetToMeters
 

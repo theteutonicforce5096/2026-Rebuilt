@@ -15,7 +15,7 @@ class HopperConstants:
  #TODO i think we added more motors or something
     # CAN IDs
     _mechanim_wheel_id = 50
-    _agitator_wheel_id = 50
+    _agitator_wheel_id = 51
 
 
     # Number of times to attempt to configure each device
@@ -37,8 +37,8 @@ class HopperConstants:
         Creates a Hopper subsystem instance.
         """
 
+#TODO canbus?
         return Hopper(
-            cls._canbus,
             cls._mechanim_wheel_id,
             cls._agitator_wheel_id,
             cls._mechanim_wheel_configs,
