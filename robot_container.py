@@ -36,15 +36,15 @@ class RobotContainer:
         # Create shooter subsystem
         self.shooter = ShooterConstants.create_shooter()
 
-        #Create hoppper subsystem
-        self.hopper = HopperConstants.create_hopper()
+        # #Create hoppper subsystem
+        # self.hopper = HopperConstants.create_hopper()
 
-        #Create intake subsystem
-        self.intake = IntakeConstants.create_intake()
+        # #Create intake subsystem
+        # self.intake = IntakeConstants.create_intake()
 
         # Initialize LEDs
-        self.led = LED()
-        self.last_time = None
+        # self.led = LED()
+        # self.last_time = None
         # ^^^ I need this for LEDs
 
         # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
@@ -52,19 +52,19 @@ class RobotContainer:
             Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(10), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
         )
 
-    def create_commands_periodic(self):
-        if DriverStation.isAutonomousEnabled():
-            self.led.auto_in_progress()
+    # def create_commands_periodic(self):
+    #     if DriverStation.isAutonomousEnabled():
+    #         self.led.auto_in_progress()
 
-        self.MATCHTIME = int(DriverStation.getMatchTime())
+    #     self.MATCHTIME = int(DriverStation.getMatchTime())
 
-        # I need this so the LEDs won't constantly be trying to change to the same animation
-        if self.MATCHTIME != self.last_time:
-            self.last_time = self.MATCHTIME
-            if DriverStation.isTeleopEnabled():
-                # The numbers are 5 seconds before each phase switch
-                if self.MATCHTIME in (115, 90, 65, 40, 25): 
-                    self.led.five_seconds_left()
+    #     # I need this so the LEDs won't constantly be trying to change to the same animation
+    #     if self.MATCHTIME != self.last_time:
+    #         self.last_time = self.MATCHTIME
+    #         if DriverStation.isTeleopEnabled():
+    #             # The numbers are 5 seconds before each phase switch
+    #             if self.MATCHTIME in (115, 90, 65, 40, 25): 
+    #                 self.led.five_seconds_left()
 
     def create_commands_auto(self):
         pass
@@ -226,45 +226,50 @@ class RobotContainer:
         #     )
 
     def create_commands_test(self):
-        self.shooter.flywheel_motor.get_velocity().set_update_frequency(1000.0)
-        self.shooter.flywheel_motor.get_position().set_update_frequency(1000.0)
-        self.shooter.flywheel_motor.get_motor_voltage().set_update_frequency(1000.0)
+        # self.shooter.flywheel_motor.get_velocity().set_update_frequency(1000.0)
+        # self.shooter.flywheel_motor.get_position().set_update_frequency(1000.0)
+        # self.shooter.flywheel_motor.get_motor_voltage().set_update_frequency(1000.0)
 
-        self.shooter.flywheel_intake_motor.get_velocity().set_update_frequency(1000.0)
-        self.shooter.flywheel_intake_motor.get_position().set_update_frequency(1000.0)
-        self.shooter.flywheel_intake_motor.get_motor_voltage().set_update_frequency(1000.0)
+        # self.shooter.flywheel_intake_motor.get_velocity().set_update_frequency(1000.0)
+        # self.shooter.flywheel_intake_motor.get_position().set_update_frequency(1000.0)
+        # self.shooter.flywheel_intake_motor.get_motor_voltage().set_update_frequency(1000.0)
 
-        # Set the SysId routine to run
-        self.shooter.set_sys_id_routine()
+        # # Set the SysId routine to run
+        # self.shooter.set_sys_id_routine()
     
-        # Set button bindings for starting and stopping SignalLogger
-        self.controller.leftBumper().onTrue(commands2.cmd.runOnce(SignalLogger.start))
-        self.controller.rightBumper().onTrue(commands2.cmd.runOnce(SignalLogger.stop))
+        # # Set button bindings for starting and stopping SignalLogger
+        # self.controller.leftBumper().onTrue(commands2.cmd.runOnce(SignalLogger.start))
+        # self.controller.rightBumper().onTrue(commands2.cmd.runOnce(SignalLogger.stop))
 
-        # Set button bindings for performing various parts of SysID routine
-        self.controller.y().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kForward))
-        self.controller.a().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kReverse))
-        self.controller.b().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kForward))
-        self.controller.x().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kReverse))
+        # # Set button bindings for performing various parts of SysID routine
+        # self.controller.y().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kForward))
+        # self.controller.a().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kReverse))
+        # self.controller.b().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kForward))
+        # self.controller.x().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kReverse))
 
-    #     self.controller.a().onTrue(
-    #         commands2.SequentialCommandGroup(
-    #             self.shooter.runOnce(
-    #                 lambda: SignalLogger.start()
-    #             ),
-    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 0.5, 1),
-    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 1.0, 1),
-    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 1.5, 1),
-    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 2.0, 1),
-    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 3.0, 2.0),
-    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 6.0, 2.0),
-    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 9.0, 2.0),
-    #             self.shooter.set_voltage(self.shooter.flywheel_motor, 12.0, 5.0),
-    #             self.shooter.runOnce(
-    #                 lambda: SignalLogger.stop()
-    #             )
-    #         )
-    #     )
+        self.controller.x().onTrue(
+            commands2.SequentialCommandGroup(
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 1.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 3.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 5.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 6.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 7.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 10.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_motor, 0, 5),
+            )
+        )
+
+        self.controller.b().onTrue(
+            commands2.SequentialCommandGroup(
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 1.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 3.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 5.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 6.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 7.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 10.0, 5),
+                self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 0, 5),
+            )
+        )
 
     #     self.controller.y().onTrue(
     #         commands2.SequentialCommandGroup(

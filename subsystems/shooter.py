@@ -77,7 +77,7 @@ class Shooter(Subsystem):
             SysIdRoutine.Config(
                 rampRate = 0.5,
                 stepVoltage = 9.0,
-                timeout = 30.0,
+                timeout = 15.0,
                 recordState = lambda state: SignalLogger.write_string(
                     "SysId_Flywheel_Motor_State", SysIdRoutineLog.stateEnumToString(state)
                 )
@@ -94,7 +94,7 @@ class Shooter(Subsystem):
             SysIdRoutine.Config(
                 rampRate = 0.5,
                 stepVoltage = 9.0,
-                timeout = 30.0,
+                timeout = 15.0,
                 recordState = lambda state: SignalLogger.write_string(
                     "SysId_Flywheel_Intake_Motor_State", SysIdRoutineLog.stateEnumToString(state)
                 )

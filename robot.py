@@ -27,10 +27,10 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         if DriverStation.isFMSAttached():
             SignalLogger.start()
 
-    def robotPeriodic(self):
-        #TODO no clue if I'm doing this right. 
-        commands2.CommandScheduler.getInstance().run()
-        self.robot_container.create_commands_periodic()
+    # def robotPeriodic(self):
+    #     #TODO no clue if I'm doing this right. 
+    #     commands2.CommandScheduler.getInstance().run()
+    #     self.robot_container.create_commands_periodic()
 
     def disabledInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
