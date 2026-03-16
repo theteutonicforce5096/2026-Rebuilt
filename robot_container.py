@@ -51,6 +51,9 @@ class RobotContainer:
         self.drivetrain.reset_pose(
             Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(10), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
         )
+        
+        self.create_button_bindings()
+
 
     # def create_commands_periodic(self):
     #     if DriverStation.isAutonomousEnabled():
@@ -73,9 +76,7 @@ class RobotContainer:
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain.set_forward_perspective()
         
-        # Reset slew rate limiters for controlling acceleration
-        self.drivetrain.reset_slew_rate_limiters()
-
+    def create_button_bindings(self):
         # Set button binding for reseting field centric heading
         (self.controller.leftBumper() & self.controller.rightBumper()).onTrue(
             self.drivetrain.runOnce(lambda: self.drivetrain.seed_field_centric())
@@ -84,8 +85,8 @@ class RobotContainer:
         # Set default command for drivetrain
         self.drivetrain.setDefaultCommand(
             self.drivetrain.get_operator_drive_command(
-                lambda: self.controller.getLeftTriggerAxis() > 0.05,
-                lambda: self.controller.getRightTriggerAxis() > 0.05,
+                lambda: self.controller.getLeftTriggerAxis() > 0.10,
+                lambda: self.controller.getRightTriggerAxis() > 0.10,
                 lambda: self.controller.getLeftY(),
                 lambda: self.controller.getLeftX(),
                 lambda: self.controller.getRightX()
@@ -122,6 +123,13 @@ class RobotContainer:
             )
         )
 
+    def create_commands_auto(self):
+        pass
+
+    def create_commands_teleop(self):   
+        # Set the forward perspective of the robot for field oriented driving
+        self.drivetrain.set_forward_perspective()
+        
         # # Estimated button bindings for shooter (subject to change):
         #     - Left trigger: Shoot at calculated speed based on distance to target
         #     - X button: Shoot at speeds specified by network tables
@@ -236,6 +244,9 @@ class RobotContainer:
 
         # # Set the SysId routine to run
         # self.shooter.set_sys_id_routine()
+
+        # Set the SysId routine to run
+        self.shooter.set_sys_id_routine()
     
         # # Set button bindings for starting and stopping SignalLogger
         # self.controller.leftBumper().onTrue(commands2.cmd.runOnce(SignalLogger.start))

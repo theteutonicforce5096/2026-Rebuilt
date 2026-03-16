@@ -1,5 +1,5 @@
 from typing import Callable, Any
-from math import copysign, pi, atan2, cos, sin
+from math import pi, atan2, cos, sin
 
 from commands2 import Subsystem
 
@@ -10,7 +10,7 @@ from phoenix6 import swerve, utils, hardware
 from wpilib import DriverStation, RobotBase
 
 from wpimath.filter import SlewRateLimiter
-from wpimath.geometry import Rotation2d
+from wpimath.geometry import Rotation2d, Transform2d, Translation2d
 from wpimath.units import inchesToMeters, radiansToDegrees
 
 from pathplannerlib.auto import AutoBuilder, RobotConfig
@@ -55,7 +55,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # Initialize parent classes
         Subsystem.__init__(self)
         swerve.SwerveDrivetrain.__init__(self, drive_motor_type, steer_motor_type, encoder_type, 
-                                         drivetrain_constants, modules)
+                                         drivetrain_constants, 500.0, modules)
         
         # Create Limelight instance and configure default values
         self.camera = VisionCamera()
@@ -81,34 +81,29 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         self.hub_x_pos = None
         self.hub_y_pos = None
 
+        # Create shooter position variable
+        # X: -7.78 inches (behind center)
+        # Y: -7.95 inches (right of center)
+        self.shooter_offset = Transform2d(
+            Translation2d(inchesToMeters(-7.78), inchesToMeters(-7.95)),
+            Rotation2d(0) # 0 means it always faces the same way as the drivebase
+        )
+
         # Create current alliance variable
         self.current_alliance = None 
         self.set_forward_perspective()
 
-        # Create slew rate limiters for limiting robot acceleration
-        self.straight_speed_limiter = SlewRateLimiter(self.max_linear_speed * 5)
-        self.strafe_speed_limiter = SlewRateLimiter(self.max_linear_speed * 5)
-        self.rotation_speed_limiter = SlewRateLimiter(self.max_angular_rate * 10)
+        # Max acceleration of robot 
+        self.max_linear_accel = (1 / 0.5) * 0.02 * self.max_linear_speed # Max speed in 0.5 seconds
+        self.max_angular_accel = (1 / 1) * 0.02 * self.max_angular_rate # Max speed in 1 second
 
-        # Create requests for controlling swerve drive
+        # Create request for controlling swerve drive
         # https://www.chiefdelphi.com/t/motion-magic-velocity-control-for-drive-motors-in-phoenix6-swerve-drive-api/483669/6
-        self.default_mode_field_centric_request = (
+        self.field_centric_request = (
             swerve.requests.FieldCentric()
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-            .with_deadband(self.max_linear_speed * 0.01) # Controller deadband of approximately 0.05
-            .with_rotational_deadband(self.max_angular_rate * 0.03) # Controller deadband of approximately 0.05
-            .with_desaturate_wheel_speeds(True)
-        )
-
-        self.max_speed_mode_field_centric_request = (
-            swerve.requests.FieldCentric()
-            .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
-            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-            .with_deadband(self.max_linear_speed * 0.01) # Controller deadband of 0.05
-            .with_rotational_deadband(self.max_angular_rate * 0.04) # Controller deadband of 0.05
             .with_desaturate_wheel_speeds(True)
         )
 
@@ -116,9 +111,12 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             swerve.requests.FieldCentricFacingAngle()
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-            .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
+            .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.BLUE_ALLIANCE)
             .with_heading_pid(10, 0, 0)
         )
+
+        self.rotate_robot_pid_controller = self.rotate_robot_request.heading_controller
+        self.rotate_robot_pid_controller.setTolerance(1.0)
 
         self.brake_mode_request = (
             swerve.requests.SwerveDriveBrake()
@@ -184,19 +182,6 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # fused_pose_array = [current_state.pose.x, current_state.pose.y, current_state.pose.rotation().degrees()]
         # self.fused_pose_est.set(fused_pose_array)
 
-    def reset_slew_rate_limiters(self):
-        """
-        Reset the slew rate limiters to the current speeds of the drivetrain.
-        """
-
-        # Get current state of the drivetrain
-        current_state = self.get_state()
-
-        # Reset slew rate limiters to current speed of the drivetrain
-        self.straight_speed_limiter.reset(current_state.speeds.vx)
-        self.strafe_speed_limiter.reset(current_state.speeds.vy)
-        self.rotation_speed_limiter.reset(current_state.speeds.omega)
-
     def set_forward_perspective(self):
         """
         Set forward perspective of the robot for field oriented drive.
@@ -256,39 +241,36 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         :param rotation_speed: Desired rotation speed of the operator in terms of percent of max angular speed where clockwise is positive. 
         :type rotation_speed: float
         """
+
+        # Get current speeds of the drivetrain
+        current_state = self.get_state()
+        current_vx = current_state.speeds.vx
+        current_vy = current_state.speeds.vy
+        current_omega = current_state.speeds.omega
         
+        # Square input (Preserve sign)
+        requested_vx = abs(forward_speed) * forward_speed * self.max_linear_speed
+        requested_vy = abs(strafe_speed) * strafe_speed * self.max_linear_speed
+        requested_omega = abs(rotation_speed) * rotation_speed * self.max_angular_rate
+        
+        # Clamp requested velocity to a window around ACTUAL velocity
+        limited_vx = max(current_vx - self.max_linear_accel, min(requested_vx, current_vx + self.max_linear_accel))
+        limited_vy = max(current_vy - self.max_linear_accel, min(requested_vy, current_vy + self.max_linear_accel))
+        limited_omega = max(current_omega - self.max_angular_accel, min(requested_omega, current_omega + self.max_angular_accel))
+
         if left_trigger_pressed and right_trigger_pressed:
-            operator_drive_request = (
-                self.max_speed_mode_field_centric_request.with_velocity_x(
-                    self.straight_speed_limiter.calculate(
-                        -copysign((forward_speed) ** 2, forward_speed) * self.max_linear_speed
-                    )
-                ).with_velocity_y(
-                    self.strafe_speed_limiter.calculate(
-                        -copysign((strafe_speed) ** 2, strafe_speed) * self.max_linear_speed
-                    )
-                ).with_rotational_rate(
-                    self.rotation_speed_limiter.calculate(
-                        -copysign((rotation_speed) ** 2, rotation_speed) * self.max_angular_rate
-                    )
-                )
-            )
+            scale_factor = 1.0
         else:
-            operator_drive_request = (
-                self.default_mode_field_centric_request.with_velocity_x(
-                    self.straight_speed_limiter.calculate(
-                        -copysign(forward_speed ** 2, forward_speed) * (self.max_linear_speed * 0.75)
-                    )
-                ).with_velocity_y(
-                    self.strafe_speed_limiter.calculate(
-                        -copysign(strafe_speed **2, strafe_speed) * (self.max_linear_speed * 0.75)
-                    )
-                ).with_rotational_rate(
-                    self.rotation_speed_limiter.calculate(
-                        -copysign(rotation_speed ** 2, rotation_speed) * (self.max_angular_rate * 0.75)
-                    )
-                )
-            )
+            scale_factor = 0.75
+        
+        operator_drive_request = (
+            self.field_centric_request
+            .with_velocity_x(limited_vx * scale_factor)
+            .with_velocity_y(limited_vy * scale_factor)
+            .with_rotational_rate(limited_omega * scale_factor)
+            .with_deadband((self.max_linear_speed * scale_factor) * 0.05)
+            .with_rotational_deadband((self.max_angular_rate * scale_factor) * 0.05)
+        )
 
         return operator_drive_request
     
@@ -337,39 +319,43 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         :type rotation_threshold: float
         """
 
+        # Get current pose of the robot
         current_pose = self.get_state().pose
 
-        # Get the optimal angle from the robot to the target
-        
-        # current_rotation = current_pose.rotateAround
-        # current_rotation = current_pose.rotation().radians()
-        # shooter_offset = inchesToMeters(7.95)*cos(current_rotation) + inchesToMeters(7.95)*sin(current_rotation)
-        
-        # optimal_angle = Rotation2d(self.hub_x_pos + (current_pose.x + shooter_offset), self.hub_y_pos - (current_pose.y + shooter_offset)).radians()
-        if self.current_alliance == DriverStation.Alliance.kRed:
-            optimal_angle = optimal_angle.rotateBy(Rotation2d.fromDegrees(0))
+        # Get pose of shooter
+        shooter_pose = current_pose.transformBy(self.shooter_offset)
+
+        # Calculate optimal angle to hub from shooter
+        optimal_angle = Rotation2d(
+            self.hub_x_pos - shooter_pose.x, 
+            self.hub_y_pos - shooter_pose.y,
+        )
+
+        center_of_rotation = shooter_pose.translation() - current_pose.translation()
 
         return self.run(
-            lambda: self.test_pid(optimal_angle)
+            lambda: self.test_pid(optimal_angle, center_of_rotation)
             # lambda: self.set_control(
             #     self.rotate_robot_request.with_target_direction(
             #         Rotation2d(optimal_angle)
             #     )
             # )
-        ).withTimeout(5)
+        ).until(self.rotate_robot_pid_controller.atSetpoint)
     
         # .until(
         #     lambda: (self.get_state().pose.rotation().degrees() - optimal_angle.degrees()) < 1
         # )
         
-    def test_pid(self, optimal_angle: Rotation2d):
+    def test_pid(self, optimal_angle: Rotation2d, center_of_rotation: Translation2d):
         print(f"Target: {optimal_angle.degrees()}. Current: {self.get_state().pose.rotation().degrees()}")
+        request = (
+            self.rotate_robot_request
+            .with_target_direction(optimal_angle)
+            .with_center_of_rotation(center_of_rotation)
 
-        self.set_control(
-            self.rotate_robot_request.with_target_direction(
-                optimal_angle
-            )
         )
+
+        self.set_control(request)
     
     def set_brake_mode(self):
         """

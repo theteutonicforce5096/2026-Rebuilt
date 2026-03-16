@@ -16,10 +16,8 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         # Disable Phoenix 6 Auto Signal Logging
         SignalLogger.enable_auto_logging(False)
 
-        # Sleep for 10 seconds to prevent CANBus motor config errors 
-        # and allow libraries to fully initialize if not in simulation
-        if not RobotBase.isSimulation():
-            time.sleep(10) 
+        # Sleep for 1 seconds to prevent CANBus motor config errors 
+        time.sleep(1) 
 
         # Create robot container
         self.robot_container = RobotContainer()
