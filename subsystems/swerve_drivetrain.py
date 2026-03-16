@@ -152,7 +152,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # )
 
         self.inst = ntcore.NetworkTableInstance.getDefault()
-        self.pose_est_table = self.inst.getTable("Pose Esimation")
+        self.pose_est_table = self.inst.getTable("Pose Estimation")
         
         self.fused_pose_est = self.pose_est_table.getDoubleArrayTopic("Fused Robot Pose").publish()
         self.fused_pose_est_pub = self.pose_est_table.getStringTopic("Field2d").publish()
