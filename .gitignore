@@ -6,6 +6,9 @@ simgui-ds.json
 simgui-window.json
 simgui.json
 
+# MacOS specific file
+.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

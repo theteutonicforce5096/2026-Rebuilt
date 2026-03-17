@@ -5,7 +5,6 @@ from wpilib import DriverStation, RobotBase
 from phoenix6 import SignalLogger
 
 from robot_container import RobotContainer
-from subsystems.LED_controller import LED
 
 class RebuiltRobot(commands2.TimedCommandRobot):
     """
@@ -16,19 +15,15 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         # Disable Phoenix 6 Auto Signal Logging
         SignalLogger.enable_auto_logging(False)
 
-        # Sleep for 1 seconds to prevent CANBus motor config errors 
-        time.sleep(1) 
+        # Sleep for 10 seconds only if robot isn't in simulation mode to prevent CANBus motor config errors 
+        if RobotBase.isReal():
+            time.sleep(10) 
 
         # Create robot container
         self.robot_container = RobotContainer()
 
         if DriverStation.isFMSAttached():
             SignalLogger.start()
-
-    # def robotPeriodic(self):
-    #     #TODO no clue if I'm doing this right. 
-    #     commands2.CommandScheduler.getInstance().run()
-    #     self.robot_container.create_commands_periodic()
 
     def disabledInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()

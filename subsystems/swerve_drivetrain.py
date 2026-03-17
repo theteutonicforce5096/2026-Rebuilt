@@ -3,11 +3,9 @@ from math import pi, atan2, cos, sin
 
 from commands2 import Subsystem
 
-import ntcore
-
 from phoenix6 import swerve, utils, hardware
 
-from wpilib import DriverStation, RobotBase
+from wpilib import DriverStation, Field2d, SmartDashboard
 
 from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Rotation2d, Transform2d, Translation2d
@@ -26,7 +24,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
     def __init__(self, drive_motor_type: Any, steer_motor_type: Any, encoder_type: Any, 
                  drivetrain_constants: swerve.SwerveDrivetrainConstants, 
                  modules: list[swerve.SwerveModuleConstants],
-                 num_config_attempts: int, max_linear_speed: float, max_angular_rate: float):
+                 odometry_update_frequency: float, max_linear_speed: float, max_angular_speed: float, 
+                 max_linear_accel: float, max_angular_accel: float):
         """
         Constructor for initializing swerve drivetrain using the specified constants.
 
@@ -40,39 +39,31 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         :type drivetrain_constants: phoenix6.swerve.SwerveDrivetrainConstants
         :param modules: Constants for each specific module
         :type modules: list[phoenix6.swerve.SwerveModuleConstants]
-        :param num_config_attempts: Number of times to attempt to configure each device
-        :type num_config_attempts: int
+        :param odometry_update_frequency: The frequency to run the odometry loop at.
+        :type odometry_update_frequency: hertz
         :param max_linear_speed: Max linear speed of drivetrain in meters per second. 
         :type max_linear_speed: float
-        :param max_angular_rate: Max angular velocity of drivetrain in radians per second. 
-        :type max_angular_rate: float
+        :param max_angular_speed: Max angular velocity of drivetrain in radians per second. 
+        :type max_angular_speed: float
+        :param max_linear_accel: Max linear acceleration of drivetrain in meters per second squared.
+        :type max_linear_accel: float
+        :param max_angular_accel: Max angular acceleration of drivetrain in radians per second squared.
+        :type max_angular_accel: float
         """
-
-        # Redefine the number of config attempts to try in phoenix6.swerve.swerve_drivetrain API
-        # swerve.swerve_drivetrain._NUM_CONFIG_ATTEMPTS = num_config_attempts
-        # swerve.swerve_module._NUM_CONFIG_ATTEMPTS = num_config_attempts
         
         # Initialize parent classes
         Subsystem.__init__(self)
         swerve.SwerveDrivetrain.__init__(self, drive_motor_type, steer_motor_type, encoder_type, 
-                                         drivetrain_constants, 500.0, modules)
+                                         drivetrain_constants, odometry_update_frequency, modules)
         
         # Create Limelight instance and configure default values
         self.camera = VisionCamera()
         
-        # Create max speeds variables
+        # Create max speed and max accel variables
         self.max_linear_speed = max_linear_speed
-        self.max_angular_rate = max_angular_rate
-        
-        # if RobotBase.isSimulation() == False:
-        #     devices = []
-        #     for num in range(4):
-        #         module = self.get_module(num)
-        #         devices.append(module.drive_motor)
-        #         devices.append(module.steer_motor)
-        #         devices.append(module.encoder)
-
-        #     hardware.ParentDevice.optimize_bus_utilization_for_all(devices)
+        self.max_angular_speed = max_angular_speed
+        self.max_linear_accel = max_linear_accel
+        self.max_angular_accel = max_angular_accel
 
         ### TODO: Move this to constants file, have swerve drive and vision camera class take this as input
         self.field_type = "AndyMark" # Welded for regionals
@@ -92,10 +83,6 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # Create current alliance variable
         self.current_alliance = None 
         self.set_forward_perspective()
-
-        # Max acceleration of robot 
-        self.max_linear_accel = (1 / 0.5) * 0.02 * self.max_linear_speed # Max speed in 0.5 seconds
-        self.max_angular_accel = (1 / 1) * 0.02 * self.max_angular_rate # Max speed in 1 second
 
         # Create request for controlling swerve drive
         # https://www.chiefdelphi.com/t/motion-magic-velocity-control-for-drive-motors-in-phoenix6-swerve-drive-api/483669/6
@@ -151,14 +138,11 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         #     self
         # )
 
-        self.inst = ntcore.NetworkTableInstance.getDefault()
-        self.pose_est_table = self.inst.getTable("Pose Estimation")
+        self.fused_robot_pose_field = Field2d()
+        self.vision_robot_pose_field = Field2d()
         
-        self.fused_pose_est = self.pose_est_table.getDoubleArrayTopic("Fused Robot Pose").publish()
-        self.fused_pose_est_pub = self.pose_est_table.getStringTopic("Field2d").publish()
-
-        self.vision_pose_est = self.pose_est_table.getDoubleArrayTopic("Vision Robot Pose").publish()
-        self.vision_pose_est_pub = self.pose_est_table.getStringTopic("Field2d").publish()
+        SmartDashboard.putData("Fused Robot Pose", self.fused_robot_pose_field)
+        SmartDashboard.putData("Vision Robot Pose", self.vision_robot_pose_field)
 
     def periodic(self):
         """
@@ -251,7 +235,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # Square input (Preserve sign)
         requested_vx = abs(forward_speed) * forward_speed * self.max_linear_speed
         requested_vy = abs(strafe_speed) * strafe_speed * self.max_linear_speed
-        requested_omega = abs(rotation_speed) * rotation_speed * self.max_angular_rate
+        requested_omega = abs(rotation_speed) * rotation_speed * self.max_angular_speed
         
         # Clamp requested velocity to a window around ACTUAL velocity
         limited_vx = max(current_vx - self.max_linear_accel, min(requested_vx, current_vx + self.max_linear_accel))
@@ -269,7 +253,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             .with_velocity_y(limited_vy * scale_factor)
             .with_rotational_rate(limited_omega * scale_factor)
             .with_deadband((self.max_linear_speed * scale_factor) * 0.05)
-            .with_rotational_deadband((self.max_angular_rate * scale_factor) * 0.05)
+            .with_rotational_deadband((self.max_angular_speed * scale_factor) * 0.05)
         )
 
         return operator_drive_request

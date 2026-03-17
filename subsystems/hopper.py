@@ -1,25 +1,16 @@
-'''
+"""
 TODO: I am making the hopper and the intake two seperate things so it will make everything easier
-'''
-import wpilib
-import phoenix6
-import phoenix6.controls
-import phoenix6.configs
-import phoenix6.signals
-import commands2
-from commands2 import Subsystem, SequentialCommandGroup
-from commands2.cmd import print_
+"""
+from commands2 import PrintCommand, SequentialCommandGroup, Subsystem
+from commands2.sysid import SysIdRoutine
 
-from commands2 import PrintCommand
-
-from phoenix6 import CANBus
+from phoenix6 import CANBus, SignalLogger
 from phoenix6.configs import TalonFXConfiguration
-from phoenix6.controls import VelocityVoltage
+from phoenix6.controls import VelocityVoltage, VoltageOut
 from phoenix6.hardware import TalonFX
 from phoenix6.status_code import StatusCode
 
-from ntcore import NetworkTableInstance
-from wpilib.shuffleboard import Shuffleboard
+from wpilib.sysid import SysIdRoutineLog
 
 """ 
 TODO: 
@@ -67,6 +58,29 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
 
         # Create VelocityVoltage request
         self.velocity_pid_request = VelocityVoltage(velocity = 0)
+        self.voltage_request = VoltageOut(output = 0)
+
+        # Create SysId routine for characterizing the mechanim wheel motor.
+        self.mechanim_motor_sys_id_routine = SysIdRoutine(
+            SysIdRoutine.Config(
+                rampRate = 0.5,
+                stepVoltage = 9.0,
+                timeout = 15.0,
+                recordState = lambda state: SignalLogger.write_string(
+                    "SysId_Hopper_Mechanim_Motor_State",
+                    SysIdRoutineLog.stateEnumToString(state)
+                )
+            ),
+            SysIdRoutine.Mechanism(
+                lambda output: self.mechanim_wheel.set_control(
+                    self.voltage_request.with_output(output)
+                ),
+                lambda log: None,
+                self,
+            ),
+        )
+
+        self.sys_id_routine_to_apply = self.mechanim_motor_sys_id_routine
         
     def _configure_device(self, device: TalonFX, 
                           configs: TalonFXConfiguration, 
@@ -88,7 +102,31 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
                 break
         if not status_code.is_ok():
             PrintCommand(f"Device with CAN ID {device.device_id} failed to config with error: {status_code.name}").schedule()
-        
+
+    def set_sys_id_routine(self):
+        """
+        Set the SysId routine to run. Hopper currently exposes only the mechanim wheel routine.
+        """
+        self.sys_id_routine_to_apply = self.mechanim_motor_sys_id_routine
+
+    def sys_id_quasistatic(self, direction: SysIdRoutine.Direction):
+        """
+        Runs the SysId Quasistatic test for the mechanim wheel motor.
+
+        :param direction: Direction of the SysId Quasistatic test
+        :type direction: SysIdRoutine.Direction
+        """
+        return self.sys_id_routine_to_apply.quasistatic(direction)
+
+    def sys_id_dynamic(self, direction: SysIdRoutine.Direction):
+        """
+        Runs the SysId Dynamic test for the mechanim wheel motor.
+
+        :param direction: Direction of the SysId Dynamic test
+        :type direction: SysIdRoutine.Direction
+        """
+        return self.sys_id_routine_to_apply.dynamic(direction)
+
     def hop(self, mechanim_speed, agitator_speed):
         return SequentialCommandGroup(
             self.runOnce(
@@ -106,6 +144,5 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
 
     # def set_agitator_speed(self, speed):
     #     self.agitator_wheel.set(speed)
-
 
 

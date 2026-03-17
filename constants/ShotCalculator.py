@@ -1,515 +1,336 @@
 from __future__ import annotations
 
-"""
-RobotPy/WPIMath port of ShotCalculator.java.
-
-This preserves the Java-facing API shape as closely as practical in Python:
-- module path: frc.firecontrol.ShotCalculator
-- class name: ShotCalculator
-- nested types: ShotCalculator.LaunchParameters, ShotCalculator.ShotInputs, ShotCalculator.Config
-- camelCase public methods retained for easier drop-in migration
-
-Note: RobotPy exposes the geometry/kinematics primitives used here, but this file includes
-small local shims for WPILib Java's MathUtil.clamp/interpolate behavior and
-InterpolatingDoubleTreeMap semantics.
-"""
-
-from bisect import bisect_left
-from dataclasses import dataclass
 import math
-from typing import Optional
+from typing import Final
 
 from wpimath import angleModulus
-from wpimath.geometry import Pose2d, Rotation2d, Translation2d, Twist2d
-from wpimath.kinematics import ChassisSpeeds
+from wpimath.geometry import Rotation2d, Transform2d, Translation2d, Twist2d
+
+from constants.shot_calculator_support import (
+    Config,
+    LaunchParameters,
+    ShotInputs,
+    _InterpolatingLookupTable,
+)
 
 
-class _MathUtil:
-    @staticmethod
-    def clamp(value: float, low: float, high: float) -> float:
-        return max(low, min(high, value))
-
-    @staticmethod
-    def interpolate(start: float, end: float, t: float) -> float:
-        t = _MathUtil.clamp(t, 0.0, 1.0)
-        return start + (end - start) * t
-
-
-class _InterpolatingDoubleTreeMap:
-    """
-    Minimal Python equivalent of WPILib Java's InterpolatingDoubleTreeMap.
-
-    Behavior implemented to match typical WPILib usage in this solver:
-    - exact key -> exact value
-    - below minimum key -> minimum value
-    - above maximum key -> maximum value
-    - between keys -> linear interpolation
-    """
-
-    def __init__(self) -> None:
-        self._keys: list[float] = []
-        self._values: list[float] = []
-
-    def put(self, key: float, value: float) -> None:
-        idx = bisect_left(self._keys, key)
-        if idx < len(self._keys) and self._keys[idx] == key:
-            self._values[idx] = value
-        else:
-            self._keys.insert(idx, key)
-            self._values.insert(idx, value)
-
-    def get(self, key: float) -> Optional[float]:
-        if not self._keys:
-            return None
-
-        idx = bisect_left(self._keys, key)
-
-        if idx < len(self._keys) and self._keys[idx] == key:
-            return self._values[idx]
-        if idx == 0:
-            return self._values[0]
-        if idx >= len(self._keys):
-            return self._values[-1]
-
-        x0 = self._keys[idx - 1]
-        x1 = self._keys[idx]
-        y0 = self._values[idx - 1]
-        y1 = self._values[idx]
-
-        if x1 == x0:
-            return y0
-
-        t = (key - x0) / (x1 - x0)
-        return y0 + (y1 - y0) * t
-
-    def clear(self) -> None:
-        self._keys.clear()
-        self._values.clear()
+def _clamp(value: float, low: float, high: float) -> float:
+    return max(low, min(high, value))
 
 
 class ShotCalculator:
-    @dataclass(frozen=True)
-    class LaunchParameters:
-        rpm: float
-        timeOfFlightSec: float
-        driveAngle: Rotation2d
-        driveAngularVelocityRadPerSec: float
-        isValid: bool
-        confidence: float
-        solvedDistanceM: float
-        iterationsUsed: int
-        warmStartUsed: bool
+    """Shoot-on-the-move solver ported from the original Java implementation."""
 
-    @dataclass(frozen=True)
-    class ShotInputs:
-        robotPose: Pose2d
-        fieldVelocity: ChassisSpeeds
-        robotVelocity: ChassisSpeeds
-        hubCenter: Translation2d
-        hubForward: Translation2d
-        visionConfidence: float
-        pitchDeg: float = 0.0
-        rollDeg: float = 0.0
+    LOOP_PERIOD_SEC: Final[float] = 0.02
+    DERIVATIVE_STEP_METERS: Final[float] = 0.01
 
-    class Config:
-        def __init__(self) -> None:
-            # Launcher geometry (measure from CAD)
-            self.launcherOffsetX = 0.20
-            self.launcherOffsetY = 0.0
+    def __init__(self, config: Config | None = None) -> None:
+        self.config = config if config is not None else Config()
 
-            # How close/far you can score from (meters)
-            self.minScoringDistance = 0.5
-            self.maxScoringDistance = 5.0
+        self._rpm_map = _InterpolatingLookupTable()
+        self._tof_map = _InterpolatingLookupTable()
 
-            # Newton solver tuning
-            self.maxIterations = 25
-            self.convergenceTolerance = 0.001
-            self.tofMin = 0.05
-            self.tofMax = 5.0
+        self._previous_tof = -1.0
+        self._previous_speed = 0.0
 
-            # Below this speed (m/s), don't bother with SOTM, just aim straight
-            self.minSOTMSpeed = 0.1
+        self._prev_robot_vx = 0.0
+        self._prev_robot_vy = 0.0
+        self._prev_robot_omega = 0.0
 
-            # Above this speed (m/s), don't shoot, we're outside calibration range
-            self.maxSOTMSpeed = 3.0
+    def _launcher_transform(self) -> Transform2d:
+        return Transform2d(
+            Translation2d(self.config.launcher_offset_x, self.config.launcher_offset_y),
+            Rotation2d(),
+        )
 
-            # Latency compensation (ms)
-            self.phaseDelayMs = 30.0
-            self.mechLatencyMs = 20.0
+    def _lookup_required(self, table: _InterpolatingLookupTable, distance: float, label: str) -> float:
+        value = table.get(distance)
+        if value is None:
+            raise ValueError(f"{label} lookup table is empty")
+        return value
 
-            # The ball's inherited robot velocity decays in flight because of drag.
-            self.sotmDragCoeff = 0.47
+    def load_lut_entry(self, distance_m: float, rpm: float, tof: float) -> None:
+        self._rpm_map.put(distance_m, rpm)
+        self._tof_map.put(distance_m, tof)
 
-            # Confidence scoring weights (5-component weighted geometric mean)
-            self.wConvergence = 1.0
-            self.wVelocityStability = 0.8
-            self.wVisionConfidence = 1.2
-            self.wHeadingAccuracy = 1.5
-            self.wDistanceInRange = 0.5
-            self.headingMaxErrorRad = math.radians(15.0)
+    def _effective_rpm(self, distance: float) -> float:
+        return self._lookup_required(self._rpm_map, distance, "RPM")
 
-            # Heading tolerance tuning
-            self.headingSpeedScalar = 1.0
-            self.headingReferenceDistance = 2.5
+    def _effective_tof(self, distance: float) -> float:
+        return self._lookup_required(self._tof_map, distance, "TOF")
 
-            # Suppress firing when pitch or roll exceeds this threshold
-            self.maxTiltDeg = 5.0
-
-    DERIV_H = 0.01
-
-    def __init__(self, config: Optional[Config] = None) -> None:
-        self.config = config if config is not None else ShotCalculator.Config()
-
-        self.rpmMap = _InterpolatingDoubleTreeMap()
-        self.tofMap = _InterpolatingDoubleTreeMap()
-        self.correctionRpmMap = _InterpolatingDoubleTreeMap()
-        self.correctionTofMap = _InterpolatingDoubleTreeMap()
-
-        self.rpmOffset = 0.0
-
-        self.previousTOF = -1.0
-        self.previousSpeed = 0.0
-
-        self.prevRobotVx = 0.0
-        self.prevRobotVy = 0.0
-        self.prevRobotOmega = 0.0
-
-    def loadLUTEntry(self, distanceM: float, rpm: float, tof: float) -> None:
-        self.rpmMap.put(distanceM, rpm)
-        self.tofMap.put(distanceM, tof)
-
-    def effectiveRPM(self, distance: float) -> float:
-        base = self.rpmMap.get(distance)
-        if base is None:
-            raise ValueError("RPM lookup table is empty")
-        correction = self.correctionRpmMap.get(distance)
-        return base + (correction if correction is not None else 0.0) + self.rpmOffset
-
-    def effectiveTOF(self, distance: float) -> float:
-        base = self.tofMap.get(distance)
-        if base is None:
-            raise ValueError("TOF lookup table is empty")
-        correction = self.correctionTofMap.get(distance)
-        return base + (correction if correction is not None else 0.0)
-
-    def dragCompensatedTOF(self, tof: float) -> float:
-        c = self.config.sotmDragCoeff
-        if c < 1e-6:
+    def _drag_compensated_tof(self, tof: float) -> float:
+        if self.config.sotm_drag_coeff < 1e-6:
             return tof
-        return (1.0 - math.exp(-c * tof)) / c
 
-    def tofMapDerivative(self, d: float) -> float:
-        t_high = self.effectiveTOF(d + self.DERIV_H)
-        t_low = self.effectiveTOF(d - self.DERIV_H)
-        return (t_high - t_low) / (2.0 * self.DERIV_H)
+        return (1.0 - math.exp(-self.config.sotm_drag_coeff * tof)) / self.config.sotm_drag_coeff
 
-    def calculate(
-        self, inputs: Optional[ShotInputs]
-    ) -> "ShotCalculator.LaunchParameters":
+    def _tof_map_derivative(self, distance: float) -> float:
+        high = self._effective_tof(distance + self.DERIVATIVE_STEP_METERS)
+        low = self._effective_tof(distance - self.DERIVATIVE_STEP_METERS)
+        return (high - low) / (2.0 * self.DERIVATIVE_STEP_METERS)
+
+    def calculate(self, inputs: ShotInputs | None) -> LaunchParameters:
         if (
             inputs is None
-            or inputs.robotPose is None
-            or inputs.fieldVelocity is None
-            or inputs.robotVelocity is None
+            or inputs.robot_pose is None
+            or inputs.field_velocity is None
+            or inputs.robot_velocity is None
+            or len(self._rpm_map) == 0
+            or len(self._tof_map) == 0
         ):
-            return ShotCalculator.LaunchParameters.INVALID
+            return LaunchParameters.INVALID
 
-        rawPose = inputs.robotPose
-        fieldVel = inputs.fieldVelocity
-        robotVel = inputs.robotVelocity
+        raw_pose = inputs.robot_pose
+        if not math.isfinite(raw_pose.x) or not math.isfinite(raw_pose.y):
+            return LaunchParameters.INVALID
 
-        poseX = rawPose.X()
-        poseY = rawPose.Y()
-        if math.isnan(poseX) or math.isnan(poseY) or math.isinf(poseX) or math.isinf(poseY):
-            return ShotCalculator.LaunchParameters.INVALID
+        dt = self.config.phase_delay_ms / 1000.0
+        robot_velocity = inputs.robot_velocity
+        field_velocity = inputs.field_velocity
 
-        dt = self.config.phaseDelayMs / 1000.0
-        ax = (robotVel.vx - self.prevRobotVx) / 0.02
-        ay = (robotVel.vy - self.prevRobotVy) / 0.02
-        aOmega = (robotVel.omega - self.prevRobotOmega) / 0.02
+        ax = (robot_velocity.vx - self._prev_robot_vx) / self.LOOP_PERIOD_SEC
+        ay = (robot_velocity.vy - self._prev_robot_vy) / self.LOOP_PERIOD_SEC
+        angular_accel = (robot_velocity.omega - self._prev_robot_omega) / self.LOOP_PERIOD_SEC
 
-        compensatedPose = rawPose.exp(
+        compensated_pose = raw_pose.exp(
             Twist2d(
-                robotVel.vx * dt + 0.5 * ax * dt * dt,
-                robotVel.vy * dt + 0.5 * ay * dt * dt,
-                robotVel.omega * dt + 0.5 * aOmega * dt * dt,
+                robot_velocity.vx * dt + 0.5 * ax * dt * dt,
+                robot_velocity.vy * dt + 0.5 * ay * dt * dt,
+                robot_velocity.omega * dt + 0.5 * angular_accel * dt * dt,
             )
         )
 
-        self.prevRobotVx = robotVel.vx
-        self.prevRobotVy = robotVel.vy
-        self.prevRobotOmega = robotVel.omega
+        self._prev_robot_vx = robot_velocity.vx
+        self._prev_robot_vy = robot_velocity.vy
+        self._prev_robot_omega = robot_velocity.omega
 
-        robotX = compensatedPose.X()
-        robotY = compensatedPose.Y()
-        heading = compensatedPose.rotation().radians()
-
-        hubCenter = inputs.hubCenter
-        hubX = hubCenter.X()
-        hubY = hubCenter.Y()
-
-        hubForward = inputs.hubForward
-        dot = (hubX - robotX) * hubForward.X() + (hubY - robotY) * hubForward.Y()
-        if dot < 0.0:
-            return ShotCalculator.LaunchParameters.INVALID
+        robot_translation = compensated_pose.translation()
+        heading = compensated_pose.rotation()
+        to_hub_from_robot = inputs.hub_center - robot_translation
 
         if (
-            abs(inputs.pitchDeg) > self.config.maxTiltDeg
-            or abs(inputs.rollDeg) > self.config.maxTiltDeg
+            to_hub_from_robot.x * inputs.hub_forward.x
+            + to_hub_from_robot.y * inputs.hub_forward.y
+        ) < 0.0:
+            return LaunchParameters.INVALID
+
+        if (
+            abs(inputs.pitch_deg) > self.config.max_tilt_deg
+            or abs(inputs.roll_deg) > self.config.max_tilt_deg
         ):
-            return ShotCalculator.LaunchParameters.INVALID
+            return LaunchParameters.INVALID
 
-        cosH = math.cos(heading)
-        sinH = math.sin(heading)
-        launcherX = robotX + self.config.launcherOffsetX * cosH - self.config.launcherOffsetY * sinH
-        launcherY = robotY + self.config.launcherOffsetX * sinH + self.config.launcherOffsetY * cosH
+        launcher_pose = compensated_pose.transformBy(self._launcher_transform())
+        launcher_translation = launcher_pose.translation()
+        launcher_offset_field = launcher_translation - robot_translation
 
-        launcherFieldOffX = self.config.launcherOffsetX * cosH - self.config.launcherOffsetY * sinH
-        launcherFieldOffY = self.config.launcherOffsetX * sinH + self.config.launcherOffsetY * cosH
-        omega = fieldVel.omega
-        vx = fieldVel.vx + (-launcherFieldOffY) * omega
-        vy = fieldVel.vy + launcherFieldOffX * omega
+        launcher_velocity = Translation2d(
+            field_velocity.vx - launcher_offset_field.y * field_velocity.omega,
+            field_velocity.vy + launcher_offset_field.x * field_velocity.omega,
+        )
 
-        rx = hubX - launcherX
-        ry = hubY - launcherY
-        distance = math.hypot(rx, ry)
+        displacement_to_hub = inputs.hub_center - launcher_translation
+        distance = displacement_to_hub.norm()
+        if (
+            distance < self.config.min_scoring_distance
+            or distance > self.config.max_scoring_distance
+        ):
+            return LaunchParameters.INVALID
 
-        if distance < self.config.minScoringDistance or distance > self.config.maxScoringDistance:
-            return ShotCalculator.LaunchParameters.INVALID
+        robot_speed = launcher_velocity.norm()
+        if robot_speed > self.config.max_sotm_speed:
+            return LaunchParameters.INVALID
 
-        robotSpeed = math.hypot(vx, vy)
-        if robotSpeed > self.config.maxSOTMSpeed:
-            return ShotCalculator.LaunchParameters.INVALID
+        velocity_filtered = robot_speed < self.config.min_sotm_speed
+        projected_distance = distance
+        iterations_used = 0
+        warm_start_used = False
 
-        velocityFiltered = robotSpeed < self.config.minSOTMSpeed
-
-        solvedTOF: float
-        projDist: float
-        iterationsUsed: int
-        warmStartUsed: bool
-
-        if velocityFiltered:
-            solvedTOF = self.effectiveTOF(distance)
-            projDist = distance
-            iterationsUsed = 0
-            warmStartUsed = False
-        else:
-            maxIter = self.config.maxIterations
-            convTol = self.config.convergenceTolerance
-
-            if self.previousTOF > 0.0:
-                tof = self.previousTOF
-                warmStartUsed = True
+        try:
+            if velocity_filtered:
+                solved_tof = self._effective_tof(distance)
             else:
-                tof = self.effectiveTOF(distance)
-                warmStartUsed = False
-
-            projDist = distance
-            iterationsUsed = 0
-
-            for i in range(maxIter):
-                prevTOF = tof
-
-                c = self.config.sotmDragCoeff
-                dragExp = 1.0 if c < 1e-6 else math.exp(-c * tof)
-                driftTOF = tof if c < 1e-6 else (1.0 - dragExp) / c
-
-                prx = rx - vx * driftTOF
-                pry = ry - vy * driftTOF
-                projDist = math.hypot(prx, pry)
-
-                if projDist < 0.01:
-                    tof = self.effectiveTOF(distance)
-                    iterationsUsed = maxIter + 1
-                    break
-
-                lookupTOF = self.effectiveTOF(projDist)
-                dPrime = -dragExp * (prx * vx + pry * vy) / projDist
-                gPrime = self.tofMapDerivative(projDist)
-                f = lookupTOF - tof
-                fPrime = gPrime * dPrime - 1.0
-
-                if abs(fPrime) > 0.01:
-                    tof = tof - f / fPrime
-                else:
-                    tof = lookupTOF
-
-                tof = _MathUtil.clamp(tof, self.config.tofMin, self.config.tofMax)
-                iterationsUsed = i + 1
-
-                if abs(tof - prevTOF) < convTol:
-                    break
-
-            if tof > self.config.tofMax or tof < 0.0 or math.isnan(tof):
-                tof = self.effectiveTOF(distance)
-                iterationsUsed = maxIter + 1
-
-            solvedTOF = tof
-
-        self.previousTOF = solvedTOF
-
-        effectiveTOF = solvedTOF + self.config.mechLatencyMs / 1000.0
-        effectiveRPMValue = self.effectiveRPM(projDist)
-
-        if velocityFiltered:
-            compTargetX = hubX
-            compTargetY = hubY
-        else:
-            headingDriftTOF = self.dragCompensatedTOF(solvedTOF)
-            compTargetX = hubX - vx * headingDriftTOF
-            compTargetY = hubY - vy * headingDriftTOF
-
-        aimX = compTargetX - robotX
-        aimY = compTargetY - robotY
-        driveAngle = Rotation2d(aimX, aimY)
-
-        headingErrorRad = angleModulus(driveAngle.radians() - heading)
-
-        driveAngularVelocity = 0.0
-        if not velocityFiltered and distance > 0.1:
-            tangentialVel = (ry * vx - rx * vy) / distance
-            driveAngularVelocity = tangentialVel / distance
-
-        if velocityFiltered:
-            solverQuality = 1.0
-        else:
-            maxIter = self.config.maxIterations
-            if iterationsUsed > maxIter:
-                solverQuality = 0.0
-            elif iterationsUsed <= 3:
-                solverQuality = 1.0
-            else:
-                solverQuality = _MathUtil.interpolate(
-                    1.0,
-                    0.1,
-                    float(iterationsUsed - 3) / float(maxIter - 3),
+                solved_tof = (
+                    self._previous_tof
+                    if self._previous_tof > 0.0
+                    else self._effective_tof(distance)
                 )
+                warm_start_used = self._previous_tof > 0.0
 
-        confidence = self.computeConfidence(
-            solverQuality,
-            robotSpeed,
-            headingErrorRad,
-            distance,
-            inputs.visionConfidence,
+                for iteration in range(self.config.max_iterations):
+                    previous_tof = solved_tof
+
+                    if self.config.sotm_drag_coeff < 1e-6:
+                        drag_exp = 1.0
+                        drift_tof = solved_tof
+                    else:
+                        drag_exp = math.exp(-self.config.sotm_drag_coeff * solved_tof)
+                        drift_tof = (1.0 - drag_exp) / self.config.sotm_drag_coeff
+
+                    projected_dx = displacement_to_hub.x - launcher_velocity.x * drift_tof
+                    projected_dy = displacement_to_hub.y - launcher_velocity.y * drift_tof
+                    projected_distance = math.hypot(projected_dx, projected_dy)
+
+                    if projected_distance < 0.01:
+                        solved_tof = self._effective_tof(distance)
+                        projected_distance = distance
+                        iterations_used = self.config.max_iterations + 1
+                        break
+
+                    lookup_tof = self._effective_tof(projected_distance)
+                    distance_rate = -drag_exp * (
+                        projected_dx * launcher_velocity.x
+                        + projected_dy * launcher_velocity.y
+                    ) / projected_distance
+                    tof_rate = self._tof_map_derivative(projected_distance)
+                    residual = lookup_tof - solved_tof
+                    residual_rate = tof_rate * distance_rate - 1.0
+
+                    if abs(residual_rate) > 0.01:
+                        solved_tof -= residual / residual_rate
+                    else:
+                        solved_tof = lookup_tof
+
+                    solved_tof = _clamp(solved_tof, self.config.tof_min, self.config.tof_max)
+                    iterations_used = iteration + 1
+
+                    if abs(solved_tof - previous_tof) < self.config.convergence_tolerance:
+                        break
+
+                if not math.isfinite(solved_tof) or solved_tof < 0.0 or solved_tof > self.config.tof_max:
+                    solved_tof = self._effective_tof(distance)
+                    projected_distance = distance
+                    iterations_used = self.config.max_iterations + 1
+        except ValueError:
+            return LaunchParameters.INVALID
+
+        self._previous_tof = solved_tof
+
+        effective_time_of_flight = solved_tof + self.config.mech_latency_ms / 1000.0
+        rpm = self._effective_rpm(projected_distance)
+
+        if velocity_filtered:
+            compensated_target = inputs.hub_center
+        else:
+            compensated_target = inputs.hub_center - launcher_velocity * self._drag_compensated_tof(solved_tof)
+
+        aim_vector = compensated_target - robot_translation
+        drive_angle = Rotation2d(aim_vector.x, aim_vector.y)
+        heading_error_rad = angleModulus(drive_angle.radians() - heading.radians())
+
+        drive_angular_velocity = 0.0
+        if not velocity_filtered and distance > 0.1:
+            tangential_velocity = (
+                displacement_to_hub.x * launcher_velocity.y
+                - displacement_to_hub.y * launcher_velocity.x
+            ) / distance
+            drive_angular_velocity = tangential_velocity / distance
+
+        if velocity_filtered:
+            solver_quality = 1.0
+        elif iterations_used > self.config.max_iterations:
+            solver_quality = 0.0
+        elif iterations_used <= 3:
+            solver_quality = 1.0
+        else:
+            interpolation = (iterations_used - 3) / (self.config.max_iterations - 3)
+            solver_quality = 1.0 + (0.1 - 1.0) * _clamp(interpolation, 0.0, 1.0)
+
+        confidence = self.compute_confidence(
+            solver_quality=solver_quality,
+            current_speed=robot_speed,
+            heading_error_rad=heading_error_rad,
+            distance=distance,
+            vision_confidence=inputs.vision_confidence,
         )
 
-        self.previousSpeed = robotSpeed
+        self._previous_speed = robot_speed
 
-        return ShotCalculator.LaunchParameters(
-            effectiveRPMValue,
-            effectiveTOF,
-            driveAngle,
-            driveAngularVelocity,
-            True,
-            confidence,
-            distance,
-            iterationsUsed,
-            warmStartUsed,
+        return LaunchParameters(
+            rpm=rpm,
+            time_of_flight_sec=effective_time_of_flight,
+            drive_angle=drive_angle,
+            drive_angular_velocity_rad_per_sec=drive_angular_velocity,
+            is_valid=True,
+            confidence=confidence,
+            solved_distance_m=distance,
+            iterations_used=iterations_used,
+            warm_start_used=warm_start_used,
         )
 
-    def computeConfidence(
+    def compute_confidence(
         self,
-        solverQuality: float,
-        currentSpeed: float,
-        headingErrorRad: float,
+        solver_quality: float,
+        current_speed: float,
+        heading_error_rad: float,
         distance: float,
-        visionConfidence: float,
+        vision_confidence: float,
     ) -> float:
-        convergenceQuality = solverQuality
+        speed_delta = abs(current_speed - self._previous_speed)
+        velocity_stability = _clamp(1.0 - speed_delta / 0.5, 0.0, 1.0)
+        vision_quality = _clamp(vision_confidence, 0.0, 1.0)
 
-        speedDelta = abs(currentSpeed - self.previousSpeed)
-        velocityStability = _MathUtil.clamp(1.0 - speedDelta / 0.5, 0.0, 1.0)
-
-        visionConf = _MathUtil.clamp(visionConfidence, 0.0, 1.0)
-
-        distanceScale = _MathUtil.clamp(
-            self.config.headingReferenceDistance / distance,
+        distance_scale = _clamp(
+            self.config.heading_reference_distance / distance if distance > 1e-9 else 2.0,
             0.5,
             2.0,
         )
-        speedScale = 1.0 / (1.0 + self.config.headingSpeedScalar * currentSpeed)
-        scaledMaxError = self.config.headingMaxErrorRad * distanceScale * speedScale
-        headingErr = abs(headingErrorRad)
-        headingAccuracy = _MathUtil.clamp(1.0 - headingErr / scaledMaxError, 0.0, 1.0)
+        speed_scale = 1.0 / (1.0 + self.config.heading_speed_scalar * current_speed)
+        scaled_max_error = self.config.heading_max_error_rad * distance_scale * speed_scale
+        if scaled_max_error <= 1e-9:
+            heading_accuracy = 1.0 if abs(heading_error_rad) <= 1e-9 else 0.0
+        else:
+            heading_accuracy = _clamp(
+                1.0 - abs(heading_error_rad) / scaled_max_error,
+                0.0,
+                1.0,
+            )
 
-        rangeSpan = self.config.maxScoringDistance - self.config.minScoringDistance
-        rangeFraction = (distance - self.config.minScoringDistance) / rangeSpan
-        distInRange = 1.0 - 2.0 * abs(rangeFraction - 0.5)
-        distInRange = _MathUtil.clamp(distInRange, 0.0, 1.0)
+        range_span = self.config.max_scoring_distance - self.config.min_scoring_distance
+        if range_span <= 1e-9:
+            distance_in_range = 1.0
+        else:
+            range_fraction = (distance - self.config.min_scoring_distance) / range_span
+            distance_in_range = _clamp(
+                1.0 - 2.0 * abs(range_fraction - 0.5),
+                0.0,
+                1.0,
+            )
 
-        c = [convergenceQuality, velocityStability, visionConf, headingAccuracy, distInRange]
-        w = [
-            self.config.wConvergence,
-            self.config.wVelocityStability,
-            self.config.wVisionConfidence,
-            self.config.wHeadingAccuracy,
-            self.config.wDistanceInRange,
-        ]
+        components = (
+            solver_quality,
+            velocity_stability,
+            vision_quality,
+            heading_accuracy,
+            distance_in_range,
+        )
+        weights = (
+            self.config.w_convergence,
+            self.config.w_velocity_stability,
+            self.config.w_vision_confidence,
+            self.config.w_heading_accuracy,
+            self.config.w_distance_in_range,
+        )
 
-        sumW = 0.0
-        logSum = 0.0
-        for i in range(5):
-            if c[i] <= 0.0:
+        weight_sum = 0.0
+        weighted_log_sum = 0.0
+        for component, weight in zip(components, weights, strict=True):
+            if component <= 0.0:
                 return 0.0
-            logSum += w[i] * math.log(c[i])
-            sumW += w[i]
+            weighted_log_sum += weight * math.log(component)
+            weight_sum += weight
 
-        if sumW <= 0.0:
+        if weight_sum <= 0.0:
             return 0.0
 
-        composite = math.exp(logSum / sumW) * 100.0
-        return _MathUtil.clamp(composite, 0.0, 100.0)
+        return _clamp(math.exp(weighted_log_sum / weight_sum) * 100.0, 0.0, 100.0)
 
-    def addRpmCorrection(self, distance: float, deltaRpm: float) -> None:
-        self.correctionRpmMap.put(distance, deltaRpm)
+    def reset_warm_start(self) -> None:
+        self._previous_tof = -1.0
+        self._previous_speed = 0.0
+        self._prev_robot_vx = 0.0
+        self._prev_robot_vy = 0.0
+        self._prev_robot_omega = 0.0
 
-    def addTofCorrection(self, distance: float, deltaTof: float) -> None:
-        self.correctionTofMap.put(distance, deltaTof)
-
-    def clearCorrections(self) -> None:
-        self.correctionRpmMap.clear()
-        self.correctionTofMap.clear()
-
-    def adjustOffset(self, delta: float) -> None:
-        self.rpmOffset = _MathUtil.clamp(self.rpmOffset + delta, -200.0, 200.0)
-
-    def resetOffset(self) -> None:
-        self.rpmOffset = 0.0
-
-    def getOffset(self) -> float:
-        return self.rpmOffset
-
-    def getTimeOfFlight(self, distanceM: float) -> float:
-        return self.effectiveTOF(distanceM)
-
-    def getBaseRPM(self, distance: float) -> float:
-        value = self.rpmMap.get(distance)
-        if value is None:
-            raise ValueError("RPM lookup table is empty")
-        return value
-
-    def resetWarmStart(self) -> None:
-        self.previousTOF = -1.0
-        self.previousSpeed = 0.0
-        self.prevRobotVx = 0.0
-        self.prevRobotVy = 0.0
-        self.prevRobotOmega = 0.0
-
-    def getRpmMap(self) -> _InterpolatingDoubleTreeMap:
-        return self.rpmMap
-
-    def getTofMap(self) -> _InterpolatingDoubleTreeMap:
-        return self.tofMap
-
-
-ShotCalculator.LaunchParameters.INVALID = ShotCalculator.LaunchParameters(
-    0.0,
-    0.0,
-    Rotation2d(),
-    0.0,
-    False,
-    0.0,
-    0.0,
-    0,
-    False,
-)
+__all__ = ["Config", "LaunchParameters", "ShotCalculator", "ShotInputs"]

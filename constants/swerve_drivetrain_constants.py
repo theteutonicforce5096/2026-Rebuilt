@@ -15,10 +15,14 @@ class SwerveDrivetrainConstants:
 
     # Max speeds of drivetrain
     _max_linear_speed = 5.25 # Max linear speed in meters per second
-    _max_angular_rate = 16 # Max angular velocity in radians per second 
+    _max_angular_speed = 16 # Max angular velocity in radians per second 
 
-    # Number of times to attempt to configure each device
-    _num_config_attempts = 25
+    # Max acceleration of robot (assuming 0.02 second loop time)
+    _max_linear_accel = (1 / 0.25) * 0.02 * _max_linear_speed # Max speed in 0.25 seconds
+    _max_angular_accel = (1 / 0.5) * 0.02 * _max_angular_speed # Max speed in 0.5 second
+
+    # Frequency to run the odometry loop at in hertz
+    _odometry_update_frequency = 500.0 
 
     # The steer motor uses any SwerveModule.SteerRequestType control request with the
     # output type specified by SwerveModuleConstants.SteerMotorClosedLoopOutput
@@ -271,7 +275,9 @@ class SwerveDrivetrainConstants:
                 cls.back_left, 
                 cls.back_right,
             ],
-            cls._num_config_attempts,
+            cls._odometry_update_frequency,
             cls._max_linear_speed,
-            cls._max_angular_rate
+            cls._max_angular_speed,
+            cls._max_linear_accel,
+            cls._max_angular_accel
         )
