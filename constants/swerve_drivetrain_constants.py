@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from phoenix6 import CANBus, configs, hardware, signals, swerve, units
 from wpimath.units import inchesToMeters
 
@@ -26,7 +28,7 @@ class SwerveDrivetrainConstants:
 
     # The steer motor uses any SwerveModule.SteerRequestType control request with the
     # output type specified by SwerveModuleConstants.SteerMotorClosedLoopOutput
-    _steer_gains = (
+    _front_left_steer_gains = (
         configs.Slot0Configs()
         .with_k_p(50) #140
         .with_k_i(0)
@@ -38,10 +40,78 @@ class SwerveDrivetrainConstants:
             signals.StaticFeedforwardSignValue.USE_CLOSED_LOOP_SIGN
         )
     )
+    _front_left_steer_motion_magic_expo_k_v = 0.12
+    _front_left_steer_motion_magic_expo_k_a = 0.1
+    _front_left_drive_gains = (
+        configs.Slot0Configs()
+        .with_k_p(0.1)
+        .with_k_i(0)
+        .with_k_d(0)
+        .with_k_s(0)
+        .with_k_v(0.124)
+    )
 
-    # When using closed-loop control, the drive motor uses the control
-    # output type specified by SwerveModuleConstants.DriveMotorClosedLoopOutput
-    _drive_gains = (
+    _front_right_steer_gains = (
+        configs.Slot0Configs()
+        .with_k_p(50) #140
+        .with_k_i(0)
+        .with_k_d(0.5) #2.5
+        .with_k_s(0.1)
+        .with_k_v(1.91)
+        .with_k_a(0)
+        .with_static_feedforward_sign(
+            signals.StaticFeedforwardSignValue.USE_CLOSED_LOOP_SIGN
+        )
+    )
+    _front_right_steer_motion_magic_expo_k_v = 0.12
+    _front_right_steer_motion_magic_expo_k_a = 0.1
+    _front_right_drive_gains = (
+        configs.Slot0Configs()
+        .with_k_p(0.1)
+        .with_k_i(0)
+        .with_k_d(0)
+        .with_k_s(0)
+        .with_k_v(0.124)
+    )
+
+    _back_left_steer_gains = (
+        configs.Slot0Configs()
+        .with_k_p(50) #140
+        .with_k_i(0)
+        .with_k_d(0.5) #2.5
+        .with_k_s(0.1)
+        .with_k_v(1.91)
+        .with_k_a(0)
+        .with_static_feedforward_sign(
+            signals.StaticFeedforwardSignValue.USE_CLOSED_LOOP_SIGN
+        )
+    )
+    _back_left_steer_motion_magic_expo_k_v = 0.12
+    _back_left_steer_motion_magic_expo_k_a = 0.1
+    _back_left_drive_gains = (
+        configs.Slot0Configs()
+        .with_k_p(0.1)
+        .with_k_i(0)
+        .with_k_d(0)
+        .with_k_s(0)
+        .with_k_v(0.124)
+    )
+
+    _back_right_steer_gains = (
+        configs.Slot0Configs()
+        .with_k_p(50) #140
+        .with_k_i(0)
+        .with_k_d(0.5) #2.5
+        .with_k_s(0.1)
+        .with_k_v(1.91)
+        .with_k_a(0)
+        .with_static_feedforward_sign(
+            signals.StaticFeedforwardSignValue.USE_CLOSED_LOOP_SIGN
+        )
+    )
+    _back_right_steer_motion_magic_expo_k_v = 0.12
+    _back_right_steer_motion_magic_expo_k_a = 0.1
+    _back_right_drive_gains = (
         configs.Slot0Configs()
         .with_k_p(0.1)
         .with_k_i(0)
@@ -91,6 +161,39 @@ class SwerveDrivetrainConstants:
         # stator current limit to help avoid brownouts without impacting performance.
         .with_stator_current_limit(40.0) #60
         .with_stator_current_limit_enable(True)
+    )
+
+    _front_left_steer_initial_configs = (
+        _steer_initial_configs
+        .with_motion_magic(
+            configs.MotionMagicConfigs()
+            .with_motion_magic_expo_k_v(_front_left_steer_motion_magic_expo_k_v)
+            .with_motion_magic_expo_k_a(_front_left_steer_motion_magic_expo_k_a)
+        )
+    )
+    _front_right_steer_initial_configs = (
+        _steer_initial_configs
+        .with_motion_magic(
+            configs.MotionMagicConfigs()
+            .with_motion_magic_expo_k_v(_front_right_steer_motion_magic_expo_k_v)
+            .with_motion_magic_expo_k_a(_front_right_steer_motion_magic_expo_k_a)
+        )
+    )
+    _back_left_steer_initial_configs = (
+        _steer_initial_configs
+        .with_motion_magic(
+            configs.MotionMagicConfigs()
+            .with_motion_magic_expo_k_v(_back_left_steer_motion_magic_expo_k_v)
+            .with_motion_magic_expo_k_a(_back_left_steer_motion_magic_expo_k_a)
+        )
+    )
+    _back_right_steer_initial_configs = (
+        _steer_initial_configs
+        .with_motion_magic(
+            configs.MotionMagicConfigs()
+            .with_motion_magic_expo_k_v(_back_right_steer_motion_magic_expo_k_v)
+            .with_motion_magic_expo_k_a(_back_right_steer_motion_magic_expo_k_a)
+        )
     )
         
     # Configs for the azimuth encoders
@@ -151,8 +254,6 @@ class SwerveDrivetrainConstants:
         .with_steer_motor_gear_ratio(_steer_gear_ratio)
         .with_coupling_gear_ratio(_couple_ratio)
         .with_wheel_radius(_wheel_radius)
-        .with_steer_motor_gains(_steer_gains)
-        .with_drive_motor_gains(_drive_gains)
         .with_steer_motor_closed_loop_output(_steer_closed_loop_output)
         .with_drive_motor_closed_loop_output(_drive_closed_loop_output)
         .with_slip_current(_slip_current)
@@ -161,7 +262,6 @@ class SwerveDrivetrainConstants:
         .with_steer_motor_type(_steer_motor_type)
         .with_feedback_source(_steer_feedback_type)
         .with_drive_motor_initial_configs(_drive_initial_configs)
-        .with_steer_motor_initial_configs(_steer_initial_configs)
         .with_encoder_initial_configs(_encoder_initial_configs)
         .with_steer_inertia(_steer_inertia)
         .with_drive_inertia(_drive_inertia)
@@ -213,49 +313,69 @@ class SwerveDrivetrainConstants:
     _back_right_x_pos: units.meter = inchesToMeters(-9)
     _back_right_y_pos: units.meter = inchesToMeters(-9)
 
-    front_left = _constants_creator.create_module_constants(
-        _front_left_steer_motor_id,
-        _front_left_drive_motor_id,
-        _front_left_encoder_id,
-        _front_left_encoder_offset,
-        _front_left_x_pos,
-        _front_left_y_pos,
-        _invert_left_side,
-        _front_left_steer_motor_inverted,
-        _front_left_encoder_inverted,
+    front_left = (
+        _constants_creator.create_module_constants(
+            _front_left_steer_motor_id,
+            _front_left_drive_motor_id,
+            _front_left_encoder_id,
+            _front_left_encoder_offset,
+            _front_left_x_pos,
+            _front_left_y_pos,
+            _invert_left_side,
+            _front_left_steer_motor_inverted,
+            _front_left_encoder_inverted,
+        )
+        .with_steer_motor_gains(_front_left_steer_gains)
+        .with_drive_motor_gains(_front_left_drive_gains)
+        .with_steer_motor_initial_configs(_front_left_steer_initial_configs)
     )
-    front_right = _constants_creator.create_module_constants(
-        _front_right_steer_motor_id,
-        _front_right_drive_motor_id,
-        _front_right_encoder_id,
-        _front_right_encoder_offset,
-        _front_right_x_pos,
-        _front_right_y_pos,
-        _invert_right_side,
-        _front_right_steer_motor_inverted,
-        _front_right_encoder_inverted,
+    front_right = (
+        _constants_creator.create_module_constants(
+            _front_right_steer_motor_id,
+            _front_right_drive_motor_id,
+            _front_right_encoder_id,
+            _front_right_encoder_offset,
+            _front_right_x_pos,
+            _front_right_y_pos,
+            _invert_right_side,
+            _front_right_steer_motor_inverted,
+            _front_right_encoder_inverted,
+        )
+        .with_steer_motor_gains(_front_right_steer_gains)
+        .with_drive_motor_gains(_front_right_drive_gains)
+        .with_steer_motor_initial_configs(_front_right_steer_initial_configs)
     )
-    back_left = _constants_creator.create_module_constants(
-        _back_left_steer_motor_id,
-        _back_left_drive_motor_id,
-        _back_left_encoder_id,
-        _back_left_encoder_offset,
-        _back_left_x_pos,
-        _back_left_y_pos,
-        _invert_left_side,
-        _back_left_steer_motor_inverted,
-        _back_left_encoder_inverted,
+    back_left = (
+        _constants_creator.create_module_constants(
+            _back_left_steer_motor_id,
+            _back_left_drive_motor_id,
+            _back_left_encoder_id,
+            _back_left_encoder_offset,
+            _back_left_x_pos,
+            _back_left_y_pos,
+            _invert_left_side,
+            _back_left_steer_motor_inverted,
+            _back_left_encoder_inverted,
+        )
+        .with_steer_motor_gains(_back_left_steer_gains)
+        .with_drive_motor_gains(_back_left_drive_gains)
+        .with_steer_motor_initial_configs(_back_left_steer_initial_configs)
     )
-    back_right = _constants_creator.create_module_constants(
-        _back_right_steer_motor_id,
-        _back_right_drive_motor_id,
-        _back_right_encoder_id,
-        _back_right_encoder_offset,
-        _back_right_x_pos,
-        _back_right_y_pos,
-        _invert_right_side,
-        _back_right_steer_motor_inverted,
-        _back_right_encoder_inverted,
+    back_right = (
+        _constants_creator.create_module_constants(
+            _back_right_steer_motor_id,
+            _back_right_drive_motor_id,
+            _back_right_encoder_id,
+            _back_right_encoder_offset,
+            _back_right_x_pos,
+            _back_right_y_pos,
+            _invert_right_side,
+            _back_right_steer_motor_inverted,
+            _back_right_encoder_inverted,
+        )
+        .with_steer_motor_gains(_back_right_steer_gains)
+        .with_drive_motor_gains(_back_right_drive_gains)
+        .with_steer_motor_initial_configs(_back_right_steer_initial_configs)
     )
 
     @classmethod

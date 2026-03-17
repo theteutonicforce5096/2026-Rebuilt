@@ -61,7 +61,7 @@ class Shooter(Subsystem):
         self._configure_device(self.flywheel_intake_motor, flywheel_intake_motor_configs, num_config_attempts)
         self._configure_device(self.flywheel_encoder, flywheel_encoder_configs, num_config_attempts)
 
-        # Increase encoder update frequency to 1000 hertz to improve velocity PID on flywheel motor
+        # Set encoder update frequency to improve velocity PID on flywheel motor
         self.flywheel_encoder.get_velocity().set_update_frequency(flywheel_encoder_vel_update_frequency)
         
         # Create VelocityVoltage request
