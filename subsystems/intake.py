@@ -14,9 +14,9 @@ from commands2.cmd import print_
 from commands2 import PrintCommand, SequentialCommandGroup, DeferredCommand
 
 from phoenix6 import CANBus
-from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration
+from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
 from phoenix6.controls import VelocityVoltage, PositionVoltage
-from phoenix6.hardware import TalonFX, TalonFXS
+from phoenix6.hardware import TalonFX, TalonFXS, CANcoder
 from phoenix6.status_code import StatusCode
 
 from ntcore import NetworkTableInstance
@@ -29,8 +29,8 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
     """
 
     def __init__(self, canbus: CANBus, intake_wheel_id: int, intake_arm_id: int, 
-                 intake_wheel_configs: TalonFXSConfiguration, 
-                 intake_arm_configs: TalonFXConfiguration,
+                 intake_arm_encoder_id: int, intake_wheel_configs: TalonFXSConfiguration, 
+                 intake_arm_configs: TalonFXConfiguration, intake_arm_encoder_configs: CANcoderConfiguration,
                  num_config_attempts: int):
         """
         Constructor for initializing shooter using the specified constants.
@@ -41,10 +41,14 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         :type intake_wheel_id: int
         :param intake_arm_id: CAN ID of the intake arm
         :type intake_arm_id: int
+        :param intake_arm_encoder_id: CAN ID of the intake arm encoder
+        :type intake_arm_encoder_id: int
         :param intake_wheel_configs: Configs for the intake wheel
         :type intake_wheel_configs: phoenix6.configs.TalonFXSConfiguration
         :param intake_arm_configs: Configs for the intake arm
         :type intake_arm_configs: phoenix6.configs.TalonFXConfiguration
+        :param intake_arm_encoder_configs: Configs for the intake arm encoder
+        :type intake_arm_encoder_configs: phoenix6.configs.CANcoderConfiguration
         :param num_config_attempts: Number of times to attempt to configure each device
         :type num_config_attempts: int
         """
@@ -64,11 +68,15 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         self.intake_wheel = TalonFXS(intake_wheel_id, canbus)
         # self.wheel_config.motor_output = MOTOROUTPUT
         self.intake_arm = TalonFX(intake_arm_id, canbus)
-        #TODO Add encoder for arm
+        self.intake_arm_encoder = CANcoder(intake_arm_encoder_id, canbus)
+
 
         # Apply motor configs
         self._configure_device(self.intake_wheel, intake_wheel_configs, num_config_attempts)
         self._configure_device(self.intake_arm, intake_arm_configs, num_config_attempts)
+        self._configure_device(self.intake_arm_encoder, intake_arm_encoder_configs, num_config_attempts)
+
+        self.intake_arm_encoder.get_position().set_update_frequency(1000.0)
 
         # Create PID control requests
         # self.velocity_voltage_request = VelocityVoltage(velocity = 0)

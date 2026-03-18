@@ -130,7 +130,9 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
     def hop(self, mechanim_speed, agitator_speed):
         return SequentialCommandGroup(
             self.runOnce(
-                lambda: self.mechanim_wheel.set(mechanim_speed)
+                lambda: self.mechanim_wheel.set_control(
+                    self.velocity_pid_request.with_velocity(mechanim_speed)
+                )
             ),
             self.runOnce(
                 lambda: self.agitator_wheel.set_control(
