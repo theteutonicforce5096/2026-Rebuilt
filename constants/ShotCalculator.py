@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 import math
 from typing import Final
 
+from tomlkit import value
 from wpimath import angleModulus
 from wpimath.geometry import Rotation2d, Transform2d, Translation2d, Twist2d
 
@@ -12,11 +11,6 @@ from constants.shot_calculator_support import (
     ShotInputs,
     _InterpolatingLookupTable,
 )
-
-
-def _clamp(value: float, low: float, high: float) -> float:
-    return max(low, min(high, value))
-
 
 class ShotCalculator:
     """Shoot-on-the-move solver ported from the original Java implementation."""
@@ -36,6 +30,9 @@ class ShotCalculator:
         self._prev_robot_vx = 0.0
         self._prev_robot_vy = 0.0
         self._prev_robot_omega = 0.0
+
+    def _clamp(value: float, low: float, high: float) -> float:
+        return max(low, min(high, value))
 
     def _launcher_transform(self) -> Transform2d:
         return Transform2d(
@@ -192,7 +189,7 @@ class ShotCalculator:
                     else:
                         solved_tof = lookup_tof
 
-                    solved_tof = _clamp(solved_tof, self.config.tof_min, self.config.tof_max)
+                    solved_tof = self._clamp(solved_tof, self.config.tof_min, self.config.tof_max)
                     iterations_used = iteration + 1
 
                     if abs(solved_tof - previous_tof) < self.config.convergence_tolerance:
@@ -332,5 +329,3 @@ class ShotCalculator:
         self._prev_robot_vx = 0.0
         self._prev_robot_vy = 0.0
         self._prev_robot_omega = 0.0
-
-__all__ = ["Config", "LaunchParameters", "ShotCalculator", "ShotInputs"]
