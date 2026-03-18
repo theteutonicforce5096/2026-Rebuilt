@@ -16,7 +16,7 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         SignalLogger.enable_auto_logging(False)
 
         # Sleep for 10 seconds only if robot isn't in simulation mode to prevent CANBus motor config errors 
-        if RobotBase.isReal():
+        if RobotBase.isSimulation() == False:
             time.sleep(10) 
 
         # Create robot container
