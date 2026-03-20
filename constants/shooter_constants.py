@@ -57,7 +57,14 @@ class ShooterConstants:
     _flywheel_encoder_configs.magnet_sensor.sensor_direction = signals.SensorDirectionValue.CLOCKWISE_POSITIVE
 
     @classmethod
-    def create_shooter(cls) -> Shooter:
+    def create_shooter(
+        cls,
+        get_current_swerve_state,
+        get_robot_tilt,
+        get_hub_center,
+        launcher_offset_x: float,
+        launcher_offset_y: float,
+    ) -> Shooter:
         """
         Creates a Shooter subsystem instance.
         """
@@ -71,5 +78,10 @@ class ShooterConstants:
             cls._flywheel_intake_motor_configs,
             cls._flywheel_encoder_configs,
             cls._num_config_attempts,
-            cls.flywheel_encoder_vel_update_frequency
+            cls.flywheel_encoder_vel_update_frequency,
+            get_current_swerve_state,
+            get_robot_tilt,
+            get_hub_center,
+            launcher_offset_x,
+            launcher_offset_y,
         )

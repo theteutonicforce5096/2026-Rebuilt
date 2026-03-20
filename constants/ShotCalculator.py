@@ -1,16 +1,44 @@
 import math
 from typing import Final
 
-from tomlkit import value
 from wpimath import angleModulus
 from wpimath.geometry import Rotation2d, Transform2d, Translation2d, Twist2d
 
+from constants.physics import calc_shot_profile
 from constants.shot_calculator_support import (
     Config,
     LaunchParameters,
     ShotInputs,
     _InterpolatingLookupTable,
 )
+
+# Temporary empirical seed table for the hybrid shot model.
+# Each tuple is: (distance_m, flywheel_rps, time_of_flight_sec).
+# These values are absolute shot targets, and load_lut_entry() converts them
+# into residual corrections against the physics baseline.
+_DEFAULT_CALIBRATION_ENTRY_LABELS: Final[tuple[str, str, str]] = (
+    "distance_m",
+    "flywheel_rps",
+    "time_of_flight_sec",
+)
+_DEFAULT_CALIBRATION_ENTRIES: Final[tuple[tuple[float, float, float], ...]] = (
+    (0.500000000000, 19.075039701033, 0.214595846814),
+    (0.821428571429, 30.179703655724, 0.222828939040),
+    (1.142857142857, 40.313893530590, 0.232088681475),
+    (1.464285714286, 49.412599542271, 0.242607868321),
+    (1.785714285714, 57.398264920801, 0.254700599605),
+    (2.107142857143, 64.176622193444, 0.268802859211),
+    (2.428571428571, 69.630456063661, 0.285540950219),
+    (2.750000000000, 73.609828825519, 0.305853633901),
+    (3.071428571429, 75.915872239012, 0.331226131558),
+    (3.392857142857, 76.271882389781, 0.364181489479),
+    (3.714285714286, 74.266475704167, 0.409448469101),
+    (4.035714285714, 69.225061400513, 0.477280643204),
+    (4.357142857143, 59.847811470644, 0.596032971015),
+    (4.678571428571, 42.650029386438, 0.898071032519),
+    (5.000000000000, 23.696753157268, 1.727419900308),
+)
+
 
 class ShotCalculator:
     """Shoot-on-the-move solver ported from the original Java implementation."""
@@ -21,8 +49,10 @@ class ShotCalculator:
     def __init__(self, config: Config | None = None) -> None:
         self.config = config if config is not None else Config()
 
-        self._rpm_map = _InterpolatingLookupTable()
-        self._tof_map = _InterpolatingLookupTable()
+        # Residual tables store empirical correction on top of the physics
+        # baseline, indexed by shooting distance in meters.
+        self._rpm_residual_map = _InterpolatingLookupTable()
+        self._tof_residual_map = _InterpolatingLookupTable()
 
         self._previous_tof = -1.0
         self._previous_speed = 0.0
@@ -31,7 +61,11 @@ class ShotCalculator:
         self._prev_robot_vy = 0.0
         self._prev_robot_omega = 0.0
 
-    def _clamp(value: float, low: float, high: float) -> float:
+        for distance_m, flywheel_rps, time_of_flight_sec in _DEFAULT_CALIBRATION_ENTRIES:
+            self.load_lut_entry(distance_m, flywheel_rps, time_of_flight_sec)
+
+    @staticmethod
+    def clamp(value: float, low: float, high: float) -> float:
         return max(low, min(high, value))
 
     def _launcher_transform(self) -> Transform2d:
@@ -46,15 +80,38 @@ class ShotCalculator:
             raise ValueError(f"{label} lookup table is empty")
         return value
 
+    def _physics_rpm(self, distance: float) -> float:
+        rpm, _ = calc_shot_profile(distance)
+        return rpm
+
+    def _physics_tof(self, distance: float) -> float:
+        _, tof = calc_shot_profile(distance)
+        return tof
+
     def load_lut_entry(self, distance_m: float, rpm: float, tof: float) -> None:
-        self._rpm_map.put(distance_m, rpm)
-        self._tof_map.put(distance_m, tof)
+        # The lookup table is defined as absolute empirical shot targets:
+        # distance_m -> (flywheel_rps, time_of_flight_sec).
+        # Internally we store those values as residuals so the calculator uses
+        # physics baseline + interpolated empirical correction.
+        physics_rpm = self._physics_rpm(distance_m)
+        physics_tof = self._physics_tof(distance_m)
+
+        self._rpm_residual_map.put(distance_m, rpm - physics_rpm)
+        self._tof_residual_map.put(distance_m, tof - physics_tof)
 
     def _effective_rpm(self, distance: float) -> float:
-        return self._lookup_required(self._rpm_map, distance, "RPM")
+        return self._physics_rpm(distance) + self._lookup_required(
+            self._rpm_residual_map,
+            distance,
+            "RPM residual",
+        )
 
     def _effective_tof(self, distance: float) -> float:
-        return self._lookup_required(self._tof_map, distance, "TOF")
+        return self._physics_tof(distance) + self._lookup_required(
+            self._tof_residual_map,
+            distance,
+            "TOF residual",
+        )
 
     def _drag_compensated_tof(self, tof: float) -> float:
         if self.config.sotm_drag_coeff < 1e-6:
@@ -73,8 +130,8 @@ class ShotCalculator:
             or inputs.robot_pose is None
             or inputs.field_velocity is None
             or inputs.robot_velocity is None
-            or len(self._rpm_map) == 0
-            or len(self._tof_map) == 0
+            or len(self._rpm_residual_map) == 0
+            or len(self._tof_residual_map) == 0
         ):
             return LaunchParameters.INVALID
 
@@ -189,7 +246,7 @@ class ShotCalculator:
                     else:
                         solved_tof = lookup_tof
 
-                    solved_tof = self._clamp(solved_tof, self.config.tof_min, self.config.tof_max)
+                    solved_tof = self.clamp(solved_tof, self.config.tof_min, self.config.tof_max)
                     iterations_used = iteration + 1
 
                     if abs(solved_tof - previous_tof) < self.config.convergence_tolerance:
@@ -232,7 +289,7 @@ class ShotCalculator:
             solver_quality = 1.0
         else:
             interpolation = (iterations_used - 3) / (self.config.max_iterations - 3)
-            solver_quality = 1.0 + (0.1 - 1.0) * _clamp(interpolation, 0.0, 1.0)
+            solver_quality = 1.0 + (0.1 - 1.0) * self.clamp(interpolation, 0.0, 1.0)
 
         confidence = self.compute_confidence(
             solver_quality=solver_quality,
@@ -265,10 +322,10 @@ class ShotCalculator:
         vision_confidence: float,
     ) -> float:
         speed_delta = abs(current_speed - self._previous_speed)
-        velocity_stability = _clamp(1.0 - speed_delta / 0.5, 0.0, 1.0)
-        vision_quality = _clamp(vision_confidence, 0.0, 1.0)
+        velocity_stability = self.clamp(1.0 - speed_delta / 0.5, 0.0, 1.0)
+        vision_quality = self.clamp(vision_confidence, 0.0, 1.0)
 
-        distance_scale = _clamp(
+        distance_scale = self.clamp(
             self.config.heading_reference_distance / distance if distance > 1e-9 else 2.0,
             0.5,
             2.0,
@@ -278,7 +335,7 @@ class ShotCalculator:
         if scaled_max_error <= 1e-9:
             heading_accuracy = 1.0 if abs(heading_error_rad) <= 1e-9 else 0.0
         else:
-            heading_accuracy = _clamp(
+            heading_accuracy = self.clamp(
                 1.0 - abs(heading_error_rad) / scaled_max_error,
                 0.0,
                 1.0,
@@ -289,7 +346,7 @@ class ShotCalculator:
             distance_in_range = 1.0
         else:
             range_fraction = (distance - self.config.min_scoring_distance) / range_span
-            distance_in_range = _clamp(
+            distance_in_range = self.clamp(
                 1.0 - 2.0 * abs(range_fraction - 0.5),
                 0.0,
                 1.0,
@@ -321,7 +378,7 @@ class ShotCalculator:
         if weight_sum <= 0.0:
             return 0.0
 
-        return _clamp(math.exp(weighted_log_sum / weight_sum) * 100.0, 0.0, 100.0)
+        return self.clamp(math.exp(weighted_log_sum / weight_sum) * 100.0, 0.0, 100.0)
 
     def reset_warm_start(self) -> None:
         self._previous_tof = -1.0

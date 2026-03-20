@@ -1,5 +1,7 @@
+from typing import Any, Callable, Final
+
 from commands2 import Subsystem
-from commands2 import ParallelCommandGroup, SequentialCommandGroup, WaitCommand, PrintCommand, WaitUntilCommand, ParallelRaceGroup, ParallelDeadlineGroup
+from commands2 import DeferredCommand, ParallelCommandGroup, SequentialCommandGroup, WaitCommand, PrintCommand, WaitUntilCommand, ParallelRaceGroup, ParallelDeadlineGroup
 
 from phoenix6 import CANBus, SignalLogger
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
@@ -13,17 +15,29 @@ from wpilib import SendableChooser, RobotBase, Timer
 
 from ntcore import NetworkTableInstance
 from wpilib.shuffleboard import Shuffleboard
+from wpimath.geometry import Translation2d
+from wpimath.kinematics import ChassisSpeeds
+
+from constants.ShotCalculator import ShotCalculator
+from constants.shot_calculator_support import Config as ShotCalculatorConfig, LaunchParameters, ShotInputs
 
 class Shooter(Subsystem):
     """
     Class for controlling shooter.
     """
 
+    DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS: Final[float] = 26.5
+    CALCULATED_FEED_CONFIDENCE_THRESHOLD: Final[float] = 50.0
+
     def __init__(self, canbus: CANBus, flywheel_motor_id: int, flywheel_intake_motor_id: int, 
                  flywheel_encoder_id: int, flywheel_motor_configs: TalonFXSConfiguration, 
                  flywheel_intake_motor_configs: TalonFXConfiguration,
                  flywheel_encoder_configs: CANcoderConfiguration,
-                 num_config_attempts: int, flywheel_encoder_vel_update_frequency: float):
+                 num_config_attempts: int, flywheel_encoder_vel_update_frequency: float,
+                 get_current_swerve_state: Callable[[], Any],
+                 get_robot_tilt: Callable[[], tuple[float, float]],
+                 get_hub_center: Callable[[], Translation2d],
+                 launcher_offset_x: float, launcher_offset_y: float):
         """
         Constructor for initializing shooter using the specified constants.
 
@@ -133,6 +147,18 @@ class Shooter(Subsystem):
         self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").subscribe(.25)
         self.desired_flywheel_intake_speed_sub.get()
 
+        self._get_current_swerve_state = get_current_swerve_state
+        self._get_robot_tilt = get_robot_tilt
+        self._get_hub_center = get_hub_center
+
+        self.shot_calculator = ShotCalculator(
+            ShotCalculatorConfig(
+                launcher_offset_x = launcher_offset_x,
+                launcher_offset_y = launcher_offset_y,
+            )
+        )
+        self._latest_calculated_shot = LaunchParameters.INVALID
+
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
                           num_attempts: int) -> None:
@@ -178,6 +204,83 @@ class Shooter(Subsystem):
         :type direction: SysIdRoutine.Direction
         """
         return self.sys_id_routine_to_apply.dynamic(direction)
+
+    def _build_shot_inputs(self) -> ShotInputs:
+        current_state = self._get_current_swerve_state()
+        pitch_deg, roll_deg = self._get_robot_tilt()
+
+        return ShotInputs(
+            robot_pose = current_state.pose,
+            field_velocity = ChassisSpeeds.fromRobotRelativeSpeeds(
+                current_state.speeds,
+                current_state.pose.rotation()
+            ),
+            robot_velocity = current_state.speeds,
+            hub_center = self._get_hub_center(),
+            hub_forward = Translation2d(1.0, 0.0),
+            vision_confidence = 1.0,
+            pitch_deg = pitch_deg,
+            roll_deg = roll_deg,
+        )
+
+    def _calculate_launch_parameters(self) -> LaunchParameters:
+        return self.shot_calculator.calculate(self._build_shot_inputs())
+
+    def _apply_calculated_shot(self):
+        self._latest_calculated_shot = self._calculate_launch_parameters()
+
+        flywheel_target_velocity = (
+            self._latest_calculated_shot.rpm
+            if self._latest_calculated_shot.is_valid
+            else 0.0
+        )
+        intake_motor_velocity = (
+            self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
+            if self._latest_calculated_shot.is_valid
+            else 0.0
+        )
+
+        self.set_flywheel_velocities(flywheel_target_velocity, intake_motor_velocity)
+
+    @staticmethod
+    def should_feed_calculated_shot(launch_parameters: LaunchParameters) -> bool:
+        return (
+            launch_parameters.is_valid
+            and launch_parameters.confidence >= Shooter.CALCULATED_FEED_CONFIDENCE_THRESHOLD
+        )
+
+    def reset_calculated_shot_state(self):
+        self.shot_calculator.reset_warm_start()
+        self._latest_calculated_shot = LaunchParameters.INVALID
+
+    def create_manual_shoot_command(self):
+        return DeferredCommand(
+            lambda: self.shoot(
+                self.desired_ball_speed_sub.get(),
+                self.desired_flywheel_intake_speed_sub.get()
+            ),
+            self
+        )
+
+    def create_calculated_shoot_command(self):
+        return self.runOnce(
+            lambda: self._apply_calculated_shot()
+        )
+
+    def create_calculated_feed_command(self, hopper):
+        return DeferredCommand(
+            lambda: (
+                hopper.create_feed_cycle_command()
+                if self.should_feed_calculated_shot(self._latest_calculated_shot)
+                else hopper.create_stop_command()
+            ),
+            hopper
+        )
+
+    def create_stop_command(self):
+        return self.runOnce(
+            lambda: self.set_flywheel_velocities(0, 0)
+        )
     
 #Shoot functions
     def shoot(self, flywheel_target_velocity, intake_motor_velocity):

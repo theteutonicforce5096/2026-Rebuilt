@@ -1,4 +1,4 @@
-from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
+from phoenix6.configs import TalonFXSConfiguration, CANcoderConfiguration
 from phoenix6 import CANBus, signals
 
 from subsystems.intake import Intake
@@ -24,6 +24,7 @@ class IntakeConstants:
     _intake_arm_stowed_position = 0 
     _intake_arm_up_position = 2
     _encoder_0_position = 0
+    # From what I can tell, the arm positions should be angles
 
     # Intake Wheel Configs (NEO550 - TalonFXS)
     _intake_wheel_configs = TalonFXSConfiguration()
@@ -38,7 +39,7 @@ class IntakeConstants:
     _intake_arm_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.NEO550_JST)
     _intake_arm_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
     _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
-    _intake_arm_configs.current_limits.with_stator_current_limit(40)
+    _intake_arm_configs.current_limits.with_stator_current_limit(40) #May need to increase
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_arm_configs.external_feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
     _intake_arm_configs.external_feedback.with_external_feedback_sensor_source(signals.FeedbackSensorSourceValue.FUSED_CANCODER)

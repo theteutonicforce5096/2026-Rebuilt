@@ -14,8 +14,6 @@ from wpimath.units import inchesToMeters, radiansToDegrees
 from pathplannerlib.auto import AutoBuilder, RobotConfig
 from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
 
-from subsystems.camera import VisionCamera
-
 class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
     """
     Class for controlling swerve drive.
@@ -64,9 +62,6 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                 module.encoder.optimize_bus_utilization()
 
             self.pigeon2.optimize_bus_utilization()
-
-        # Create Limelight instance and configure default values
-        self.camera = VisionCamera()
         
         # Create max speed and max accel variables
         self.max_linear_speed = max_linear_speed
@@ -148,32 +143,18 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # )
 
         self.fused_robot_pose_field = Field2d()
-        self.vision_robot_pose_field = Field2d()
-        
         SmartDashboard.putData("Fused Robot Pose", self.fused_robot_pose_field)
-        SmartDashboard.putData("Vision Robot Pose", self.vision_robot_pose_field)
 
     def periodic(self):
         """
         Update pose of the robot in network tables periodically.
         """
-        pass
-        # robot_pose, timestamp = self.camera.get_vision_measurement()
-        # if robot_pose and timestamp:
-        #     self.add_vision_measurement(
-        #         robot_pose,
-        #         utils.fpga_to_current_time(timestamp),
-        #         (1.0, 1.0, 1000 * pi)
-        #     )
 
-        #     vision_pose_array = [robot_pose.x, robot_pose.y, robot_pose.rotation().degrees()]
-        #     self.vision_pose_est.set(vision_pose_array)
+        # Get current state of the robot
+        current_state = self.get_state()
 
-        # current_state = self.get_state()
-
-        # # Telemeterize the poses to Field2d
-        # fused_pose_array = [current_state.pose.x, current_state.pose.y, current_state.pose.rotation().degrees()]
-        # self.fused_pose_est.set(fused_pose_array)
+        # Telemeterize the pose to Field2d
+        self.fused_robot_pose_field.setRobotPose(current_state.pose)
 
     def set_forward_perspective(self):
         """
@@ -192,7 +173,18 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             self.current_alliance = DriverStation.Alliance.kBlue
 
         self._set_hub_position(self.field_type, self.current_alliance)
+
+    def get_robot_tilt(self) -> tuple[float, float]:
+        """
+        Get the current pitch and roll in degrees of the robot from the Pigeon 2.
+        """
+
+        return (
+            self.pigeon2.get_pitch().get_latency_compensated_value(),
+            self.pigeon2.get_roll().get_latency_compensated_value(),
+        )
     
+
     def _set_hub_position(self, field_type: str, alliance_color: DriverStation.Alliance):
         """
         Set the hub position variables based on the field type and alliance color.

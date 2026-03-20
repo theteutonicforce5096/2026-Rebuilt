@@ -1,26 +1,39 @@
-from photonlibpy import PhotonCamera, PhotonPoseEstimator, EstimatedRobotPose
-
-from robotpy_apriltag import AprilTagFieldLayout, AprilTagField
-
-from wpimath.geometry import Transform3d, Translation3d, Rotation3d, Pose3d
+from typing import Callable
+from math import hypot
 
 from commands2 import Subsystem
+from robotpy_apriltag import AprilTagFieldLayout
+from wpimath.geometry import Pose3d, Rotation3d, Transform3d, Translation3d
 
-class VisionCamera(Subsystem):
-    def __init__(self, add_vision_measurement: callable):
+from phoenix6 import swerve
+
+from photonlibpy import EstimatedRobotPose, PhotonCamera, PhotonPoseEstimator
+
+class Vision(Subsystem):
+    def __init__(self, add_vision_measurement, 
+                 get_current_swerve_state: Callable[[], swerve.SwerveDrivetrain.SwerveDriveState],
+                 get_robot_tilt: Callable[[], tuple[float, float]],
+                 april_tag_layout: AprilTagFieldLayout,
+                 linear_std_dev_baseline: float, angular_std_dev_baseline: float,
+                 camera_std_dev_factors: tuple[float, ...],max_linear_speed: float,
+                 max_angular_speed: float, max_tilt_deg: float):
+        
         Subsystem.__init__(self)
 
         self.add_vision_measurement = add_vision_measurement
+        self.get_current_swerve_state = get_current_swerve_state
+        self.get_robot_tilt = get_robot_tilt
+        self.april_tag_layout = april_tag_layout
+        self.linear_std_dev_baseline = linear_std_dev_baseline
+        self.angular_std_dev_baseline = angular_std_dev_baseline
+        self.camera_std_dev_factors = camera_std_dev_factors
+        self.max_linear_speed = max_linear_speed
+        self.max_angular_speed = max_angular_speed
+        self.max_tilt_deg = max_tilt_deg
 
-        # For districts in Wisconsin, AndyMark fields are used.
-        # For regionals in the U.S., Welded fields are used.
-        # REMEMBER TO CHANGE THIS IN CODE AND GUI DEPENDING ON COMPETITION TYPE!
-        # https://github.com/wpilibsuite/allwpilib/blob/main/apriltag/src/main/native/resources/edu/wpi/first/apriltag/2026-rebuilt-andymark.json
-        self.april_tag_layout = AprilTagFieldLayout.loadField(AprilTagField.k2026RebuiltAndyMark)
-
-        self.back_camera = PhotonCamera("front_camera")
-        self.front_left_camera = PhotonCamera("front_camera")
-        self.front_right_camera = PhotonCamera("front_camera")
+        self.back_camera = PhotonCamera("back_camera")
+        self.front_left_camera = PhotonCamera("front_left_camera")
+        self.front_right_camera = PhotonCamera("front_right_camera")
 
         robot_to_back_camera_translation = Transform3d(
             Translation3d(0.3175, 0.26035, 0.511175),
@@ -36,67 +49,131 @@ class VisionCamera(Subsystem):
         )
 
         self.back_camera_pose_est = PhotonPoseEstimator(
-            self.april_tag_layout,
-            robot_to_back_camera_translation
+            self.april_tag_layout, robot_to_back_camera_translation
         )
         self.front_left_camera_pose_est = PhotonPoseEstimator(
-            self.april_tag_layout,
-            robot_to_front_left_camera_translation
+            self.april_tag_layout, robot_to_front_left_camera_translation
         )
         self.front_right_camera_pose_est = PhotonPoseEstimator(
-            self.april_tag_layout,
-            robot_to_front_right_camera_translation
+            self.april_tag_layout, robot_to_front_right_camera_translation
         )
 
         self.cameras = [
-            (self.back_camera, self.back_camera_pose_est), 
-            (self.front_left_camera, self.front_left_camera_pose_est), 
-            (self.front_right_camera, self.front_right_camera_pose_est)
+            (self.back_camera, self.back_camera_pose_est),
+            (self.front_left_camera, self.front_left_camera_pose_est),
+            (self.front_right_camera, self.front_right_camera_pose_est),
         ]
-        
-
 
     def periodic(self):
-        for camera, pose_est in self.cameras:
-            pose, timestamp = self.get_vision_measurement(camera, pose_est)
-            if pose != None:
-                self.add_vision_measurement(pose, timestamp)
+        current_state = self.get_current_swerve_state()
 
-    def reject_pose_estimate(self, pose: Pose3d):
-        reject_pose = (
-            # Must be within a reasonable height range (not above the trench or under the floor)
+        for camera_index, (camera, pose_est) in enumerate(self.cameras):
+            measurement = self.get_vision_measurement(
+                camera_index,
+                camera,
+                pose_est,
+                current_state,
+            )
+
+            if measurement == None:
+                continue
+
+            pose, timestamp, std_devs = measurement
+            self.add_vision_measurement(pose, timestamp, std_devs)
+
+    def reject_pose_estimate(self, current_state: swerve.SwerveDrivetrain.SwerveDriveState, pose: Pose3d) -> bool:
+        current_linear_speed = hypot(current_state.speeds.vx, current_state.speeds.vy)
+        current_angular_speed = current_state.speeds.omega
+        pitch_deg, roll_deg = self.get_robot_tilt()
+
+        return not (
             -0.25 < pose.Z() < 0.5
-            
-            # Must be within the field boundaries
-            or 0.0 < pose.X() < self.april_tag_layout.getFieldLength() 
-            or 0.0 < pose.Y() < self.april_tag_layout.getFieldWidth()
+            and 0.0 < pose.X() < self.april_tag_layout.getFieldLength()
+            and 0.0 < pose.Y() < self.april_tag_layout.getFieldWidth()
+            and current_linear_speed <= self.max_linear_speed
+            and abs(current_angular_speed) <= self.max_angular_speed
+            and abs(pitch_deg) <= self.max_tilt_deg
+            and abs(roll_deg) <= self.max_tilt_deg
         )
 
-        return reject_pose
+    def get_average_tag_distance(self, estimated_pose: EstimatedRobotPose) -> float | None:
+        robot_translation = estimated_pose.estimatedPose.toPose2d().translation()
 
-    def calc_std_dev(self, pose: EstimatedRobotPose):
-        std_dev_factor = (pose.estimatedPose.() ** 2.0) / observation.tag_count()
-        linear_std_dev = linear_std_dev_baseline * std_dev_factor
-        angular_std_dev = angular_std_dev_baseline * std_dev_factor
+        total_distance = 0.0
+        tag_count = 0
 
-        if camera_index < len(camera_std_dev_factors):
-            linear_std_dev *= camera_std_dev_factors[camera_index]
-            angular_std_dev *= camera_std_dev_factors[camera_index]
+        for target in estimated_pose.targetsUsed:
+            tag_pose = self.april_tag_layout.getTagPose(target.getFiducialId())
+            if tag_pose is None:
+                continue
 
-    def get_vision_measurement(self, camera: PhotonCamera, pose_est: PhotonPoseEstimator):
+            total_distance += robot_translation.distance(tag_pose.toPose2d().translation())
+            tag_count += 1
+
+        if tag_count == 0:
+            return None
+
+        return total_distance / tag_count 
+
+    def calc_std_dev(self, estimated_pose: EstimatedRobotPose, camera_index: int,
+                     latency_ms: float):
+        avg_tag_distance = self.get_average_tag_distance(estimated_pose)
+
+        tag_count = len(estimated_pose.targetsUsed)
+        if avg_tag_distance is None or tag_count == 0:
+            return None
+
+        distance_factor = (avg_tag_distance ** 2.0) / tag_count
+
+        camera_factor = (
+            self.camera_std_dev_factors[camera_index]
+            if camera_index < len(self.camera_std_dev_factors)
+            else 1.0
+        )
+
+        nominal_latency_ms = 100
+        latency_factor = (
+            max(latency_ms, nominal_latency_ms) / nominal_latency_ms
+            if nominal_latency_ms > 0.0
+            else 1.0
+        )
+
+        linear_std_dev = (
+            self.linear_std_dev_baseline
+            * distance_factor
+            * camera_factor
+            * latency_factor
+        )
+
+        angular_std_dev = (
+            self.angular_std_dev_baseline
+            * distance_factor
+            * camera_factor
+            * latency_factor
+        )
+
+        return (linear_std_dev, linear_std_dev, angular_std_dev)
+
+    def get_vision_measurement(self, camera_index: int, camera: PhotonCamera, pose_est: PhotonPoseEstimator,
+                               current_state: swerve.SwerveDrivetrain.SwerveDriveState):
         results = camera.getAllUnreadResults()
         if len(results) == 0:
-            return None, None, None
-            
+            return None
+
         latest_result = results[-1]
 
-        pose = None
-        latest_result.
-        num_targets = len(latest_result.getTargets())
-        if num_targets > 1:
-            pose = pose_est.estimateCoprocMultiTagPose(latest_result)    
+        if len(latest_result.getTargets()) <= 1:
+            return None
 
-        if pose != None and not self.reject_pose_estimate(pose.estimatedPose):
-            return pose.estimatedPose.toPose2d(), pose.timestampSeconds, self.calc_std_dev(pose) 
-        
-        return None, None, None
+        pose = pose_est.estimateCoprocMultiTagPose(latest_result)
+
+        if pose is None or self.reject_pose_estimate(current_state,pose.estimatedPose):
+            return None
+
+        latency_ms = latest_result.getLatencyMillis()
+
+        return (
+            pose.estimatedPose.toPose2d(),
+            pose.timestampSeconds,
+            self.calc_std_dev(pose, camera_index, latency_ms),
+        )

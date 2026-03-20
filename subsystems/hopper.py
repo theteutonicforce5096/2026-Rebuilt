@@ -1,7 +1,7 @@
 """
 TODO: I am making the hopper and the intake two seperate things so it will make everything easier
 """
-from commands2 import PrintCommand, SequentialCommandGroup, Subsystem
+from commands2 import PrintCommand, SequentialCommandGroup, Subsystem, WaitCommand
 from commands2.sysid import SysIdRoutine
 
 from phoenix6 import CANBus, SignalLogger
@@ -145,8 +145,19 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
         self.agitator_wheel.set_control(
             self.voltage_request.with_output(agitator_volts)
         )
+
+    def create_feed_cycle_command(self):
+        return SequentialCommandGroup(
+            self.run_hopper(35, 1.5),
+            WaitCommand(1.5),
+            self.run_hopper(35, -1.5),
+            WaitCommand(.5)
+        )
+
+    def create_stop_command(self):
+        return self.run_hopper(0, 0)
+
     # The hopper speeds will likely be constant
     # Mecanum at 35rps
     # Agitator at 1.5v (will flip between pos and neg to help agitate balls)
-
 

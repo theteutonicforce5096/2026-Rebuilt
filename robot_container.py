@@ -1,26 +1,19 @@
 import commands2
 from commands2 import WaitUntilCommand, ParallelDeadlineGroup, ParallelCommandGroup, SequentialCommandGroup, RepeatCommand, WaitCommand
 from commands2.sysid import SysIdRoutine
-import wpilib
-from wpilib import DriverStation, PowerDistribution
-from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
-from phoenix6 import signals
 from phoenix6 import SignalLogger
 
-from pathplannerlib.auto import AutoBuilder, PathConstraints
+from pathplannerlib.auto import AutoBuilder, PathConstraints, PathPlannerAuto, NamedCommands
 from pathplannerlib.path import PathPlannerPath, IdealStartingState, GoalEndState
-from pathplannerlib.auto import PathPlannerAuto
 
-from wpimath.geometry import Pose2d, Rotation2d
+from wpimath.geometry import Pose2d, Rotation2d, Translation2d
 from wpimath.units import inchesToMeters, feetToMeters
 
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
 from constants.hopper_constants import HopperConstants
 from constants.intake_constants import IntakeConstants
-from subsystems.LED_controller import LED
-from constants.physics import calc_velocity, calc_x_dis, shoot_speed, flywheel_intake_speed
-
+from constants.vision_constants import VisionConstants
 
 class RobotContainer:
     def __init__(self):
@@ -33,9 +26,20 @@ class RobotContainer:
         
         # Create drivetrain subsystem
         self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
+
+        launcher_offset = self.drivetrain.shooter_offset.translation()
                      
         # Create shooter subsystem
-        self.shooter = ShooterConstants.create_shooter()
+        self.shooter = ShooterConstants.create_shooter(
+            self.drivetrain.get_state,
+            self.drivetrain.get_robot_tilt,
+            lambda: Translation2d(
+                self.drivetrain.hub_x_pos,
+                self.drivetrain.hub_y_pos
+            ),
+            launcher_offset.x,
+            launcher_offset.y,
+        )
 
         # #Create hoppper subsystem
         self.hopper = HopperConstants.create_hopper()
@@ -43,32 +47,22 @@ class RobotContainer:
         # #Create intake subsystem
         self.intake = IntakeConstants.create_intake()
 
-        # Initialize LEDs
-        # self.led = LED()
-        # self.last_time = None
-        # ^^^ I need this for LEDs
+        # Create vision subsystem
+        self.camera = VisionConstants.create_vision(
+            self.drivetrain.add_vision_measurement,
+            self.drivetrain.get_state,
+            self.drivetrain.get_robot_tilt
+        )
 
         # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
         self.drivetrain.reset_pose(
             Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(10), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
         )
         
+        NamedCommands.registerCommand("shot_one", '''command goes here''')
+        NamedCommands.registerCommand("shot_two", '''command goes here''')
+
         self.create_button_bindings()
-
-
-    # def create_commands_periodic(self):
-    #     if DriverStation.isAutonomousEnabled():
-    #         self.led.auto_in_progress()
-
-    #     self.MATCHTIME = int(DriverStation.getMatchTime())
-
-    #     # I need this so the LEDs won't constantly be trying to change to the same animation
-    #     if self.MATCHTIME != self.last_time:
-    #         self.last_time = self.MATCHTIME
-    #         if DriverStation.isTeleopEnabled():
-    #             # The numbers are 5 seconds before each phase switch
-    #             if self.MATCHTIME in (115, 90, 65, 40, 25): 
-    #                 self.led.five_seconds_left()
 
     def create_commands_auto(self):
         pass
@@ -93,75 +87,103 @@ class RobotContainer:
                 lambda: self.controller.getRightX()
             )
         )
-          
-        # self.controller.y().onTrue(
-        #     commands2.DeferredCommand(
-        #         self.drivetrain.auto_align_to_hub,
-        #         self.drivetrain
-        #     ).until(
-        #         lambda: self.controller.getHID().getBButton()
-        #     )
-        # )
+
+        self.controller.a().onTrue(
+            SequentialCommandGroup(
+                # self.intake.arm_down(),
+                self.intake.run_intake_wheel(5),
+                WaitUntilCommand(
+                    lambda: self.controller.a().onTrue()
+                ),
+                self.intake.run_intake_wheel(0),
+            )
+        )
+
+        self.controller.x().onTrue(
+            SequentialCommandGroup(
+                ParallelDeadlineGroup(
+                    WaitUntilCommand(
+                        lambda: self.controller.getHID().getYButton()
+                    ),
+                    ParallelCommandGroup(
+                        RepeatCommand(
+                            self.shooter.create_manual_shoot_command()
+                        ),
+                        RepeatCommand(
+                            self.hopper.create_feed_cycle_command()
+                        ),
+                        RepeatCommand(
+                            self.drivetrain.auto_align_to_hub()     
+                        )
+                    )
+                ),
+                ParallelCommandGroup(
+                    self.hopper.create_stop_command(),
+                    self.shooter.create_stop_command()
+                )
+            )
+        )
 
         self.controller.b().onTrue(
             SequentialCommandGroup(
                 ParallelDeadlineGroup(
                     SequentialCommandGroup(        
-                        self.shooter.shoot(
-                            self.shooter.desired_ball_speed_sub.get(),
-                            self.shooter.desired_flywheel_intake_speed_sub.get()
+                        commands2.InstantCommand(
+                            lambda: self.shooter.reset_calculated_shot_state()
                         ),
-                        self.shooter.runOnce(lambda: self.shooter.reset_empty_time()),
+                        commands2.InstantCommand(
+                            lambda: self.shooter.reset_empty_time()
+                        ),
                         ParallelCommandGroup(
                             WaitUntilCommand(
                                 lambda: self.shooter.detect_empty()
                             ),
-                            self.drivetrain.auto_align_or_some_bs().until(
-                                lambda: self.controller.getHID().getYButton() #TODO   
+                            WaitUntilCommand(
+                                lambda: self.controller.getHID().getYButton()
                             )
-                        ),
-                        self.shooter.runOnce(lambda: self.shooter.stop())
+                        )
                     ),
-                    RepeatCommand(
-                        SequentialCommandGroup(
-                            self.hopper.run_hopper(35, 1.5),
-                            WaitCommand(1.5),
-                            self.hopper.run_hopper(35, -1.5),
-                            WaitCommand(.5)
+                    ParallelCommandGroup(
+                        RepeatCommand(
+                            self.shooter.create_calculated_shoot_command()
+                        ),
+                        RepeatCommand(
+                            self.shooter.create_calculated_feed_command(self.hopper)
+                        ),
+                        RepeatCommand(
+                            self.drivetrain.auto_align_to_hub()     
                         )
                     )
                 ),
-                self.hopper.run_hopper(0, 0)
+                ParallelCommandGroup(
+                    self.hopper.create_stop_command(),
+                    self.shooter.create_stop_command()
+                )
             )
         )
 
-        self.controller.a().onTrue(
-            SequentialCommandGroup(
-                self.intake.arm_down(),
-                self.intake.run_intake_wheel(5),
-                WaitUntilCommand(
-                    lambda: self.controller.getHID().getXButton()
-                ),
-                self.intake.run_intake_wheel(0),
-                self.intake.arm_up()
+        self.controller.y().onTrue(
+            ParallelCommandGroup(
+                self.hopper.create_stop_command(),
+                self.shooter.create_stop_command()
             )
         )
 
     def create_commands_auto(self):
-        pass
+        self.intake.runOnce(
+            lambda: self.intake.arm_down()
+        ).schedule()
 
     def create_commands_teleop(self):   
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain.set_forward_perspective()
         
         # # Estimated button bindings for shooter (subject to change):
-        #     - Left trigger: Shoot at calculated speed based on distance to target
         #     - X button: Shoot at speeds specified by network tables
-        #     - B button: Stop shooting no matter what mode is being used
+        #     - B button: Shoot at calculated speed based on distance to target
+        #     - POV down: Stop shooting no matter what mode is being used
         #     - A button: Auto move button (figure out to where later)
         #     - Y button: Cancel auto move command
-
-        # TODO: Add in shooter functions and check if this even works????
      
         #     )
         # )
@@ -214,48 +236,7 @@ class RobotContainer:
         #             self.shooter.desired_flywheel_intake_speed_sub.get() * 106)
         #         )
         #     )
-        
-        # self.controller.b().onTrue(
-        #     self.shooter.runOnce(
-        #         lambda: self.shooter.stop_networktable()
-        #     )
-        # )
 
-        #Button bindings for hopper
-        # self.controller.rightBumper().onTrue(
-        #     commands2.SequentialCommandGroup(
-        #         self.hopper.hop(.25, 1),
-        #         commands2.WaitUntilCommand(
-        #             lambda: self.controller.getHID().getRightBumperButtonReleased()
-        #         ),
-        #         self.hopper.hop(0, 0)
-        #     )
-        # )
-
-        # #Button bindings for intake
-        # self.controller.leftBumper().onTrue(
-        #     self.intake.runOnce(lambda: self.intake.intake_running())
-        #     )
-
-        # self.controller.leftBumper().onFalse(
-        #     self.intake.runOnce(lambda: self.intake.intake_stopped())
-        #     )
-        
-        # self.controller.povDown().onTrue(
-        #     self.intake.runOnce(lambda: self.intake.arm_down())
-        #     )
-        
-        # self.controller.povDown().onFalse(
-        #     self.intake.runOnce(lambda: self.intake.arm_stopped())
-        #     )
-
-        # self.controller.povUp().onTrue(
-        #     self.intake.runOnce(lambda: self.intake.arm_up())
-        #     )
-
-        # self.controller.povUp().onFalse(
-        #     self.intake.runOnce(lambda: self.intake.arm_stopped())
-        #     )
 
     def create_commands_test(self):
         # self.hopper.mecanum_wheel.get_velocity().set_update_frequency(1000.0)
@@ -274,6 +255,19 @@ class RobotContainer:
         self.controller.a().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kReverse))
         self.controller.b().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kForward))
         self.controller.x().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kReverse))
+
+        # Intake stuffs
+        self.controller.rightTrigger().onTrue(
+            SequentialCommandGroup(
+                # self.intake.arm_down(),
+                self.intake.run_intake_wheel(5),
+                WaitUntilCommand(
+                    lambda: self.controller.getHID().getLeftStickButton()
+                ),
+                self.intake.run_intake_wheel(0),
+                # self.intake.arm_up()
+            )
+        )
 
         # self.controller.x().onTrue(
         #     commands2.SequentialCommandGroup(
