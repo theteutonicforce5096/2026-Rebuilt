@@ -5,7 +5,7 @@ from commands2 import Subsystem
 
 from phoenix6 import swerve, utils, hardware
 
-from wpilib import DriverStation, Field2d, SmartDashboard
+from wpilib import DriverStation, Field2d, RobotBase, SmartDashboard
 
 from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Rotation2d, Transform2d, Translation2d
@@ -56,6 +56,15 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         swerve.SwerveDrivetrain.__init__(self, drive_motor_type, steer_motor_type, encoder_type, 
                                          drivetrain_constants, odometry_update_frequency, modules)
         
+        if RobotBase.isSimulation() == False:
+            for num in range(4):
+                module = self.get_module(num)
+                module.drive_motor.optimize_bus_utilization()
+                module.steer_motor.optimize_bus_utilization()
+                module.encoder.optimize_bus_utilization()
+
+            self.pigeon2.optimize_bus_utilization()
+
         # Create Limelight instance and configure default values
         self.camera = VisionCamera()
         

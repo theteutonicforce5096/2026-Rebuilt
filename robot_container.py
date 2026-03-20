@@ -1,7 +1,8 @@
 import commands2
+from commands2 import WaitUntilCommand, ParallelDeadlineGroup, ParallelCommandGroup, SequentialCommandGroup, RepeatCommand, WaitCommand
 from commands2.sysid import SysIdRoutine
 import wpilib
-from wpilib import DriverStation
+from wpilib import DriverStation, PowerDistribution
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
 from phoenix6 import signals
 from phoenix6 import SignalLogger
@@ -40,7 +41,7 @@ class RobotContainer:
         self.hopper = HopperConstants.create_hopper()
 
         # #Create intake subsystem
-        # self.intake = IntakeConstants.create_intake()
+        self.intake = IntakeConstants.create_intake()
 
         # Initialize LEDs
         # self.led = LED()
@@ -102,24 +103,47 @@ class RobotContainer:
         #     )
         # )
 
-        self.controller.a().onTrue(
-            commands2.SequentialCommandGroup(
-                commands2.DeferredCommand(
-                    self.drivetrain.auto_align_to_hub,
-                    self.drivetrain
-                ).until(
-                    lambda: self.controller.getHID().getXButton()
-                ),
-                commands2.ParallelCommandGroup(
-                    self.shooter.shoot(
-                        self.shooter.desired_ball_speed_sub.get(),
-                        self.shooter.desired_flywheel_intake_speed_sub.get()
+        self.controller.b().onTrue(
+            SequentialCommandGroup(
+                ParallelDeadlineGroup(
+                    SequentialCommandGroup(        
+                        self.shooter.shoot(
+                            self.shooter.desired_ball_speed_sub.get(),
+                            self.shooter.desired_flywheel_intake_speed_sub.get()
+                        ),
+                        self.shooter.runOnce(lambda: self.shooter.reset_empty_time()),
+                        ParallelCommandGroup(
+                            WaitUntilCommand(
+                                lambda: self.shooter.detect_empty()
+                            ),
+                            self.drivetrain.auto_align_or_some_bs().until(
+                                lambda: self.controller.getHID().getYButton() #TODO   
+                            )
+                        ),
+                        self.shooter.runOnce(lambda: self.shooter.stop())
                     ),
-                    self.drivetrain.set_brake_mode().until(
-                        lambda: self.controller.getHID().getBButton()
+                    RepeatCommand(
+                        SequentialCommandGroup(
+                            self.hopper.run_hopper(35, 1.5),
+                            WaitCommand(1.5),
+                            self.hopper.run_hopper(35, -1.5),
+                            WaitCommand(.5)
+                        )
                     )
                 ),
-                self.shooter.runOnce(lambda: self.shooter.stop())
+                self.hopper.run_hopper(0, 0)
+            )
+        )
+
+        self.controller.a().onTrue(
+            SequentialCommandGroup(
+                self.intake.arm_down(),
+                self.intake.run_intake_wheel(5),
+                WaitUntilCommand(
+                    lambda: self.controller.getHID().getXButton()
+                ),
+                self.intake.run_intake_wheel(0),
+                self.intake.arm_up()
             )
         )
 
@@ -234,9 +258,9 @@ class RobotContainer:
         #     )
 
     def create_commands_test(self):
-        # self.hopper.mechanim_wheel.get_velocity().set_update_frequency(1000.0)
-        # self.hopper.mechanim_wheel.get_position().set_update_frequency(1000.0)
-        # self.hopper.mechanim_wheel.get_motor_voltage().set_update_frequency(1000.0)
+        # self.hopper.mecanum_wheel.get_velocity().set_update_frequency(1000.0)
+        # self.hopper.mecanum_wheel.get_position().set_update_frequency(1000.0)
+        # self.hopper.mecanum_wheel.get_motor_voltage().set_update_frequency(1000.0)
 
         # # Set the SysId routine to run
         self.shooter.set_sys_id_routine()

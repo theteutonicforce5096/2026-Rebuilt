@@ -1,5 +1,5 @@
 from commands2 import Subsystem
-from commands2 import ParallelCommandGroup, SequentialCommandGroup, WaitCommand, PrintCommand, WaitUntilCommand
+from commands2 import ParallelCommandGroup, SequentialCommandGroup, WaitCommand, PrintCommand, WaitUntilCommand, ParallelRaceGroup, ParallelDeadlineGroup
 
 from phoenix6 import CANBus, SignalLogger
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
@@ -9,7 +9,7 @@ from phoenix6.status_code import StatusCode
 
 from commands2.sysid import SysIdRoutine 
 from wpilib.sysid import SysIdRoutineLog
-from wpilib import SendableChooser
+from wpilib import SendableChooser, RobotBase, Timer
 
 from ntcore import NetworkTableInstance
 from wpilib.shuffleboard import Shuffleboard
@@ -60,15 +60,24 @@ class Shooter(Subsystem):
         self._configure_device(self.flywheel_motor, flywheel_motor_configs, num_config_attempts)
         self._configure_device(self.flywheel_intake_motor, flywheel_intake_motor_configs, num_config_attempts)
         self._configure_device(self.flywheel_encoder, flywheel_encoder_configs, num_config_attempts)
+       
+        if RobotBase.isSimulation() == False:
+            self.flywheel_motor.optimize_bus_utilization()
+            self.flywheel_intake_motor.optimize_bus_utilization()
+            self.flywheel_encoder.optimize_bus_utilization()
 
         # Set encoder update frequency to improve velocity PID on flywheel motor
-        self.flywheel_encoder.get_velocity().set_update_frequency(flywheel_encoder_vel_update_frequency)
+        # self.flywheel_encoder.get_velocity().set_update_frequency(flywheel_encoder_vel_update_frequency)
         
         # Create VelocityVoltage request
         self.velocity_pid_request = VelocityVoltage(velocity = 0)
 
         self.voltage_request = VoltageOut(output = 0)
-        
+
+        # Empty detection variable       
+        self.empty_time = None
+        self.has_surged = False
+
         # What to publish over networktables for shooter
         self._network_table_instance = NetworkTableInstance.getDefault()
 
@@ -170,7 +179,7 @@ class Shooter(Subsystem):
         """
         return self.sys_id_routine_to_apply.dynamic(direction)
     
-        #TODO is_near is not working well. Likely because of oscilation (fix PID tuning)
+#Shoot functions
     def shoot(self, flywheel_target_velocity, intake_motor_velocity):
         return SequentialCommandGroup(
             self.runOnce(
@@ -186,7 +195,7 @@ class Shooter(Subsystem):
             )
         )
     
-    def set_flywheel_velocities(self,flywheel_target_velocity, intake_motor_velocity):
+    def set_flywheel_velocities(self, flywheel_target_velocity, intake_motor_velocity):
         self.flywheel_motor.set_control(
             self.velocity_pid_request.with_velocity(flywheel_target_velocity)
         )
@@ -223,6 +232,29 @@ class Shooter(Subsystem):
             self.runOnce(lambda: self.flywheel_intake_motor.set_control(
                 self.velocity_pid_request.with_velocity(0)))
         ).schedule()
+
+#Detect amp surge functions (to determine if the hopper is empty)
+    def detect_empty(self):
+        if self.flywheel_intake_motor.get_closed_loop_error().is_near(0, 1) == True:
+            self.surging = False
+
+        elif self.flywheel_intake_motor.get_closed_loop_error().is_near(0, 1) == False:
+            self.surging = True
+
+        if self.surging == True:
+            self.empty_time = Timer.getFPGATimestamp()
+            # every time there is an amp surge, the empty_time timestamp resets
+            # when no surge occurs, empty_time stops updating
+            # So, empty_time = timestamp of last surge
+            # We detect that the hopper is empty when its been over 3 seconds since the last surge
+    
+        return (
+            (Timer.getFPGATimestamp() - self.empty_time) >= 3
+        )
+    
+    def reset_empty_time(self):
+        self.empty_time = Timer.getFPGATimestamp()
+        self.surging = True
 
     # def stop_networktable(self):
     #     SequentialCommandGroup(

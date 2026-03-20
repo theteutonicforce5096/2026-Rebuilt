@@ -22,15 +22,13 @@ class ShooterConstants:
     # Update frequency in hertz for the flywheel encoder's velocity measurement
     flywheel_encoder_vel_update_frequency = 1000.0
 
-#TODO Big oscillation thing. Try to test without encoder. Encoder may be causing oscillation. 
-#Oscillation detected when doing feedforward tuning on NEO VORTEX, but not when doing Falcon 500
     # Flywheel Motor Configs (NEO VORTEX - TalonFXS)
     _flywheel_motor_configs = TalonFXSConfiguration()
     _flywheel_motor_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.VORTEX_JST)
     _flywheel_motor_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
     _flywheel_motor_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
     _flywheel_motor_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)
-    _flywheel_motor_configs.current_limits.with_stator_current_limit(60)
+    _flywheel_motor_configs.current_limits.with_stator_current_limit(80)
     _flywheel_motor_configs.current_limits.with_stator_current_limit_enable(True)
     # _flywheel_motor_configs.external_feedback.with_feedback_remote_sensor_id(_flywheel_encoder_id)
     # _flywheel_motor_configs.external_feedback.with_external_feedback_sensor_source(signals.FeedbackSensorSourceValue.REMOTE_CANCODER) #Commutation seemed to be yielding better data
@@ -38,7 +36,7 @@ class ShooterConstants:
     # _flywheel_motor_configs.external_feedback.with_rotor_to_sensor_ratio(1.0)
     _flywheel_motor_configs.slot0.with_k_s(0.11618)
     _flywheel_motor_configs.slot0.with_k_v(0.10922)
-    _flywheel_motor_configs.slot0.with_k_p(0)
+    _flywheel_motor_configs.slot0.with_k_p(0.10)
     _flywheel_motor_configs.slot0.with_k_i(0)
     _flywheel_motor_configs.slot0.with_k_d(0)
 

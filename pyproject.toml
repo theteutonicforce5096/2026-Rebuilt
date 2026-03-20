@@ -26,7 +26,7 @@ requires = [
     "phoenix6",
     "robotpy-rev",
     "robotpy-pathplannerlib",
-    "photonlibpy"
+    "photonlibpy == 2026.3.2"
 ]
 
 # Enables Isolated Test Mode

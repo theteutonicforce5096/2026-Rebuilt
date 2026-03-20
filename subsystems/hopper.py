@@ -11,6 +11,7 @@ from phoenix6.hardware import TalonFX
 from phoenix6.status_code import StatusCode
 
 from wpilib.sysid import SysIdRoutineLog
+from wpilib import RobotBase
 
 """ 
 TODO: 
@@ -25,8 +26,8 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
     Class for controlling hopper.
     """
 
-    def __init__(self, canbus: CANBus, mechanim_wheel_id: int, agitator_wheel_id: int, 
-                 mechanim_wheel_configs: TalonFXConfiguration, 
+    def __init__(self, canbus: CANBus, mecanum_wheel_id: int, agitator_wheel_id: int, 
+                 mecanum_wheel_configs: TalonFXConfiguration, 
                  agitator_wheel_configs: TalonFXConfiguration,
                  num_config_attempts: int):
         """
@@ -34,12 +35,12 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
 
         :param canbus: CANBus instance that electronics are on
         :type canbus: phoenix6.CANBus
-        :param mechanim_wheel_id: CAN ID of the mechanim wheel
-        :type mechanim_wheel_id: int
+        :param mecanum_wheel_id: CAN ID of the mecanum wheel
+        :type mecanum_wheel_id: int
         :param agitator_wheel_id: CAN ID of the agitator wheel
         :type agitator_wheel_id: int
-        :param mechanim_wheel_configs: Configs for the mechanim wheel
-        :type mechanim_wheel_configs: phoenix6.configs.TalonFXConfiguration
+        :param mecanum_wheel_configs: Configs for the mecanum wheel
+        :type mecanum_wheel_configs: phoenix6.configs.TalonFXConfiguration
         :param agitator_wheel_configs: Configs for the agitator wheel
         :type agitator_wheel_configs: phoenix6.configs.TalonFXConfiguration
         :param num_config_attempts: Number of times to attempt to configure each device
@@ -49,30 +50,34 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
         Subsystem.__init__(self)
 
         # Create motors
-        self.mechanim_wheel = TalonFX(mechanim_wheel_id, canbus) #the mechanim wheels
+        self.mecanum_wheel = TalonFX(mecanum_wheel_id, canbus) #the mecanum wheels
         self.agitator_wheel = TalonFX(agitator_wheel_id, canbus) #wheels in the hopper
         
         # Apply motor configs
-        self._configure_device(self.mechanim_wheel, mechanim_wheel_configs, num_config_attempts)
+        self._configure_device(self.mecanum_wheel, mecanum_wheel_configs, num_config_attempts)
         self._configure_device(self.agitator_wheel, agitator_wheel_configs, num_config_attempts)
+        
+        if RobotBase.isSimulation() == False:
+            self.mecanum_wheel.optimize_bus_utilization()
+            self.agitator_wheel.optimize_bus_utilization()
 
         # Create VelocityVoltage request
         self.velocity_pid_request = VelocityVoltage(velocity = 0)
         self.voltage_request = VoltageOut(output = 0)
 
-        # Create SysId routine for characterizing the mechanim wheel motor.
-        self.mechanim_motor_sys_id_routine = SysIdRoutine(
+        # Create SysId routine for characterizing the mecanum wheel motor.
+        self.mecanum_motor_sys_id_routine = SysIdRoutine(
             SysIdRoutine.Config(
                 rampRate = 0.5,
                 stepVoltage = 9.0,
                 timeout = 15.0,
                 recordState = lambda state: SignalLogger.write_string(
-                    "SysId_Hopper_Mechanim_Motor_State",
+                    "SysId_Hopper_mecanum_Motor_State",
                     SysIdRoutineLog.stateEnumToString(state)
                 )
             ),
             SysIdRoutine.Mechanism(
-                lambda output: self.mechanim_wheel.set_control(
+                lambda output: self.mecanum_wheel.set_control(
                     self.voltage_request.with_output(output)
                 ),
                 lambda log: None,
@@ -80,7 +85,7 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
             ),
         )
 
-        self.sys_id_routine_to_apply = self.mechanim_motor_sys_id_routine
+        self.sys_id_routine_to_apply = self.mecanum_motor_sys_id_routine
         
     def _configure_device(self, device: TalonFX, 
                           configs: TalonFXConfiguration, 
@@ -105,13 +110,13 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
 
     def set_sys_id_routine(self):
         """
-        Set the SysId routine to run. Hopper currently exposes only the mechanim wheel routine.
+        Set the SysId routine to run. Hopper currently exposes only the mecanum wheel routine.
         """
-        self.sys_id_routine_to_apply = self.mechanim_motor_sys_id_routine
+        self.sys_id_routine_to_apply = self.mecanum_motor_sys_id_routine
 
     def sys_id_quasistatic(self, direction: SysIdRoutine.Direction):
         """
-        Runs the SysId Quasistatic test for the mechanim wheel motor.
+        Runs the SysId Quasistatic test for the mecanum wheel motor.
 
         :param direction: Direction of the SysId Quasistatic test
         :type direction: SysIdRoutine.Direction
@@ -120,31 +125,28 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
 
     def sys_id_dynamic(self, direction: SysIdRoutine.Direction):
         """
-        Runs the SysId Dynamic test for the mechanim wheel motor.
+        Runs the SysId Dynamic test for the mecanum wheel motor.
 
         :param direction: Direction of the SysId Dynamic test
         :type direction: SysIdRoutine.Direction
         """
         return self.sys_id_routine_to_apply.dynamic(direction)
 
-    def hop(self, mechanim_speed, agitator_speed):
-        return SequentialCommandGroup(
-            self.runOnce(
-                lambda: self.mechanim_wheel.set_control(
-                    self.velocity_pid_request.with_velocity(mechanim_speed)
-                )
-            ),
-            self.runOnce(
-                lambda: self.agitator_wheel.set_control(
-                    self.velocity_pid_request.with_velocity(agitator_speed)
-                )
-            )
+#Hopper functions
+    def run_hopper(self, mecanum_velocity, agitator_volts):
+        return self.runOnce(
+            lambda: self.set_hopper_speeds(mecanum_velocity, agitator_volts)
         )
 
-    # def set_mecanum_speed(self, speed):
-    #     self.mechanim_wheel.set(speed)
-
-    # def set_agitator_speed(self, speed):
-    #     self.agitator_wheel.set(speed)
+    def set_hopper_speeds(self, mecanum_velocity, agitator_volts):
+        self.mecanum_wheel.set_control(
+            self.velocity_pid_request.with_velocity(mecanum_velocity)
+        )
+        self.agitator_wheel.set_control(
+            self.voltage_request.with_output(agitator_volts)
+        )
+    # The hopper speeds will likely be constant
+    # Mecanum at 35rps
+    # Agitator at 1.5v (will flip between pos and neg to help agitate balls)
 
 
