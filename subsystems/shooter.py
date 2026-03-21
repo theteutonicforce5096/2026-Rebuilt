@@ -141,10 +141,10 @@ class Shooter(Subsystem):
         # Shooter state
         self._shooter_table = self._network_table_instance.getTable("Shooter State")
         self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed in Rotations per Second").publish() 
-        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed in Rotations per Second").subscribe(.5)
+        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed in Rotations per Second").subscribe(60)
         self.desired_ball_speed_sub.get()
         self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").publish()
-        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").subscribe(.25)
+        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").subscribe(40)
         self.desired_flywheel_intake_speed_sub.get()
 
         self._get_current_swerve_state = get_current_swerve_state
@@ -290,14 +290,14 @@ class Shooter(Subsystem):
         return SequentialCommandGroup(
             self.runOnce(
                 lambda: self.flywheel_motor.set_control(
-                    self.velocity_pid_request.with_velocity(flywheel_target_velocity)
+                    self.velocity_pid_request.with_velocity(60)
                 )
             ),
-            WaitUntilCommand(
-                lambda: self.flywheel_motor.get_velocity().is_near(flywheel_target_velocity, 0.25)
-            ), 
+            # WaitUntilCommand(
+            #     lambda: self.flywheel_motor.get_velocity().is_near(flywheel_target_velocity, 1)
+            # ), 
             self.runOnce(
-                lambda: self.set_flywheel_velocities(flywheel_target_velocity, intake_motor_velocity)
+                lambda: self.set_flywheel_velocities(60, 40)
             )
         )
     

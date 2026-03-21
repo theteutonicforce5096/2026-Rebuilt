@@ -123,7 +123,8 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         self.set_setpoint(self.intake_position) 
     
     def arm_up(self):
-        self.set_setpoint(self.stowed_position)        
+        self.set_setpoint(self.stowed_position)  
+      
 
         
 

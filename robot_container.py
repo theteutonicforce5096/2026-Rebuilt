@@ -71,6 +71,10 @@ class RobotContainer:
     def create_commands_teleop(self):   
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain.set_forward_perspective()
+
+        self.intake.runOnce(
+            lambda: self.intake.arm_down()
+        ).schedule()
         
     def create_button_bindings(self):
         # Set button binding for reseting field centric heading
@@ -92,11 +96,11 @@ class RobotContainer:
         self.controller.a().onTrue(
             SequentialCommandGroup(
                 self.intake.runOnce(
-                    lambda: self.intake.set_intake_speed(5)
+                    lambda: self.intake.set_intake_speed(12)
                 ),
-                # WaitCommand(2),
+                WaitCommand(2),
                 WaitUntilCommand(
-                    lambda: self.controller.getHID().getAButtonPressed()
+                    lambda: self.controller.getHID().getAButton()
                 ),
                 self.intake.runOnce(
                     lambda: self.intake.set_intake_speed(0)
@@ -128,10 +132,10 @@ class RobotContainer:
                         ),
                         RepeatCommand(
                             self.hopper.create_feed_cycle_command()
-                        ),
-                        RepeatCommand(
-                            self.drivetrain.auto_align_to_hub()
                         )
+                        # RepeatCommand(
+                        #     self.drivetrain.auto_align_to_hub()
+                        # )
                     )
                 ),
                 ParallelCommandGroup(

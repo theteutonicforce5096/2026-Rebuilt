@@ -20,8 +20,8 @@ class IntakeConstants:
     _num_config_attempts = 3
 
     # Arm Position Constants #TODO confirm values
-    _intake_position = -.51
-    _stowed_position = -0.091309 
+    _intake_position = 0.48
+    _stowed_position = -0.09
 
     # Intake Wheel Configs (??? - TalonFXS)
     _intake_wheel_configs = TalonFXSConfiguration()
@@ -37,7 +37,7 @@ class IntakeConstants:
     _intake_arm_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.NEO550_JST)
     _intake_arm_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
     _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
-    _intake_arm_configs.current_limits.with_stator_current_limit(40) #May need to increase
+    _intake_arm_configs.current_limits.with_stator_current_limit(60) #May need to increase
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_arm_configs.external_feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
     _intake_arm_configs.external_feedback.with_external_feedback_sensor_source(signals.FeedbackSensorSourceValue.FUSED_CANCODER)
@@ -45,7 +45,7 @@ class IntakeConstants:
     _intake_arm_configs.external_feedback.with_rotor_to_sensor_ratio((24 / 18) * 100)
     _intake_arm_configs.slot0.with_k_g(0)
     _intake_arm_configs.slot0.with_k_v(0)
-    _intake_arm_configs.slot0.with_k_p(50)
+    _intake_arm_configs.slot0.with_k_p(30)
     _intake_arm_configs.slot0.with_k_i(0)
     _intake_arm_configs.slot0.with_k_d(0)
 
