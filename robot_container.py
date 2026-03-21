@@ -244,104 +244,14 @@ class RobotContainer:
         # self.hopper.mecanum_wheel.get_motor_voltage().set_update_frequency(1000.0)
 
         # # Set the SysId routine to run
-        self.shooter.set_sys_id_routine()
+        self.drivetrain.set_sys_id_routine()
     
         # Set button bindings for starting and stopping SignalLogger
         self.controller.leftBumper().onTrue(commands2.cmd.runOnce(SignalLogger.start))
         self.controller.rightBumper().onTrue(commands2.cmd.runOnce(SignalLogger.stop))
 
         # Set button bindings for performing various parts of SysID routine
-        self.controller.y().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kForward))
-        self.controller.a().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kReverse))
-        self.controller.b().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kForward))
-        self.controller.x().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kReverse))
-
-        # Intake stuffs
-        self.controller.rightTrigger().onTrue(
-            SequentialCommandGroup(
-                # self.intake.arm_down(),
-                self.intake.run_intake_wheel(5),
-                WaitUntilCommand(
-                    lambda: self.controller.getHID().getLeftStickButton()
-                ),
-                self.intake.run_intake_wheel(0),
-                # self.intake.arm_up()
-            )
-        )
-
-        # self.controller.x().onTrue(
-        #     commands2.SequentialCommandGroup(
-        #         self.shooter.set_voltage(self.shooter.flywheel_motor, 1.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_motor, 3.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_motor, 5.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_motor, 6.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_motor, 7.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_motor, 10.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_motor, 0, 5),
-        #     )
-        # )
-
-        # self.controller.b().onTrue(
-        #     commands2.SequentialCommandGroup(
-        #         self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 1.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 3.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 5.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 6.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 7.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 10.0, 5),
-        #         self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 0, 5),
-        #     )
-        # )
-
-    #     self.controller.y().onTrue(
-    #         commands2.SequentialCommandGroup(
-    #             self.shooter.runOnce(
-    #                 lambda: SignalLogger.start()
-    #             ),
-    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 0.5, 1.0),
-    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 1.0, 1.0),
-    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 1.5, 1.0),
-    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 2.0, 1.0),
-    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 3.0, 2.0),
-    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 6.0, 2.0),
-    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 9.0, 2.0),
-    #             self.shooter.set_voltage(self.shooter.flywheel_intake_motor, 12.0, 5.0),
-    #             self.shooter.runOnce(
-    #                 lambda: SignalLogger.stop()
-    #             )
-    #         )
-    #     )
-
-    #     # # https://v6.docs.ctr-electronics.com/en/latest/docs/api-reference/mechanisms/swerve/swerve-requests.html#swerve-requests-with-direct-control
-    #     # self.drive_request = (
-    #     #     swerve.requests.RobotCentric()
-    #     #     .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-    #     #     .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-    #     #     .with_deadband(self.max_linear_speed * 0.05)
-    #     #     .with_rotational_deadband(self.max_angular_rate * 0.05)
-    #     #     .with_desaturate_wheel_speeds(True)
-    #     # )
-
-    #     # self.controller.y().onTrue(
-    #     #     self.drivetrain.runOnce(
-    #     #         self.drivetrain.set_control(
-    #     #             self.drive_request.with_velocity_x(1)
-    #     #         )
-    #     #     ).andThen(
-    #     #         WaitCommand(0.75)
-    #     #     ).andThen(
-    #     #         self.drivetrain.runOnce(self.drive_request)
-    #     #     )
-    #     # )
-
-    #     # self.controller.a().onTrue(
-    #     #     self.drivetrain.runOnce(
-    #     #         self.drivetrain.set_control(
-    #     #             self.drive_request.with_velocity_x(-1)
-    #     #         )
-    #     #     ).andThen(
-    #     #         WaitCommand(0.75)
-    #     #     ).andThen(
-    #     #         self.drivetrain.runOnce(self.drive_request)
-    #     #     )
-    #     # )
+        self.controller.y().whileTrue(self.drivetrain.sys_id_dynamic(SysIdRoutine.Direction.kForward))
+        self.controller.a().whileTrue(self.drivetrain.sys_id_dynamic(SysIdRoutine.Direction.kReverse))
+        self.controller.b().whileTrue(self.drivetrain.sys_id_quasistatic(SysIdRoutine.Direction.kForward))
+        self.controller.x().whileTrue(self.drivetrain.sys_id_quasistatic(SysIdRoutine.Direction.kReverse))

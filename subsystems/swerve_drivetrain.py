@@ -3,9 +3,13 @@ from math import pi, atan2, cos, sin
 
 from commands2 import Subsystem
 
-from phoenix6 import swerve, utils, hardware
+from phoenix6 import swerve, utils, hardware, SignalLogger
 
-from wpilib import DriverStation, Field2d, RobotBase, SmartDashboard
+from wpilib import DriverStation, Field2d, RobotBase, SmartDashboard, SendableChooser
+
+from wpilib.sysid import SysIdRoutineLog
+from wpilib.shuffleboard import Shuffleboard
+from commands2.sysid import SysIdRoutine
 
 from wpimath.filter import SlewRateLimiter
 from wpimath.geometry import Rotation2d, Transform2d, Translation2d
@@ -142,6 +146,71 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         #     self
         # )
 
+         # Swerve requests for SysId characterization
+        self.translation_characterization = swerve.requests.SysIdSwerveTranslation()
+        self.steer_characterization = swerve.requests.SysIdSwerveSteerGains()
+        self.rotation_characterization = swerve.requests.SysIdSwerveRotation()
+
+        # Create SysId routine for characterizing drive.
+        self.sys_id_routine_translation = SysIdRoutine(
+            SysIdRoutine.Config(
+                rampRate = 1.0,
+                stepVoltage = 5.0,
+                timeout = 5.0,
+                recordState = lambda state: SignalLogger.write_string(
+                    "SysId_Translation_State", SysIdRoutineLog.stateEnumToString(state)
+                )
+            ),
+            SysIdRoutine.Mechanism(
+                lambda output: self.set_control(self.translation_characterization.with_volts(output)),
+                lambda log: None,
+                self,
+            ),
+        )
+
+        # Create SysId routine for characterizing steer.
+        self.sys_id_routine_steer = SysIdRoutine(
+            SysIdRoutine.Config(
+                rampRate = 1.0,
+                stepVoltage = 4.0,
+                timeout = 5.0,
+                recordState = lambda state: SignalLogger.write_string(
+                    "SysId_Steer_State", SysIdRoutineLog.stateEnumToString(state)
+                )
+            ),
+            SysIdRoutine.Mechanism(
+                lambda output: self.set_control(self.steer_characterization.with_volts(output)),
+                lambda log: None,
+                self,
+            ),
+        )
+
+        self.sys_id_routine_rotation = SysIdRoutine(
+            SysIdRoutine.Config(
+                rampRate = pi / 6,
+                stepVoltage = 4.0,
+                timeout = 5.0,
+                recordState = lambda state: SignalLogger.write_string(
+                    "SysId_Rotation_State", SysIdRoutineLog.stateEnumToString(state)
+                ),
+            ),
+            SysIdRoutine.Mechanism(
+                lambda output: self.set_control(self.rotation_characterization.with_rotational_rate(output)),
+                lambda log: None,
+                self,
+            ),
+        )
+
+        # Create widget for selecting SysId routine and set default value
+        self.sys_id_routine_to_apply = self.sys_id_routine_translation
+        self.sys_id_routines = SendableChooser()
+        self.sys_id_routines.setDefaultOption("Translation Routine", self.sys_id_routine_translation)
+        self.sys_id_routines.addOption("Steer Routine", self.sys_id_routine_steer)
+        self.sys_id_routines.addOption("Rotation Routine", self.sys_id_routine_rotation)
+
+        # Send widget to Shuffleboard 
+        Shuffleboard.getTab("SysId").add(f"Drivetrain Routines", self.sys_id_routines).withSize(2, 1)
+
         self.fused_robot_pose_field = Field2d()
         SmartDashboard.putData("Fused Robot Pose", self.fused_robot_pose_field)
 
@@ -179,11 +248,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         Get the current pitch and roll in degrees of the robot from the Pigeon 2.
         """
 
-        return (
-            self.pigeon2.get_pitch().get_latency_compensated_value(),
-            self.pigeon2.get_roll().get_latency_compensated_value(),
-        )
-    
+        return (self.pigeon2.get_pitch()._value, self.pigeon2.get_roll()._value)
+
 
     def _set_hub_position(self, field_type: str, alliance_color: DriverStation.Alliance):
         """
@@ -236,7 +302,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # Square input (Preserve sign)
         requested_vx = abs(forward_speed) * forward_speed * self.max_linear_speed
         requested_vy = abs(strafe_speed) * strafe_speed * self.max_linear_speed
-        requested_omega = abs(rotation_speed) * rotation_speed * self.max_angular_speed
+        requested_omega = rotation_speed * rotation_speed * rotation_speed * self.max_angular_speed
         
         # Clamp requested velocity to a window around ACTUAL velocity
         limited_vx = max(current_vx - self.max_linear_accel, min(requested_vx, current_vx + self.max_linear_accel))
@@ -250,10 +316,10 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         
         operator_drive_request = (
             self.field_centric_request
-            .with_velocity_x(limited_vx * scale_factor)
-            .with_velocity_y(limited_vy * scale_factor)
-            .with_rotational_rate(limited_omega * scale_factor)
-            .with_deadband((self.max_linear_speed * scale_factor) * 0.05)
+            .with_velocity_x(requested_vx * scale_factor)
+            .with_velocity_y(requested_vy * scale_factor)
+            .with_rotational_rate(requested_omega * scale_factor)
+            .with_deadband((self.max_linear_speed * scale_factor) * 0.1)
             .with_rotational_deadband((self.max_angular_speed * scale_factor) * 0.05)
         )
 
@@ -287,9 +353,9 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                 self._get_operator_drive_request(
                     left_trigger(),
                     right_trigger(),
-                    forward_speed(),
-                    strafe_speed(),
-                    rotation_speed()
+                    -forward_speed(),
+                    -strafe_speed(),
+                    -rotation_speed()
                 )
             )
         )
@@ -349,3 +415,27 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         return self.run(
             lambda: self.set_control(self.brake_mode_request)
         )
+    
+    def set_sys_id_routine(self):
+        """
+        Set the SysId Routine to run based off of the routine chosen in Shuffleboard.
+        """
+        self.sys_id_routine_to_apply = self.sys_id_routines.getSelected()
+
+    def sys_id_quasistatic(self, direction: SysIdRoutine.Direction):
+        """
+        Runs the SysId Quasistatic test in the given direction for the routine specified by self.sys_id_routine_to_apply.
+
+        :param direction: Direction of the SysId Quasistatic test
+        :type direction: SysIdRoutine.Direction
+        """
+        return self.sys_id_routine_to_apply.quasistatic(direction)
+
+    def sys_id_dynamic(self, direction: SysIdRoutine.Direction):
+        """
+        Runs the SysId Dynamic test in the given direction for the routine specified by self.sys_id_routine_to_apply.
+
+        :param direction: Direction of the SysId Dynamic test
+        :type direction: SysIdRoutine.Direction
+        """
+        return self.sys_id_routine_to_apply.dynamic(direction)

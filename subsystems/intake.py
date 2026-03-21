@@ -26,8 +26,7 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
     def __init__(self, canbus: CANBus, intake_wheel_id: int, intake_arm_id: int, 
                  intake_arm_encoder_id: int, intake_wheel_configs: TalonFXSConfiguration, 
                  intake_arm_configs: TalonFXSConfiguration, intake_arm_encoder_configs: CANcoderConfiguration,
-                 num_config_attempts: int, intake_arm_down_position: float, intake_arm_stowed_position: float,
-                 intake_arm_up_position: float, encoder_0_position: float):
+                 num_config_attempts: int, intake_position: float, stowed_position: float):
         """
         Constructor for initializing shooter using the specified constants.
 
@@ -47,14 +46,10 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         :type intake_arm_encoder_configs: phoenix6.configs.CANcoderConfiguration
         :param num_config_attempts: Number of times to attempt to configure each device
         :type num_config_attempts: int
-        :param intake_arm_down_position: IT USED TO BE intake_arm_position. IM ASSUMING THIS IS THE ANGLE WHEN THE ARM IS ALL THE WAY DOWN
-        :type intake_arm_down_position: float
-        :param intake_arm_stowed_position: IM ASSUMING THIS IS THE ANGLE WHEN ARM IS ALL THE WAY UP
-        :type intake_arm_stowed_position: float
-        :param intake_arm_up_position: no clue
-        :type intake_arm_up_position: float
-        :param encoder_0_position: Value of the Encoder when the Arm is at 0 degrees (parallel to the ground). Used as a default for Shuffleboard widget.
-        :type encoder_0_position: float
+        :param intake_position: IT USED TO BE intake_arm_position. IM ASSUMING THIS IS THE ANGLE WHEN THE ARM IS ALL THE WAY DOWN
+        :type intake_position: float
+        :param stowed_position: IM ASSUMING THIS IS THE ANGLE WHEN ARM IS ALL THE WAY UP
+        :type stowed_position: float
         """
 
         # Note to Riley:
@@ -84,10 +79,8 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         # Placeholder values, will need to be tuned
 
         # Arm Positions because apparently we need those
-        self.intake_arm_down_position = intake_arm_down_position
-        self.intake_arm_stowed_position = intake_arm_stowed_position
-        self.intake_arm_up_position = intake_arm_up_position
-        self.encoder_0_position = encoder_0_position
+        self.intake_position = intake_position
+        self.stowed_position = stowed_position
 
     def _configure_device(self, device: TalonFXS | CANcoder, 
                           configs: TalonFXSConfiguration | CANcoderConfiguration, 
@@ -122,19 +115,21 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         )
 
 #Intake Arm Functions
-    def set_setpoint(self, desired_angle):
+    def set_setpoint(self, position):
+        # self.intake_arm.set_control(
+        #     self.position_voltage_request.with_position(self.encoder_0_position + (desired_angle / 360))
         self.intake_arm.set_control(
-            self.position_voltage_request.with_position(self.encoder_0_position + (desired_angle / 360))
+            self.position_voltage_request.with_position(position)
         )
 
     def arm_down(self):
         return self.runOnce(
-            lambda: self.set_setpoint(self.intake_arm_down_position) 
+            lambda: self.set_setpoint(self.intake_position) 
         )
     
     def arm_up(self):
         return self.runOnce(
-            lambda: self.set_setpoint(self.intake_arm_up_position)
+            lambda: self.set_setpoint(self.stowed_position)
         )
         
 

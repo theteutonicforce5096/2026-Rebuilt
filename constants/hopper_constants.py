@@ -24,8 +24,8 @@ class HopperConstants:
     _mecanum_wheel_configs.current_limits.with_stator_current_limit(20)
     _mecanum_wheel_configs.current_limits.with_stator_current_limit_enable(True)
     _mecanum_wheel_configs.slot0.with_k_s(0.15736)
-    _mecanum_wheel_configs.slot0.with_k_v(0.12473)
-    _mecanum_wheel_configs.slot0.with_k_p(0)
+    _mecanum_wheel_configs.slot0.with_k_v(0.122)
+    _mecanum_wheel_configs.slot0.with_k_p(0.6)
     _mecanum_wheel_configs.slot0.with_k_i(0)
     _mecanum_wheel_configs.slot0.with_k_d(0)
 

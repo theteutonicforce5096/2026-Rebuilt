@@ -22,18 +22,17 @@ class SwerveDrivetrainConstants:
     _max_angular_accel = (1 / 0.125) * 0.02 * _max_angular_speed # Max speed in 0.5 second
 
     # Frequency to run the odometry loop at in hertz
-    _odometry_update_frequency = 100.0 
+    _odometry_update_frequency = 250.0
 
     # The steer motor uses any SwerveModule.SteerRequestType control request with the
     # output type specified by SwerveModuleConstants.SteerMotorClosedLoopOutput
     _steer_gains = (
         configs.Slot0Configs()
-        .with_k_p(50) #140
+        .with_k_p(100) #25
         .with_k_i(0)
-        .with_k_d(0.5) #2.5
+        .with_k_d(0.5) # 1.225
         .with_k_s(0.1)
-        .with_k_v(1.91)
-        .with_k_a(0)
+        .with_k_v(1.91) # 1.499125
         .with_static_feedforward_sign(
             signals.StaticFeedforwardSignValue.USE_CLOSED_LOOP_SIGN
         )
@@ -89,7 +88,7 @@ class SwerveDrivetrainConstants:
         configs.CurrentLimitsConfigs()
         # Swerve azimuth does not require much torque output, so we can set a relatively low
         # stator current limit to help avoid brownouts without impacting performance.
-        .with_stator_current_limit(40.0) #60
+        .with_stator_current_limit(60.0)
         .with_stator_current_limit_enable(True)
     )
         

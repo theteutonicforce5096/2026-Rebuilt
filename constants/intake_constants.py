@@ -20,11 +20,8 @@ class IntakeConstants:
     _num_config_attempts = 3
 
     # Arm Position Constants #TODO confirm values
-    _intake_arm_down_position = .25 
-    _intake_arm_stowed_position = 0 
-    _intake_arm_up_position = 2
-    _encoder_0_position = 0
-    # From what I can tell, the arm positions should be angles
+    _intake_position = -.51
+    _stowed_position = -0.091309 
 
     # Intake Wheel Configs (NEO550 - TalonFXS)
     _intake_wheel_configs = TalonFXSConfiguration()
@@ -38,7 +35,7 @@ class IntakeConstants:
     _intake_arm_configs = TalonFXSConfiguration()
     _intake_arm_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.NEO550_JST)
     _intake_arm_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
-    _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
+    _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
     _intake_arm_configs.current_limits.with_stator_current_limit(40) #May need to increase
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_arm_configs.external_feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
@@ -47,7 +44,7 @@ class IntakeConstants:
     _intake_arm_configs.external_feedback.with_rotor_to_sensor_ratio((24 / 18) * 100)
     _intake_arm_configs.slot0.with_k_g(0)
     _intake_arm_configs.slot0.with_k_v(0)
-    _intake_arm_configs.slot0.with_k_p(0)
+    _intake_arm_configs.slot0.with_k_p(50)
     _intake_arm_configs.slot0.with_k_i(0)
     _intake_arm_configs.slot0.with_k_d(0)
 
@@ -70,8 +67,6 @@ class IntakeConstants:
             cls._intake_arm_configs,
             cls._intake_arm_encoder_configs,
             cls._num_config_attempts,
-            cls._intake_arm_down_position,
-            cls._intake_arm_stowed_position,
-            cls._intake_arm_up_position,
-            cls._encoder_0_position
+            cls._intake_position,
+            cls._stowed_position
         )

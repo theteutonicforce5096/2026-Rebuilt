@@ -48,7 +48,7 @@ class ShooterConstants:
     _flywheel_intake_motor_configs.current_limits.with_stator_current_limit_enable(True)
     _flywheel_intake_motor_configs.slot0.with_k_s(0.11081)
     _flywheel_intake_motor_configs.slot0.with_k_v(0.11567)
-    _flywheel_intake_motor_configs.slot0.with_k_p(0)
+    _flywheel_intake_motor_configs.slot0.with_k_p(1)
     _flywheel_intake_motor_configs.slot0.with_k_i(0)
     _flywheel_intake_motor_configs.slot0.with_k_d(0)
 

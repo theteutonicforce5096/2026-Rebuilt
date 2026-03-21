@@ -4,6 +4,7 @@ from math import hypot
 from commands2 import Subsystem
 from robotpy_apriltag import AprilTagFieldLayout
 from wpimath.geometry import Pose3d, Rotation3d, Transform3d, Translation3d
+from wpimath.units import inchesToMeters
 
 from phoenix6 import swerve
 
@@ -36,16 +37,16 @@ class Vision(Subsystem):
         self.front_right_camera = PhotonCamera("front_right_camera")
 
         robot_to_back_camera_translation = Transform3d(
-            Translation3d(0.3175, 0.26035, 0.511175),
-            Rotation3d.fromDegrees(0, -88.5, 0),
+            Translation3d(inchesToMeters(4.25), inchesToMeters(10), inchesToMeters(20.5)),
+            Rotation3d.fromDegrees(1, 0, 180),
         )
         robot_to_front_left_camera_translation = Transform3d(
-            Translation3d(0.3175, 0.26035, 0.511175),
-            Rotation3d.fromDegrees(0, -88.5, 0),
+            Translation3d(inchesToMeters(13.5), inchesToMeters(12.5), inchesToMeters(20.25)),
+            Rotation3d.fromDegrees(-1, 0, 0),
         )
         robot_to_front_right_camera_translation = Transform3d(
-            Translation3d(0.3175, 0.26035, 0.511175),
-            Rotation3d.fromDegrees(0, -88.5, 0),
+            Translation3d(inchesToMeters(13.5), inchesToMeters(-12.25), inchesToMeters(20.25)),
+            Rotation3d.fromDegrees(-4, 0, 0),
         )
 
         self.back_camera_pose_est = PhotonPoseEstimator(
