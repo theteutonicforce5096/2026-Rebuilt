@@ -5,6 +5,8 @@ from phoenix6 import SignalLogger
 
 from pathplannerlib.auto import NamedCommands
 
+from wpilib import DriverStation
+
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import inchesToMeters, feetToMeters
 
@@ -55,9 +57,15 @@ class RobotContainer:
         )
 
         # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
-        self.drivetrain.reset_pose(
-            Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(10), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
-        )
+        alliance_color = DriverStation.getAlliance()
+        if alliance_color == DriverStation.Alliance.kRed:
+            self.drivetrain.reset_pose(
+                Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(10), inchesToMeters(158.32), Rotation2d.fromDegrees(0))
+            )
+        else:
+            self.drivetrain.reset_pose(
+                Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(10), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
+            )
         
         NamedCommands.registerCommand("shot_one", '''command goes here''')
         NamedCommands.registerCommand("shot_two", '''command goes here''')
@@ -125,17 +133,15 @@ class RobotContainer:
                     WaitUntilCommand(
                         lambda: self.controller.getHID().getYButton()
                     ),
-                    ParallelCommandGroup(
-                        RepeatCommand(
-                            self.shooter.create_manual_shoot_command()
-                        ),
-                        RepeatCommand(
-                            self.hopper.create_feed_cycle_command()
-                        ),
-                        RepeatCommand(
-                            self.drivetrain.auto_align_to_hub()
-                        )
+                    RepeatCommand(
+                        self.shooter.create_manual_shoot_command()
+                    ),
+                    RepeatCommand(
+                        self.hopper.create_feed_cycle_command()
                     )
+                    # RepeatCommand(
+                    #     self.drivetrain.auto_align_to_hub()
+                    # )
                 ),
                 ParallelCommandGroup(
                     self.hopper.create_stop_command(),

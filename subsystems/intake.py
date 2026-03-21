@@ -102,9 +102,11 @@ class Intake(Subsystem):
         self.intake_arm.set_control(
             self.position_voltage_request.with_position(position)
         )
+        print(position)
 
     def arm_down(self):
         self.set_setpoint(self.intake_position) 
+        
     
     def arm_up(self):
         self.set_setpoint(self.stowed_position)  
