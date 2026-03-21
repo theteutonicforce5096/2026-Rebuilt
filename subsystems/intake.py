@@ -114,10 +114,7 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
             lambda: self.set_intake_speed(intake_wheel_volts)
         )
 
-#Intake Arm Functions
     def set_setpoint(self, position):
-        # self.intake_arm.set_control(
-        #     self.position_voltage_request.with_position(self.encoder_0_position + (desired_angle / 360))
         self.intake_arm.set_control(
             self.position_voltage_request.with_position(position)
         )
