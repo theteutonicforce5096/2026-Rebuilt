@@ -1,0 +1,148 @@
+{
+  "version": "2025.0",
+  "waypoints": [
+    {
+      "anchor": {
+        "x": 5.989800000002521,
+        "y": 7.440683333333332
+      },
+      "prevControl": null,
+      "nextControl": {
+        "x": 5.014966807164882,
+        "y": 7.440683333333332
+      },
+      "isLocked": false,
+      "linkedName": "Trench Exit Left"
+    },
+    {
+      "anchor": {
+        "x": 3.5439444444444446,
+        "y": 7.440683333333332
+      },
+      "prevControl": {
+        "x": 4.148806844570639,
+        "y": 7.440683333333332
+      },
+      "nextControl": {
+        "x": 2.5402666666666667,
+        "y": 7.440683333333332
+      },
+      "isLocked": false,
+      "linkedName": "Trench Start Left"
+    },
+    {
+      "anchor": {
+        "x": 1.2150222222222222,
+        "y": 5.9497833333333325
+      },
+      "prevControl": {
+        "x": 2.3212849283081427,
+        "y": 5.9497833333333325
+      },
+      "nextControl": {
+        "x": 0.7150222222222238,
+        "y": 5.9497833333333325
+      },
+      "isLocked": false,
+      "linkedName": null
+    },
+    {
+      "anchor": {
+        "x": 0.75,
+        "y": 5.9497833333333325
+      },
+      "prevControl": {
+        "x": 1.0,
+        "y": 5.9497833333333325
+      },
+      "nextControl": {
+        "x": 0.5,
+        "y": 5.9497833333333325
+      },
+      "isLocked": false,
+      "linkedName": null
+    },
+    {
+      "anchor": {
+        "x": 1.2150222222222222,
+        "y": 5.9497833333333325
+      },
+      "prevControl": {
+        "x": 0.7859957994759874,
+        "y": 5.9497833333333325
+      },
+      "nextControl": {
+        "x": 2.2917833333333335,
+        "y": 5.969272222222222
+      },
+      "isLocked": false,
+      "linkedName": "Depot"
+    },
+    {
+      "anchor": {
+        "x": 3.5439444444444446,
+        "y": 7.440683333333332
+      },
+      "prevControl": {
+        "x": 2.4281949175664828,
+        "y": 7.440683333333332
+      },
+      "nextControl": {
+        "x": 4.30049984876658,
+        "y": 7.440683333333332
+      },
+      "isLocked": false,
+      "linkedName": "Trench Start Left"
+    },
+    {
+      "anchor": {
+        "x": 5.989800000002521,
+        "y": 7.440683333333332
+      },
+      "prevControl": {
+        "x": 4.989800000002521,
+        "y": 7.440683333333332
+      },
+      "nextControl": null,
+      "isLocked": false,
+      "linkedName": "Trench Exit Left"
+    }
+  ],
+  "rotationTargets": [],
+  "constraintZones": [
+    {
+      "name": "Constraints Zone",
+      "minWaypointRelativePos": 2.0,
+      "maxWaypointRelativePos": 3.0,
+      "constraints": {
+        "maxVelocity": 0.4,
+        "maxAcceleration": 3.0,
+        "maxAngularVelocity": 540.0,
+        "maxAngularAcceleration": 720.0,
+        "nominalVoltage": 12.0,
+        "unlimited": false
+      }
+    }
+  ],
+  "pointTowardsZones": [],
+  "eventMarkers": [],
+  "globalConstraints": {
+    "maxVelocity": 3.0,
+    "maxAcceleration": 3.0,
+    "maxAngularVelocity": 360.0,
+    "maxAngularAcceleration": 540.0,
+    "nominalVoltage": 12.0,
+    "unlimited": false
+  },
+  "goalEndState": {
+    "velocity": 0,
+    "rotation": -90.0
+  },
+  "reversed": false,
+  "folder": "Imported Online",
+  "idealStartingState": {
+    "velocity": 0,
+    "rotation": -90.0
+  },
+  "useDefaultConstraints": true
+}

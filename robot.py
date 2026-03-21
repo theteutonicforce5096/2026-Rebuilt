@@ -2,7 +2,7 @@ import time
 import commands2
 
 from wpilib import DriverStation, RobotBase
-from phoenix6 import SignalLogger
+from phoenix6 import utils, SignalLogger
 
 from robot_container import RobotContainer
 
@@ -16,7 +16,7 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         SignalLogger.enable_auto_logging(False)
 
         # Sleep for 10 seconds only if robot isn't in simulation mode to prevent CANBus motor config errors 
-        if RobotBase.isSimulation() == False:
+        if not utils.is_simulation():
             time.sleep(10) 
 
         # Create robot container

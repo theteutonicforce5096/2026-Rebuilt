@@ -1,15 +1,14 @@
 import commands2
-from commands2 import WaitUntilCommand, ParallelDeadlineGroup, ParallelCommandGroup, SequentialCommandGroup, RepeatCommand, WaitCommand
+from commands2 import ParallelCommandGroup, ParallelDeadlineGroup, RepeatCommand, SequentialCommandGroup, WaitCommand, WaitUntilCommand
 from commands2.sysid import SysIdRoutine
 from phoenix6 import SignalLogger
 
-from pathplannerlib.auto import AutoBuilder, PathConstraints, PathPlannerAuto, NamedCommands
-from pathplannerlib.path import PathPlannerPath, IdealStartingState, GoalEndState
+from pathplannerlib.auto import NamedCommands
 
-from wpimath.geometry import Pose2d, Rotation2d, Translation2d
+from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import inchesToMeters, feetToMeters
 
-from constants.physics import get_hub_center
+from constants.shot_calculator_constants import get_hub_center
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
 from constants.hopper_constants import HopperConstants
@@ -42,7 +41,7 @@ class RobotContainer:
             launcher_offset.y,
         )
 
-        # #Create hoppper subsystem
+        # #Create hopper subsystem
         self.hopper = HopperConstants.create_hopper()
 
         # #Create intake subsystem
@@ -132,10 +131,10 @@ class RobotContainer:
                         ),
                         RepeatCommand(
                             self.hopper.create_feed_cycle_command()
+                        ),
+                        RepeatCommand(
+                            self.drivetrain.auto_align_to_hub()
                         )
-                        # RepeatCommand(
-                        #     self.drivetrain.auto_align_to_hub()
-                        # )
                     )
                 ),
                 ParallelCommandGroup(

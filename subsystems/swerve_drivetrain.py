@@ -1,36 +1,36 @@
 from typing import Callable, Any
-from math import pi, atan2, cos, sin
+from math import pi
 
 from commands2 import Subsystem
-
-from phoenix6 import swerve, utils, hardware, SignalLogger
-
-from wpilib import DriverStation, Field2d, RobotBase, SmartDashboard, SendableChooser
-
-from wpilib.sysid import SysIdRoutineLog
-from wpilib.shuffleboard import Shuffleboard
 from commands2.sysid import SysIdRoutine
 
-from wpimath.filter import SlewRateLimiter
-from wpimath.geometry import Rotation2d, Transform2d, Translation2d
-from wpimath.units import inchesToMeters, radiansToDegrees
+from phoenix6 import swerve, utils, SignalLogger
+
+from wpilib import DriverStation, Field2d, Notifier, RobotController, SendableChooser, SmartDashboard
+from wpilib.shuffleboard import Shuffleboard
+from wpilib.sysid import SysIdRoutineLog
+from wpimath.geometry import Rotation2d, Translation2d
+from wpimath.kinematics import ChassisSpeeds
 
 from pathplannerlib.auto import AutoBuilder, RobotConfig
 from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
 
-from constants.physics import default_shooter_offset, get_hub_center
-from constants.shot_calculator_support import LaunchParameters
+from constants.shot_calculator_constants import (
+    LaunchParameters,
+    default_shooter_offset,
+    get_hub_center,
+)
 
 class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
     """
     Class for controlling swerve drive.
     """
 
-    def __init__(self, drive_motor_type: Any, steer_motor_type: Any, encoder_type: Any, 
-                 drivetrain_constants: swerve.SwerveDrivetrainConstants, 
+    def __init__(self, drive_motor_type: Any, steer_motor_type: Any, encoder_type: Any,
+                 drivetrain_constants: swerve.SwerveDrivetrainConstants,
                  modules: list[swerve.SwerveModuleConstants],
-                 odometry_update_frequency: float, max_linear_speed: float, max_angular_speed: float, 
-                 max_linear_accel: float, max_angular_accel: float):
+                 odometry_update_frequency: float, max_linear_speed: float, max_angular_speed: float,
+                 max_linear_accel: float, max_angular_accel: float, field_type: str):
         """
         Constructor for initializing swerve drivetrain using the specified constants.
 
@@ -54,6 +54,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         :type max_linear_accel: float
         :param max_angular_accel: Max angular acceleration of drivetrain in radians per second squared.
         :type max_angular_accel: float
+        :param field_type: Current field variant used for field geometry.
+        :type field_type: str
         """
         
         # Initialize parent classes
@@ -61,7 +63,9 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         swerve.SwerveDrivetrain.__init__(self, drive_motor_type, steer_motor_type, encoder_type, 
                                          drivetrain_constants, odometry_update_frequency, modules)
         
-        if RobotBase.isSimulation() == False:
+        if utils.is_simulation():
+            self._start_sim_thread()
+        else:
             for num in range(4):
                 module = self.get_module(num)
                 module.drive_motor.optimize_bus_utilization()
@@ -76,8 +80,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         self.max_linear_accel = max_linear_accel
         self.max_angular_accel = max_angular_accel
 
-        ### TODO: Move this to constants file, have swerve drive and vision camera class take this as input
-        self.field_type = "AndyMark" # Welded for regionals
+        self.field_type = field_type
 
         # Create shooter position variable
         self.shooter_offset = default_shooter_offset
@@ -96,6 +99,14 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             .with_desaturate_wheel_speeds(True)
         )
 
+        # Create Apply Robot Speeds Request for PathPlanner
+        self._apply_robot_speeds = (
+            swerve.requests.ApplyRobotSpeeds()
+            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
+            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
+            .with_desaturate_wheel_speeds(True)
+        )
+
         self.rotate_robot_request = (
             swerve.requests.FieldCentricFacingAngle()
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
@@ -105,42 +116,11 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         )
 
         self.rotate_robot_pid_controller = self.rotate_robot_request.heading_controller
-        self.rotate_robot_pid_controller.setTolerance(1.0)
+        self.rotate_robot_pid_controller.setTolerance(Rotation2d.fromDegrees(1.0).radians())
 
-        self.brake_mode_request = (
-            swerve.requests.SwerveDriveBrake()
-            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-        )
+        self._configure_auto_builder()
 
-        # # Create Apply Robot Speeds Request for PathPlanner
-        # self.apply_robot_speeds_request = (
-        #     swerve.requests.ApplyRobotSpeeds()
-        #     .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-        #     .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
-        #     .with_desaturate_wheel_speeds(True)
-        # )
-
-        # AutoBuilder.configure(
-        #     lambda: self.get_state().pose,
-        #     self.reset_pose,
-        #     lambda: self.get_state().speeds,
-        #     lambda speeds, feedforwards: self.set_control(
-        #         self.apply_robot_speeds_request
-        #         .with_speeds(speeds)
-        #         .with_wheel_force_feedforwards_x(feedforwards.robotRelativeForcesXNewtons)
-        #         .with_wheel_force_feedforwards_y(feedforwards.robotRelativeForcesYNewtons)
-        #     ),
-        #     PPHolonomicDriveController(
-        #         PIDConstants(5.0, 0.0, 0.0),
-        #         PIDConstants(5.0, 0.0, 0.0)
-        #     ),
-        #     RobotConfig.fromGUISettings(),
-        #     lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue) == DriverStation.Alliance.kRed,
-        #     self
-        # )
-
-         # Swerve requests for SysId characterization
+        # Swerve requests for SysId characterization
         self.translation_characterization = swerve.requests.SysIdSwerveTranslation()
         self.steer_characterization = swerve.requests.SysIdSwerveSteerGains()
         self.rotation_characterization = swerve.requests.SysIdSwerveRotation()
@@ -208,6 +188,44 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         self.fused_robot_pose_field = Field2d()
         SmartDashboard.putData("Fused Robot Pose", self.fused_robot_pose_field)
 
+    def _configure_auto_builder(self):
+        config = RobotConfig.fromGUISettings()
+        AutoBuilder.configure(
+            lambda: self.get_state().pose,   # Supplier of current robot pose
+            self.reset_pose,                 # Consumer for seeding pose against auto
+            lambda: self.get_state().speeds, # Supplier of current robot speeds
+            # Consumer of ChassisSpeeds and feedforwards to drive the robot
+            lambda speeds, feedforwards: self.set_control(
+                self._apply_robot_speeds
+                .with_speeds(ChassisSpeeds.discretize(speeds, 0.020))
+                .with_wheel_force_feedforwards_x(feedforwards.robotRelativeForcesXNewtons)
+                .with_wheel_force_feedforwards_y(feedforwards.robotRelativeForcesYNewtons)
+            ),
+            PPHolonomicDriveController(
+                # PID constants for translation
+                PIDConstants(10.0, 0.0, 0.0),
+                # PID constants for rotation
+                PIDConstants(7.0, 0.0, 0.0)
+            ),
+            config,
+            # Assume the path needs to be flipped for Red vs Blue, this is normally the case
+            lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue) == DriverStation.Alliance.kRed,
+            self # Subsystem for requirements
+        )
+
+    def _start_sim_thread(self):
+        def _sim_periodic():
+            current_time = utils.get_current_time_seconds()
+            delta_time = current_time - self._last_sim_time
+            self._last_sim_time = current_time
+
+            self.update_sim_state(delta_time, RobotController.getBatteryVoltage())
+
+        # Run simulation at a faster rate so PID gains behave more reasonably
+        self._last_sim_time = utils.get_current_time_seconds()
+        self._sim_notifier = Notifier(_sim_periodic)
+        self._sim_notifier.startPeriodic(0.004) # 4ms
+
     def periodic(self):
         """
         Update pose of the robot in network tables periodically.
@@ -242,7 +260,6 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
         return (self.pigeon2.get_pitch()._value, self.pigeon2.get_roll()._value)
 
-
     def _get_operator_drive_request(self, left_trigger_pressed: bool, right_trigger_pressed: bool,
                                    forward_speed: float, strafe_speed: float, rotation_speed: float):
         """
@@ -266,7 +283,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         current_vy = current_state.speeds.vy
         current_omega = current_state.speeds.omega
         
-        # Square input (Preserve sign)
+        # Square or cube inputs
         requested_vx = abs(forward_speed) * forward_speed * self.max_linear_speed
         requested_vy = abs(strafe_speed) * strafe_speed * self.max_linear_speed
         requested_omega = rotation_speed * rotation_speed * rotation_speed * self.max_angular_speed
@@ -283,10 +300,10 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         
         operator_drive_request = (
             self.field_centric_request
-            .with_velocity_x(requested_vx * scale_factor)
-            .with_velocity_y(requested_vy * scale_factor)
-            .with_rotational_rate(requested_omega * scale_factor)
-            .with_deadband((self.max_linear_speed * scale_factor) * 0.1)
+            .with_velocity_x(limited_vx * scale_factor)
+            .with_velocity_y(limited_vy * scale_factor)
+            .with_rotational_rate(limited_omega * scale_factor)
+            .with_deadband((self.max_linear_speed * scale_factor) * 0.075)
             .with_rotational_deadband((self.max_angular_speed * scale_factor) * 0.05)
         )
 
@@ -331,26 +348,26 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         return get_hub_center(self.field_type, self.current_alliance)
 
     def _get_shooter_center_of_rotation(self) -> Translation2d:
-        current_pose = self.get_state().pose
-        shooter_pose = current_pose.transformBy(self.shooter_offset)
-        return shooter_pose.translation() - current_pose.translation()
+        return self.shooter_offset.translation()
 
     def _get_hub_alignment_angle(self) -> Rotation2d:
         current_pose = self.get_state().pose
         shooter_pose = current_pose.transformBy(self.shooter_offset)
         hub_center = self._get_hub_center()
 
-        return Rotation2d(
+        aim_angle = Rotation2d(
             hub_center.x - shooter_pose.x,
             hub_center.y - shooter_pose.y,
         )
 
+        return aim_angle - self.shooter_offset.rotation()
+
     @staticmethod
     def _resolve_shot_alignment_angle(
-        launch_parameters: LaunchParameters,
+        launch_parameters: LaunchParameters | None,
         current_heading: Rotation2d,
     ) -> Rotation2d:
-        if launch_parameters.is_valid:
+        if launch_parameters is not None:
             return launch_parameters.drive_angle
 
         return current_heading
@@ -369,26 +386,34 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         Rotate the robot to face the hub from the shooter position.
         """
 
-        return self.run(
-            lambda: self._apply_alignment_target(self._get_hub_alignment_angle())
-        ).until(self.rotate_robot_pid_controller.atSetpoint)
+        return self.runOnce(
+            lambda: self.rotate_robot_pid_controller.reset()
+        ).andThen(
+            self.run(
+                lambda: self._apply_alignment_target(self._get_hub_alignment_angle())
+            ).until(self.rotate_robot_pid_controller.atSetpoint)
+        )
 
     def auto_align_to_shot_angle(
         self,
-        get_launch_parameters: Callable[[], LaunchParameters],
+        get_launch_parameters: Callable[[], LaunchParameters | None],
     ):
         """
         Rotate the robot to the latest calculated shot angle.
         """
 
-        return self.run(
-            lambda: self._apply_alignment_target(
-                self._resolve_shot_alignment_angle(
-                    get_launch_parameters(),
-                    self.get_state().pose.rotation(),
+        return self.runOnce(
+            lambda: self.rotate_robot_pid_controller.reset()
+        ).andThen(
+            self.run(
+                lambda: self._apply_alignment_target(
+                    self._resolve_shot_alignment_angle(
+                        get_launch_parameters(),
+                        self.get_state().pose.rotation(),
+                    )
                 )
-            )
-        ).until(self.rotate_robot_pid_controller.atSetpoint)
+            ).until(self.rotate_robot_pid_controller.atSetpoint)
+        )
     
     def set_brake_mode(self):
         """

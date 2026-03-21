@@ -1,12 +1,17 @@
-from math import tan, cos, radians, sqrt, pi
-from wpimath.geometry import Pose2d, Rotation2d, Transform2d, Translation2d
-from wpimath.units import inchesToMeters
-from wpilib import DriverStation
+from dataclasses import dataclass
+import math
+from math import cos, pi, radians, sqrt, tan
 
-default_y_dis = inchesToMeters(99.11) #120.36 in. (hub height) - 21.25 in. (flywheel height)
-default_r = inchesToMeters(2) #flywheel radius in meters
-default_g = -9.8 #m/s^2
-default_θ = 67.5 #degrees
+from wpilib import DriverStation
+from wpimath.geometry import Pose2d, Rotation2d, Transform2d, Translation2d
+from wpimath.kinematics import ChassisSpeeds
+from wpimath.units import inchesToMeters
+
+
+default_y_dis = inchesToMeters(72 - 21.25)  # 72 in. (hub height) - 21.25 in. (flywheel height)
+default_r = inchesToMeters(2)  # Flywheel radius in meters
+default_g = -9.8  # m/s^2
+default_θ = 67.5  # Degrees
 
 default_field_type = "AndyMark"
 default_shooter_offset = Transform2d(
@@ -33,21 +38,72 @@ _hub_positions = {
     ),
 }
 
-def _calc_profile_velocity_mps(x_dis: float, y_dis: float = default_y_dis,
-                               θ: float = default_θ, g: float = default_g):
-    try:
-        return abs(calc_velocity(x_dis, y_dis, θ, g))
-    except ValueError:
-        velocity_term = (
-            (g * (x_dis ** 2))
-            / (2 * ((cos(radians(θ))) ** 2))
-            * (y_dis - (x_dis - tan(radians(θ))))
-        )
 
-        # Preserve the existing model shape while keeping the shot-profile
-        # baseline finite across the scoring range.
-        ideal_velocity_mps = sqrt(abs(velocity_term))
-        return ideal_velocity_mps
+@dataclass
+class Config:
+    launcher_offset_x: float = 0.20
+    launcher_offset_y: float = 0.0
+
+    min_scoring_distance: float = 0.5
+    max_scoring_distance: float = 5.0
+
+    max_iterations: int = 25
+    convergence_tolerance: float = 0.001
+    tof_min: float = 0.05
+    tof_max: float = 5.0
+
+    min_sotm_speed: float = 0.1
+    max_sotm_speed: float = 3.0
+
+    phase_delay_ms: float = 30.0
+    mech_latency_ms: float = 20.0
+
+    sotm_drag_coeff: float = 0.47
+
+    w_convergence: float = 1.0
+    w_velocity_stability: float = 0.8
+    w_vision_confidence: float = 1.2
+    w_heading_accuracy: float = 1.5
+    w_distance_in_range: float = 0.5
+    heading_max_error_rad: float = math.radians(15.0)
+    heading_speed_scalar: float = 1.0
+    heading_reference_distance: float = 2.5
+
+    max_tilt_deg: float = 5.0
+
+
+@dataclass(frozen=True, slots=True)
+class ShotInputs:
+    robot_pose: Pose2d
+    field_velocity: ChassisSpeeds
+    robot_velocity: ChassisSpeeds
+    hub_center: Translation2d
+    hub_forward: Translation2d
+    vision_confidence: float
+    pitch_deg: float = 0.0
+    roll_deg: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class LaunchParameters:
+    flywheel_rps: float
+    time_of_flight_sec: float
+    drive_angle: Rotation2d
+    drive_angular_velocity_rad_per_sec: float
+    confidence: float
+    solved_distance_m: float
+    iterations_used: int
+    warm_start_used: bool
+
+
+def _calc_profile_velocity_mps(
+    x_dis: float,
+    y_dis: float = default_y_dis,
+    θ: float = default_θ,
+    g: float = default_g,
+):
+    return calc_velocity(x_dis, y_dis, θ, g)
+
 
 def _get_default_alliance_color():
     alliance_color = DriverStation.getAlliance()
@@ -56,8 +112,10 @@ def _get_default_alliance_color():
     return DriverStation.Alliance.kBlue
 
 
-def get_hub_center(field_type: str = default_field_type,
-                   alliance_color: DriverStation.Alliance | None = None):
+def get_hub_center(
+    field_type: str = default_field_type,
+    alliance_color: DriverStation.Alliance | None = None,
+):
     """
         Function to get the hub center translation for the current field setup.
     """
@@ -70,9 +128,11 @@ def get_hub_center(field_type: str = default_field_type,
     return hub_center
 
 
-def calc_shooter_to_hub_distance(robot_pose: Pose2d,
-                                 hub_center: Translation2d,
-                                 shooter_offset: Transform2d = default_shooter_offset):
+def calc_shooter_to_hub_distance(
+    robot_pose: Pose2d,
+    hub_center: Translation2d,
+    shooter_offset: Transform2d = default_shooter_offset,
+):
     """
         Function to get the shooter-to-hub distance in meters from pose geometry.
     """
@@ -82,10 +142,12 @@ def calc_shooter_to_hub_distance(robot_pose: Pose2d,
     return shooter_to_hub.norm()
 
 
-def calc_distance_to_hub(robot_pose: Pose2d,
-                         field_type: str = default_field_type,
-                         alliance_color: DriverStation.Alliance | None = None,
-                         shooter_offset: Transform2d = default_shooter_offset):
+def calc_distance_to_hub(
+    robot_pose: Pose2d,
+    field_type: str = default_field_type,
+    alliance_color: DriverStation.Alliance | None = None,
+    shooter_offset: Transform2d = default_shooter_offset,
+):
     """
         Function to get the shooter-to-hub distance in meters using the
         drivetrain's field geometry defaults.
@@ -98,10 +160,13 @@ def calc_distance_to_hub(robot_pose: Pose2d,
     )
 
 
-def calc_x_dis(robot_pose_or_x, y_pose: float | None = None,
-               field_type: str = default_field_type,
-               alliance_color: DriverStation.Alliance | None = None,
-               shooter_offset: Transform2d = default_shooter_offset):
+def calc_x_dis(
+    robot_pose_or_x,
+    y_pose: float | None = None,
+    field_type: str = default_field_type,
+    alliance_color: DriverStation.Alliance | None = None,
+    shooter_offset: Transform2d = default_shooter_offset,
+):
     """
         Compatibility wrapper for shooter-to-hub distance in meters.
 
@@ -127,8 +192,13 @@ def calc_x_dis(robot_pose_or_x, y_pose: float | None = None,
         shooter_offset,
     )
 
-def calc_velocity(x_dis: float, y_dis: float = default_y_dis,
-                        θ: float = default_θ, g: float = default_g):
+
+def calc_velocity(
+    x_dis: float,
+    y_dis: float = default_y_dis,
+    θ: float = default_θ,
+    g: float = default_g,
+):
     """
         Fuction for getting ideal velocity.
 
@@ -141,21 +211,25 @@ def calc_velocity(x_dis: float, y_dis: float = default_y_dis,
         :param g: gravitational acceleration in meters per second squared
         :type g: float
     """
-    
-    ideal_velocity_mps = sqrt(
-        (g * (x_dis ** 2)) / 
-        (2 * ((cos(radians(θ))) ** 2)) * (y_dis - (x_dis - tan(radians(θ))))
-    )
+
+    gravity_magnitude = abs(g)
+    theta_rad = radians(θ)
+    denominator = 2 * (cos(theta_rad) ** 2) * (x_dis * tan(theta_rad) - y_dis)
+    if denominator <= 0:
+        raise ValueError("Shot is unreachable with the current launch angle and target height")
+
+    ideal_velocity_mps = sqrt((gravity_magnitude * (x_dis ** 2)) / denominator)
     return ideal_velocity_mps
 
-#Calibration Notes:
-#these were kinda inconsistent
-#TODO this info is useless cuz PID is cooked
-#50 rps for 58 inches (Hub front to robot front) 7.5ft tp back
-#60 rps for 11 ft (Hub front to robot back)
-#robot with bumpers ~34 in. long
 
-#target velocity puts ideal velocity in rotations per second
+# Calibration Notes:
+# these were kinda inconsistent
+# TODO this info is useless cuz PID is cooked
+# 50 rps for 58 inches (Hub front to robot front) 7.5ft tp back
+# 60 rps for 11 ft (Hub front to robot back)
+# robot with bumpers ~34 in. long
+
+# target velocity puts ideal velocity in rotations per second
 def shoot_speed(ideal_velocity_mps, r: float = default_r):
     """
         Function to get shoot velocity in rotations per second (rps)
@@ -163,13 +237,17 @@ def shoot_speed(ideal_velocity_mps, r: float = default_r):
         :param r: flywheel radius in meters
         :type r: float
     """
-    target_velocity = (ideal_velocity_mps / 
-                        (2 * pi * r))
+
+    target_velocity = ideal_velocity_mps / (2 * pi * r)
     return target_velocity
 
 
-def calc_time_of_flight(x_dis: float, y_dis: float = default_y_dis,
-                        θ: float = default_θ, g: float = default_g):
+def calc_time_of_flight(
+    x_dis: float,
+    y_dis: float = default_y_dis,
+    θ: float = default_θ,
+    g: float = default_g,
+):
     """
         Function to get shot time of flight in seconds from the same baseline
         model used for launch velocity.
@@ -183,9 +261,13 @@ def calc_time_of_flight(x_dis: float, y_dis: float = default_y_dis,
     return x_dis / horizontal_velocity_mps
 
 
-def calc_shot_profile(x_dis: float, y_dis: float = default_y_dis,
-                      θ: float = default_θ, g: float = default_g,
-                      r: float = default_r):
+def calc_shot_profile(
+    x_dis: float,
+    y_dis: float = default_y_dis,
+    θ: float = default_θ,
+    g: float = default_g,
+    r: float = default_r,
+):
     """
         Function to get the baseline shot profile for a given distance.
 
@@ -199,8 +281,22 @@ def calc_shot_profile(x_dis: float, y_dis: float = default_y_dis,
         calc_time_of_flight(x_dis, y_dis, θ, g),
     )
 
-#TODO find better value
-#If you are converting a percent, multiply by 106
-def flywheel_intake_speed():
-    flywheel_intake_velocity_rps = 26.5 #rps
-    return flywheel_intake_velocity_rps
+__all__ = [
+    "Config",
+    "LaunchParameters",
+    "ShotInputs",
+    "calc_distance_to_hub",
+    "calc_shot_profile",
+    "calc_shooter_to_hub_distance",
+    "calc_time_of_flight",
+    "calc_velocity",
+    "calc_x_dis",
+    "default_field_type",
+    "default_g",
+    "default_r",
+    "default_shooter_offset",
+    "default_y_dis",
+    "default_θ",
+    "get_hub_center",
+    "shoot_speed",
+]

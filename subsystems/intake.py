@@ -1,24 +1,12 @@
-'''
-TODO: I am making the hopper and the intake two seperate things so it will make everything easier
-'''
-import wpilib
-import phoenix6
-from commands2 import Subsystem
-from commands2.cmd import print_
-
-from commands2 import PrintCommand
-
+from commands2 import PrintCommand, Subsystem
 from phoenix6 import CANBus
-from phoenix6.configs import TalonFXSConfiguration, CANcoderConfiguration
-from phoenix6.controls import VoltageOut, PositionVoltage
-from phoenix6.hardware import TalonFXS, CANcoder
+from phoenix6.configs import CANcoderConfiguration, TalonFXSConfiguration
+from phoenix6.controls import PositionVoltage, VoltageOut
+from phoenix6.hardware import CANcoder, TalonFXS
 from phoenix6.status_code import StatusCode
-
-from wpilib.shuffleboard import Shuffleboard
 from wpilib import RobotBase
 
-
-class Intake(Subsystem): # <-- Telling subsystem that its part of it too
+class Intake(Subsystem):
     """
     Class for controlling intake.
     """
@@ -52,10 +40,6 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         :type stowed_position: float
         """
 
-        # Note to Riley:
-        # The reason we need Subsystem.__init__ is because 
-        # it needs to know the parent class's setup code and 
-        # that commands 2 knows that it exists
         Subsystem.__init__(self) 
         
         # Create motors
@@ -130,4 +114,3 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
 
     
             
-

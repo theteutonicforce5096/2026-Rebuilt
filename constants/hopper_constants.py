@@ -32,10 +32,9 @@ class HopperConstants:
     # Agitator Wheel Configs (TalonFX)
     _agitator_wheel_configs = TalonFXConfiguration()
     _agitator_wheel_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
-    _agitator_wheel_configs.current_limits.with_supply_current_limit(10)
-    _agitator_wheel_configs.current_limits.with_supply_current_limit_enable(True)
+    _agitator_wheel_configs.current_limits.with_stator_current_limit(10)
+    _agitator_wheel_configs.current_limits.with_stator_current_limit_enable(True)
     
-
     @classmethod
     def create_hopper(cls) -> Hopper:
         """

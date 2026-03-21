@@ -2,7 +2,7 @@ from typing import Callable
 from math import hypot
 
 from commands2 import Subsystem
-from robotpy_apriltag import AprilTagFieldLayout
+from robotpy_apriltag import AprilTagField, AprilTagFieldLayout
 from wpimath.geometry import Pose3d, Rotation3d, Transform3d, Translation3d
 from wpimath.units import inchesToMeters
 
@@ -14,7 +14,7 @@ class Vision(Subsystem):
     def __init__(self, add_vision_measurement, 
                  get_current_swerve_state: Callable[[], swerve.SwerveDrivetrain.SwerveDriveState],
                  get_robot_tilt: Callable[[], tuple[float, float]],
-                 april_tag_layout: AprilTagFieldLayout,
+                 field_type: str,
                  linear_std_dev_baseline: float, angular_std_dev_baseline: float,
                  camera_std_dev_factors: tuple[float, ...],max_linear_speed: float,
                  max_angular_speed: float, max_tilt_deg: float):
@@ -24,7 +24,8 @@ class Vision(Subsystem):
         self.add_vision_measurement = add_vision_measurement
         self.get_current_swerve_state = get_current_swerve_state
         self.get_robot_tilt = get_robot_tilt
-        self.april_tag_layout = april_tag_layout
+        self.field_type = field_type
+        self.april_tag_layout = self._load_april_tag_layout(field_type)
         self.linear_std_dev_baseline = linear_std_dev_baseline
         self.angular_std_dev_baseline = angular_std_dev_baseline
         self.camera_std_dev_factors = camera_std_dev_factors
@@ -64,6 +65,18 @@ class Vision(Subsystem):
             (self.front_left_camera, self.front_left_camera_pose_est),
             (self.front_right_camera, self.front_right_camera_pose_est),
         ]
+
+    @staticmethod
+    def _load_april_tag_layout(field_type: str) -> AprilTagFieldLayout:
+        field_layouts = {
+            "AndyMark": AprilTagField.k2026RebuiltAndyMark,
+            "Welded": AprilTagField.k2026RebuiltWelded,
+        }
+        april_tag_field = field_layouts.get(field_type)
+        if april_tag_field is None:
+            raise ValueError(f"Unsupported field type: {field_type}")
+
+        return AprilTagFieldLayout.loadField(april_tag_field)
 
     def periodic(self):
         current_state = self.get_current_swerve_state()

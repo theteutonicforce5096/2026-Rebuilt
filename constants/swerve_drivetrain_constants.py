@@ -1,6 +1,7 @@
 from phoenix6 import CANBus, configs, hardware, signals, swerve, units
 from wpimath.units import inchesToMeters
 
+from constants.shot_calculator_constants import default_field_type
 from subsystems.swerve_drivetrain import SwerveDrivetrain
 
 class SwerveDrivetrainConstants:
@@ -22,7 +23,9 @@ class SwerveDrivetrainConstants:
     _max_angular_accel = (1 / 0.125) * 0.02 * _max_angular_speed # Max speed in 0.5 second
 
     # Frequency to run the odometry loop at in hertz
-    _odometry_update_frequency = 250.0
+    _odometry_update_frequency = 400.0
+
+    _field_type = default_field_type
 
     # The steer motor uses any SwerveModule.SteerRequestType control request with the
     # output type specified by SwerveModuleConstants.SteerMotorClosedLoopOutput
@@ -278,5 +281,6 @@ class SwerveDrivetrainConstants:
             cls._max_linear_speed,
             cls._max_angular_speed,
             cls._max_linear_accel,
-            cls._max_angular_accel
+            cls._max_angular_accel,
+            cls._field_type,
         )

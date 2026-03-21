@@ -1,25 +1,28 @@
 from typing import Any, Callable, Final
 
 from commands2 import Subsystem
-from commands2 import DeferredCommand, ParallelCommandGroup, SequentialCommandGroup, WaitCommand, PrintCommand, WaitUntilCommand, ParallelRaceGroup, ParallelDeadlineGroup
+from commands2 import DeferredCommand, PrintCommand, SequentialCommandGroup
 
 from phoenix6 import CANBus, SignalLogger
-from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
-from phoenix6.hardware import TalonFX, TalonFXS, CANcoder
 from phoenix6.controls import VelocityVoltage, VoltageOut
+from phoenix6.configs import CANcoderConfiguration, TalonFXConfiguration, TalonFXSConfiguration
+from phoenix6.hardware import CANcoder, TalonFX, TalonFXS
 from phoenix6.status_code import StatusCode
 
-from commands2.sysid import SysIdRoutine 
-from wpilib.sysid import SysIdRoutineLog
-from wpilib import SendableChooser, RobotBase, Timer
-
+from commands2.sysid import SysIdRoutine
 from ntcore import NetworkTableInstance
+from wpilib import RobotBase, SendableChooser, Timer
 from wpilib.shuffleboard import Shuffleboard
+from wpilib.sysid import SysIdRoutineLog
 from wpimath.geometry import Translation2d
 from wpimath.kinematics import ChassisSpeeds
 
-from constants.ShotCalculator import ShotCalculator
-from constants.shot_calculator_support import Config as ShotCalculatorConfig, LaunchParameters, ShotInputs
+from constants.shot_calculator import ShotCalculator
+from constants.shot_calculator_constants import (
+    Config as ShotCalculatorConfig,
+    LaunchParameters,
+    ShotInputs,
+)
 
 class Shooter(Subsystem):
     """
@@ -157,7 +160,7 @@ class Shooter(Subsystem):
                 launcher_offset_y = launcher_offset_y,
             )
         )
-        self._latest_calculated_shot = LaunchParameters.INVALID
+        self._latest_calculated_shot: LaunchParameters | None = None
 
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
@@ -223,7 +226,7 @@ class Shooter(Subsystem):
             roll_deg = roll_deg,
         )
 
-    def _calculate_launch_parameters(self) -> LaunchParameters:
+    def _calculate_launch_parameters(self) -> LaunchParameters | None:
         return self.shot_calculator.calculate(self._build_shot_inputs())
 
     def _apply_calculated_shot(self):
@@ -231,32 +234,32 @@ class Shooter(Subsystem):
 
         flywheel_target_velocity = (
             self._latest_calculated_shot.flywheel_rps
-            if self._latest_calculated_shot.is_valid
+            if self._latest_calculated_shot is not None
             else 0.0
         )
         intake_motor_velocity = (
             self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
-            if self._latest_calculated_shot.is_valid
+            if self._latest_calculated_shot is not None
             else 0.0
         )
 
         self.set_flywheel_velocities(flywheel_target_velocity, intake_motor_velocity)
 
     @staticmethod
-    def should_feed_calculated_shot(launch_parameters: LaunchParameters) -> bool:
+    def should_feed_calculated_shot(launch_parameters: LaunchParameters | None) -> bool:
         return (
-            launch_parameters.is_valid
+            launch_parameters is not None
             and launch_parameters.confidence >= Shooter.CALCULATED_FEED_CONFIDENCE_THRESHOLD
         )
 
     def reset_calculated_shot_state(self):
         self.shot_calculator.reset_warm_start()
-        self._latest_calculated_shot = LaunchParameters.INVALID
+        self._latest_calculated_shot = None
 
-    def get_latest_calculated_shot(self) -> LaunchParameters:
+    def get_latest_calculated_shot(self) -> LaunchParameters | None:
         return self._latest_calculated_shot
 
-    def create_manual_shoot_command(self):
+    def                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         create_manual_shoot_command(self):
         return DeferredCommand(
             lambda: self.shoot(
                 self.desired_ball_speed_sub.get(),
