@@ -88,6 +88,8 @@ class Shooter(Subsystem):
         
         # Create VelocityVoltage request
         self.velocity_pid_request = VelocityVoltage(velocity = 0)
+        self.intake_velocity_pid_request = VelocityVoltage(velocity = 0) 
+        # Created a separate PID request because ts never works ^^^
 
         self.voltage_request = VoltageOut(output = 0)
 
@@ -245,6 +247,7 @@ class Shooter(Subsystem):
 
         self.set_flywheel_velocities(flywheel_target_velocity, intake_motor_velocity)
 
+
     @staticmethod
     def should_feed_calculated_shot(launch_parameters: LaunchParameters | None) -> bool:
         return (
@@ -309,8 +312,9 @@ class Shooter(Subsystem):
             self.velocity_pid_request.with_velocity(flywheel_target_velocity)
         )
         self.flywheel_intake_motor.set_control(
-            self.velocity_pid_request.with_velocity(intake_motor_velocity)
+            self.intake_velocity_pid_request.with_velocity(intake_motor_velocity)
         )
+        # Okay changed this to the seperate PID request crossing finguers
     
     def set_voltage(self, motor: TalonFX | TalonFXS, voltage, duration):
         return self.run(
