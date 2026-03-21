@@ -91,12 +91,16 @@ class RobotContainer:
 
         self.controller.a().onTrue(
             SequentialCommandGroup(
-                # self.intake.arm_down(),
-                self.intake.run_intake_wheel(5),
-                WaitUntilCommand(
-                    lambda: self.controller.a().onTrue()
+                self.intake.runOnce(
+                    lambda: self.intake.set_intake_speed(5)
                 ),
-                self.intake.run_intake_wheel(0),
+                # WaitCommand(2),
+                WaitUntilCommand(
+                    lambda: self.controller.getHID().getAButtonPressed()
+                ),
+                self.intake.runOnce(
+                    lambda: self.intake.set_intake_speed(0)
+                )   
             )
         )
 

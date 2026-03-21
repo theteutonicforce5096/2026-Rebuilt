@@ -23,13 +23,14 @@ class IntakeConstants:
     _intake_position = -.51
     _stowed_position = -0.091309 
 
-    # Intake Wheel Configs (NEO550 - TalonFXS)
+    # Intake Wheel Configs (??? - TalonFXS)
     _intake_wheel_configs = TalonFXSConfiguration()
-    _intake_wheel_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.NEO550_JST)
+    _intake_wheel_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.BRUSHED_DC)
     _intake_wheel_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
     _intake_wheel_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
     _intake_wheel_configs.current_limits.with_stator_current_limit(20)
     _intake_wheel_configs.current_limits.with_stator_current_limit_enable(True)
+    _intake_wheel_configs.commutation.with_brushed_motor_wiring(signals.BrushedMotorWiringValue.LEADS_A_AND_C)
 
     # Intake Arm Configs (NEO 550 - TalonFXS)
     _intake_arm_configs = TalonFXSConfiguration()

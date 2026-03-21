@@ -123,15 +123,10 @@ class Intake(Subsystem): # <-- Telling subsystem that its part of it too
         )
 
     def arm_down(self):
-        return self.runOnce(
-            lambda: self.set_setpoint(self.intake_position) 
-        )
+        self.set_setpoint(self.intake_position) 
     
     def arm_up(self):
-        return self.runOnce(
-            lambda: self.set_setpoint(self.stowed_position)
-        )
-        
+        self.set_setpoint(self.stowed_position)        
 
         
 
