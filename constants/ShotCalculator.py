@@ -51,7 +51,7 @@ class ShotCalculator:
 
         # Residual tables store empirical correction on top of the physics
         # baseline, indexed by shooting distance in meters.
-        self._rpm_residual_map = _InterpolatingLookupTable()
+        self._rps_residual_map = _InterpolatingLookupTable()
         self._tof_residual_map = _InterpolatingLookupTable()
 
         self._previous_tof = -1.0
@@ -80,30 +80,30 @@ class ShotCalculator:
             raise ValueError(f"{label} lookup table is empty")
         return value
 
-    def _physics_rpm(self, distance: float) -> float:
-        rpm, _ = calc_shot_profile(distance)
-        return rpm
+    def _physics_rps(self, distance: float) -> float:
+        flywheel_rps, _ = calc_shot_profile(distance)
+        return flywheel_rps
 
     def _physics_tof(self, distance: float) -> float:
-        _, tof = calc_shot_profile(distance)
-        return tof
+        _, time_of_flight_sec = calc_shot_profile(distance)
+        return time_of_flight_sec
 
-    def load_lut_entry(self, distance_m: float, rpm: float, tof: float) -> None:
+    def load_lut_entry(self, distance_m: float, flywheel_rps: float, time_of_flight_sec: float) -> None:
         # The lookup table is defined as absolute empirical shot targets:
         # distance_m -> (flywheel_rps, time_of_flight_sec).
         # Internally we store those values as residuals so the calculator uses
         # physics baseline + interpolated empirical correction.
-        physics_rpm = self._physics_rpm(distance_m)
+        physics_rps = self._physics_rps(distance_m)
         physics_tof = self._physics_tof(distance_m)
 
-        self._rpm_residual_map.put(distance_m, rpm - physics_rpm)
-        self._tof_residual_map.put(distance_m, tof - physics_tof)
+        self._rps_residual_map.put(distance_m, flywheel_rps - physics_rps)
+        self._tof_residual_map.put(distance_m, time_of_flight_sec - physics_tof)
 
-    def _effective_rpm(self, distance: float) -> float:
-        return self._physics_rpm(distance) + self._lookup_required(
-            self._rpm_residual_map,
+    def _effective_rps(self, distance: float) -> float:
+        return self._physics_rps(distance) + self._lookup_required(
+            self._rps_residual_map,
             distance,
-            "RPM residual",
+            "RPS residual",
         )
 
     def _effective_tof(self, distance: float) -> float:
@@ -130,7 +130,7 @@ class ShotCalculator:
             or inputs.robot_pose is None
             or inputs.field_velocity is None
             or inputs.robot_velocity is None
-            or len(self._rpm_residual_map) == 0
+            or len(self._rps_residual_map) == 0
             or len(self._tof_residual_map) == 0
         ):
             return LaunchParameters.INVALID
@@ -262,7 +262,7 @@ class ShotCalculator:
         self._previous_tof = solved_tof
 
         effective_time_of_flight = solved_tof + self.config.mech_latency_ms / 1000.0
-        rpm = self._effective_rpm(projected_distance)
+        flywheel_rps = self._effective_rps(projected_distance)
 
         if velocity_filtered:
             compensated_target = inputs.hub_center
@@ -302,7 +302,7 @@ class ShotCalculator:
         self._previous_speed = robot_speed
 
         return LaunchParameters(
-            rpm=rpm,
+            flywheel_rps=flywheel_rps,
             time_of_flight_sec=effective_time_of_flight,
             drive_angle=drive_angle,
             drive_angular_velocity_rad_per_sec=drive_angular_velocity,

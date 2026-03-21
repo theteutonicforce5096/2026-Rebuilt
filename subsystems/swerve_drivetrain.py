@@ -18,6 +18,9 @@ from wpimath.units import inchesToMeters, radiansToDegrees
 from pathplannerlib.auto import AutoBuilder, RobotConfig
 from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
 
+from constants.physics import default_shooter_offset, get_hub_center
+from constants.shot_calculator_support import LaunchParameters
+
 class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
     """
     Class for controlling swerve drive.
@@ -76,17 +79,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         ### TODO: Move this to constants file, have swerve drive and vision camera class take this as input
         self.field_type = "AndyMark" # Welded for regionals
 
-        # Create hub position variables
-        self.hub_x_pos = None
-        self.hub_y_pos = None
-
         # Create shooter position variable
-        # X: -7.78 inches (behind center)
-        # Y: -7.95 inches (right of center)
-        self.shooter_offset = Transform2d(
-            Translation2d(inchesToMeters(-7.78), inchesToMeters(-7.95)),
-            Rotation2d(0) # 0 means it always faces the same way as the drivebase
-        )
+        self.shooter_offset = default_shooter_offset
 
         # Create current alliance variable
         self.current_alliance = None 
@@ -241,8 +235,6 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             self.set_operator_perspective_forward(Rotation2d.fromDegrees(0))
             self.current_alliance = DriverStation.Alliance.kBlue
 
-        self._set_hub_position(self.field_type, self.current_alliance)
-
     def get_robot_tilt(self) -> tuple[float, float]:
         """
         Get the current pitch and roll in degrees of the robot from the Pigeon 2.
@@ -250,31 +242,6 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
         return (self.pigeon2.get_pitch()._value, self.pigeon2.get_roll()._value)
 
-
-    def _set_hub_position(self, field_type: str, alliance_color: DriverStation.Alliance):
-        """
-        Set the hub position variables based on the field type and alliance color.
-
-        :param field_type: The type of field being used; either "AndyMark" or "Welded"
-        :type field_type: str
-        :param alliance_color: The alliance color of the robot; either DriverStation.Alliance.kBlue or DriverStation.Alliance.kRed
-        :type alliance_color: DriverStation.Alliance
-        """
-
-        if field_type == "AndyMark":
-            if alliance_color == DriverStation.Alliance.kBlue:
-                self.hub_x_pos = inchesToMeters(181.56)
-                self.hub_y_pos = inchesToMeters(158.32)
-            else:
-                self.hub_x_pos = inchesToMeters(468.56)
-                self.hub_y_pos = inchesToMeters(158.32)
-        else:
-            if alliance_color == DriverStation.Alliance.kBlue:
-                self.hub_x_pos = inchesToMeters(182.11)
-                self.hub_y_pos = inchesToMeters(158.84)
-            else:
-                self.hub_x_pos = inchesToMeters(469.11)
-                self.hub_y_pos = inchesToMeters(158.84)
 
     def _get_operator_drive_request(self, left_trigger_pressed: bool, right_trigger_pressed: bool,
                                    forward_speed: float, strafe_speed: float, rotation_speed: float):
@@ -360,53 +327,68 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             )
         )
 
-    def auto_align_to_hub(self):
-        """
-        Rotate the robot to the optimal angle relative to a target.
+    def _get_hub_center(self) -> Translation2d:
+        return get_hub_center(self.field_type, self.current_alliance)
 
-        :param target_pose: Pose of the target to rotate towards.
-        :type target_pose: utils.Pose2d
-        :param rotation_threshold: Threshold in degrees for considering the robot to be facing the optimal angle.
-        :type rotation_threshold: float
-        """
-
-        # Get current pose of the robot
+    def _get_shooter_center_of_rotation(self) -> Translation2d:
         current_pose = self.get_state().pose
-
-        # Get pose of shooter
         shooter_pose = current_pose.transformBy(self.shooter_offset)
+        return shooter_pose.translation() - current_pose.translation()
 
-        # Calculate optimal angle to hub from shooter
-        optimal_angle = Rotation2d(
-            self.hub_x_pos - shooter_pose.x, 
-            self.hub_y_pos - shooter_pose.y,
+    def _get_hub_alignment_angle(self) -> Rotation2d:
+        current_pose = self.get_state().pose
+        shooter_pose = current_pose.transformBy(self.shooter_offset)
+        hub_center = self._get_hub_center()
+
+        return Rotation2d(
+            hub_center.x - shooter_pose.x,
+            hub_center.y - shooter_pose.y,
         )
 
-        center_of_rotation = shooter_pose.translation() - current_pose.translation()
+    @staticmethod
+    def _resolve_shot_alignment_angle(
+        launch_parameters: LaunchParameters,
+        current_heading: Rotation2d,
+    ) -> Rotation2d:
+        if launch_parameters.is_valid:
+            return launch_parameters.drive_angle
 
-        return self.run(
-            lambda: self.test_pid(optimal_angle, center_of_rotation)
-            # lambda: self.set_control(
-            #     self.rotate_robot_request.with_target_direction(
-            #         Rotation2d(optimal_angle)
-            #     )
-            # )
-        ).until(self.rotate_robot_pid_controller.atSetpoint)
-    
-        # .until(
-        #     lambda: (self.get_state().pose.rotation().degrees() - optimal_angle.degrees()) < 1
-        # )
-        
-    def test_pid(self, optimal_angle: Rotation2d, center_of_rotation: Translation2d):
-        print(f"Target: {optimal_angle.degrees()}. Current: {self.get_state().pose.rotation().degrees()}")
+        return current_heading
+
+    def _apply_alignment_target(self, target_angle: Rotation2d):
         request = (
             self.rotate_robot_request
-            .with_target_direction(optimal_angle)
-            .with_center_of_rotation(center_of_rotation)
-
+            .with_target_direction(target_angle)
+            .with_center_of_rotation(self._get_shooter_center_of_rotation())
         )
 
         self.set_control(request)
+
+    def auto_align_to_hub(self):
+        """
+        Rotate the robot to face the hub from the shooter position.
+        """
+
+        return self.run(
+            lambda: self._apply_alignment_target(self._get_hub_alignment_angle())
+        ).until(self.rotate_robot_pid_controller.atSetpoint)
+
+    def auto_align_to_shot_angle(
+        self,
+        get_launch_parameters: Callable[[], LaunchParameters],
+    ):
+        """
+        Rotate the robot to the latest calculated shot angle.
+        """
+
+        return self.run(
+            lambda: self._apply_alignment_target(
+                self._resolve_shot_alignment_angle(
+                    get_launch_parameters(),
+                    self.get_state().pose.rotation(),
+                )
+            )
+        ).until(self.rotate_robot_pid_controller.atSetpoint)
     
     def set_brake_mode(self):
         """

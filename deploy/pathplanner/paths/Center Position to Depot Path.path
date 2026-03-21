@@ -141,9 +141,25 @@
   "eventMarkers": [
     {
       "name": "Run Intake",
-      "waypointRelativePos": 0.6,
+      "waypointRelativePos": 1.097435631229236,
       "endWaypointRelativePos": null,
-      "command": null
+      "command": {
+        "type": "named",
+        "data": {
+          "name": "Run Intake"
+        }
+      }
+    },
+    {
+      "name": "Turn Off Intake",
+      "waypointRelativePos": 4.305569975083058,
+      "endWaypointRelativePos": null,
+      "command": {
+        "type": "named",
+        "data": {
+          "name": "Turn Off Intake"
+        }
+      }
     }
   ],
   "globalConstraints": {

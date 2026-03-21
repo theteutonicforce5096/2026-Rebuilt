@@ -9,6 +9,7 @@ from pathplannerlib.path import PathPlannerPath, IdealStartingState, GoalEndStat
 from wpimath.geometry import Pose2d, Rotation2d, Translation2d
 from wpimath.units import inchesToMeters, feetToMeters
 
+from constants.physics import get_hub_center
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from constants.shooter_constants import ShooterConstants
 from constants.hopper_constants import HopperConstants
@@ -33,9 +34,9 @@ class RobotContainer:
         self.shooter = ShooterConstants.create_shooter(
             self.drivetrain.get_state,
             self.drivetrain.get_robot_tilt,
-            lambda: Translation2d(
-                self.drivetrain.hub_x_pos,
-                self.drivetrain.hub_y_pos
+            lambda: get_hub_center(
+                self.drivetrain.field_type,
+                self.drivetrain.current_alliance,
             ),
             launcher_offset.x,
             launcher_offset.y,
@@ -113,7 +114,7 @@ class RobotContainer:
                             self.hopper.create_feed_cycle_command()
                         ),
                         RepeatCommand(
-                            self.drivetrain.auto_align_to_hub()     
+                            self.drivetrain.auto_align_to_hub()
                         )
                     )
                 ),
@@ -151,7 +152,9 @@ class RobotContainer:
                             self.shooter.create_calculated_feed_command(self.hopper)
                         ),
                         RepeatCommand(
-                            self.drivetrain.auto_align_to_hub()     
+                            self.drivetrain.auto_align_to_shot_angle(
+                                self.shooter.get_latest_calculated_shot
+                            )
                         )
                     )
                 ),
@@ -239,10 +242,6 @@ class RobotContainer:
 
 
     def create_commands_test(self):
-        # self.hopper.mecanum_wheel.get_velocity().set_update_frequency(1000.0)
-        # self.hopper.mecanum_wheel.get_position().set_update_frequency(1000.0)
-        # self.hopper.mecanum_wheel.get_motor_voltage().set_update_frequency(1000.0)
-
         # # Set the SysId routine to run
         self.drivetrain.set_sys_id_routine()
     

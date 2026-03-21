@@ -1,5 +1,5 @@
 from math import tan, cos, radians, sqrt, pi
-from wpimath.geometry import Rotation2d, Transform2d, Translation2d
+from wpimath.geometry import Pose2d, Rotation2d, Transform2d, Translation2d
 from wpimath.units import inchesToMeters
 from wpilib import DriverStation
 
@@ -7,6 +7,31 @@ default_y_dis = inchesToMeters(99.11) #120.36 in. (hub height) - 21.25 in. (flyw
 default_r = inchesToMeters(2) #flywheel radius in meters
 default_g = -9.8 #m/s^2
 default_θ = 67.5 #degrees
+
+default_field_type = "AndyMark"
+default_shooter_offset = Transform2d(
+    Translation2d(inchesToMeters(-7.78), inchesToMeters(-7.95)),
+    Rotation2d(),
+)
+
+_hub_positions = {
+    ("AndyMark", DriverStation.Alliance.kBlue): Translation2d(
+        inchesToMeters(181.56),
+        inchesToMeters(158.32),
+    ),
+    ("AndyMark", DriverStation.Alliance.kRed): Translation2d(
+        inchesToMeters(468.56),
+        inchesToMeters(158.32),
+    ),
+    ("Welded", DriverStation.Alliance.kBlue): Translation2d(
+        inchesToMeters(182.11),
+        inchesToMeters(158.84),
+    ),
+    ("Welded", DriverStation.Alliance.kRed): Translation2d(
+        inchesToMeters(469.11),
+        inchesToMeters(158.84),
+    ),
+}
 
 def _calc_profile_velocity_mps(x_dis: float, y_dis: float = default_y_dis,
                                θ: float = default_θ, g: float = default_g):
@@ -24,31 +49,83 @@ def _calc_profile_velocity_mps(x_dis: float, y_dis: float = default_y_dis,
         ideal_velocity_mps = sqrt(abs(velocity_term))
         return ideal_velocity_mps
 
-def calc_x_dis(x_pose, y_pose): 
-    # Create shooter position variable
-    # X: -7.78 inches (behind center)
-    # Y: -7.95 inches (right of center)
-    shooter_offset = Transform2d(
-        Translation2d(inchesToMeters(-7.78), inchesToMeters(-7.95)),
-        Rotation2d(0) # 0 means it always faces the same way as the drivebase
+def _get_default_alliance_color():
+    alliance_color = DriverStation.getAlliance()
+    if alliance_color == DriverStation.Alliance.kRed:
+        return DriverStation.Alliance.kRed
+    return DriverStation.Alliance.kBlue
+
+
+def get_hub_center(field_type: str = default_field_type,
+                   alliance_color: DriverStation.Alliance | None = None):
+    """
+        Function to get the hub center translation for the current field setup.
+    """
+
+    resolved_alliance = alliance_color if alliance_color is not None else _get_default_alliance_color()
+    hub_center = _hub_positions.get((field_type, resolved_alliance))
+    if hub_center is None:
+        raise ValueError(f"Unsupported field configuration: {field_type}, {resolved_alliance}")
+
+    return hub_center
+
+
+def calc_shooter_to_hub_distance(robot_pose: Pose2d,
+                                 hub_center: Translation2d,
+                                 shooter_offset: Transform2d = default_shooter_offset):
+    """
+        Function to get the shooter-to-hub distance in meters from pose geometry.
+    """
+
+    shooter_pose = robot_pose.transformBy(shooter_offset)
+    shooter_to_hub = hub_center - shooter_pose.translation()
+    return shooter_to_hub.norm()
+
+
+def calc_distance_to_hub(robot_pose: Pose2d,
+                         field_type: str = default_field_type,
+                         alliance_color: DriverStation.Alliance | None = None,
+                         shooter_offset: Transform2d = default_shooter_offset):
+    """
+        Function to get the shooter-to-hub distance in meters using the
+        drivetrain's field geometry defaults.
+    """
+
+    return calc_shooter_to_hub_distance(
+        robot_pose,
+        get_hub_center(field_type, alliance_color),
+        shooter_offset,
     )
 
-    #Bottom left of field map (blue on left) is (0,0). Values are for AndyMark Field
-    alliance_color = DriverStation.getAlliance()
-    if alliance_color is not None:
-        if alliance_color == DriverStation.Alliance.kBlue:
-            hub_x_pos = inchesToMeters(181.56)
-            hub_y_pos = inchesToMeters(158.32)
-        else:
-            hub_x_pos = inchesToMeters(468.56)
-            hub_y_pos = inchesToMeters(158.32)
-            
-    #Shooter is 7.95 inches to the right of the pigeon
-    #Shooter is 7.78 inches behind the pigeon
-    x_dis = sqrt(
-        (hub_x_pos - (x_pose + inchesToMeters(7.78)))**2 + 
-        (hub_y_pos - (y_pose - inchesToMeters(7.95)))**2)
-    return x_dis
+
+def calc_x_dis(robot_pose_or_x, y_pose: float | None = None,
+               field_type: str = default_field_type,
+               alliance_color: DriverStation.Alliance | None = None,
+               shooter_offset: Transform2d = default_shooter_offset):
+    """
+        Compatibility wrapper for shooter-to-hub distance in meters.
+
+        If given a Pose2d, heading is respected. If given raw x/y, a zero
+        heading pose is assumed to preserve older call sites.
+    """
+
+    if isinstance(robot_pose_or_x, Pose2d):
+        return calc_distance_to_hub(
+            robot_pose_or_x,
+            field_type,
+            alliance_color,
+            shooter_offset,
+        )
+
+    if y_pose is None:
+        raise ValueError("y_pose must be provided when calc_x_dis is called with raw coordinates")
+
+    return calc_distance_to_hub(
+        Pose2d(robot_pose_or_x, y_pose, Rotation2d()),
+        field_type,
+        alliance_color,
+        shooter_offset,
+    )
 
 def calc_velocity(x_dis: float, y_dis: float = default_y_dis,
                         θ: float = default_θ, g: float = default_g):

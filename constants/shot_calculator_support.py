@@ -102,7 +102,7 @@ class ShotInputs:
 
 @dataclass(frozen=True, slots=True)
 class LaunchParameters:
-    rpm: float
+    flywheel_rps: float
     time_of_flight_sec: float
     drive_angle: Rotation2d
     drive_angular_velocity_rad_per_sec: float
@@ -114,7 +114,7 @@ class LaunchParameters:
 
 
 LaunchParameters.INVALID = LaunchParameters(
-    rpm=0.0,
+    flywheel_rps=0.0,
     time_of_flight_sec=0.0,
     drive_angle=Rotation2d(),
     drive_angular_velocity_rad_per_sec=0.0,

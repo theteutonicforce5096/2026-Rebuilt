@@ -230,7 +230,7 @@ class Shooter(Subsystem):
         self._latest_calculated_shot = self._calculate_launch_parameters()
 
         flywheel_target_velocity = (
-            self._latest_calculated_shot.rpm
+            self._latest_calculated_shot.flywheel_rps
             if self._latest_calculated_shot.is_valid
             else 0.0
         )
@@ -252,6 +252,9 @@ class Shooter(Subsystem):
     def reset_calculated_shot_state(self):
         self.shot_calculator.reset_warm_start()
         self._latest_calculated_shot = LaunchParameters.INVALID
+
+    def get_latest_calculated_shot(self) -> LaunchParameters:
+        return self._latest_calculated_shot
 
     def create_manual_shoot_command(self):
         return DeferredCommand(
