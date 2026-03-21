@@ -105,11 +105,15 @@ class RobotContainer:
         )
 
         self.controller.povUp().onTrue(
-            self.intake.arm_up()
+            self.intake.runOnce(
+                lambda: self.intake.arm_up()
+            )
         )
 
         self.controller.povDown().onTrue(
-            self.intake.arm_down()
+            self.intake.runOnce(
+                lambda: self.intake.arm_down()
+            )
         )
 
         self.controller.x().onTrue(
