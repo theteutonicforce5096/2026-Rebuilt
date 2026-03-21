@@ -37,8 +37,8 @@ class IntakeConstants:
     _intake_arm_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.NEO550_JST)
     _intake_arm_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
     _intake_arm_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)
-    _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
-    _intake_arm_configs.current_limits.with_stator_current_limit(20) #May need to increase
+    _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
+    _intake_arm_configs.current_limits.with_stator_current_limit(40) #May need to increase
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_arm_configs.external_feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
     _intake_arm_configs.external_feedback.with_external_feedback_sensor_source(signals.FeedbackSensorSourceValue.FUSED_CANCODER)

@@ -300,9 +300,9 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         
         operator_drive_request = (
             self.field_centric_request
-            .with_velocity_x(limited_vx * scale_factor)
-            .with_velocity_y(limited_vy * scale_factor)
-            .with_rotational_rate(limited_omega * scale_factor)
+            .with_velocity_x(requested_vx * scale_factor)
+            .with_velocity_y(requested_vy * scale_factor)
+            .with_rotational_rate(requested_omega * scale_factor)
             .with_deadband((self.max_linear_speed * scale_factor) * 0.075)
             .with_rotational_deadband((self.max_angular_speed * scale_factor) * 0.05)
         )

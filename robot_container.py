@@ -79,9 +79,9 @@ class RobotContainer:
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain.set_forward_perspective()
 
-        self.intake.runOnce(
-            lambda: self.intake.arm_down()
-        ).schedule()
+        # self.intake.runOnce(
+        #     lambda: self.intake.arm_down()
+        # ).schedule()
         
     def create_button_bindings(self):
         # Set button binding for reseting field centric heading
@@ -115,17 +115,29 @@ class RobotContainer:
             )
         )
 
-        self.controller.povUp().onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_up()
-            )
-        )
+        # self.controller.povUp().onTrue(
+        #     self.intake.runOnce(
+        #         lambda: self.intake.arm_up()
+        #     )
+        # )
 
-        self.controller.povDown().onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_down()
-            )
-        )
+        # self.controller.povDown().onTrue(
+        #     self.intake.runOnce(
+        #         lambda: self.intake.arm_down()
+        #     )
+        # )
+
+        # self.controller.povDown().onTrue(
+        #     self.intake.runOnce(
+        #         lambda: self.intake.move_arm(9)
+        #     )
+        # )
+
+        # self.controller.povDown().onFalse(
+        #     self.intake.runOnce(
+        #         lambda: self.intake.move_arm(0)
+        #     )
+        # )
 
         self.controller.x().onTrue(
             SequentialCommandGroup(
@@ -197,10 +209,10 @@ class RobotContainer:
             )
         )
 
-    def create_commands_auto(self):
-        self.intake.runOnce(
-            lambda: self.intake.arm_down()
-        ).schedule()
+    # def create_commands_auto(self):
+    #     self.intake.runOnce(
+    #         lambda: self.intake.arm_down()
+    #     ).schedule()
 
     def create_commands_teleop(self):   
         # Set the forward perspective of the robot for field oriented driving
