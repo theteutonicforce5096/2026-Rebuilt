@@ -23,7 +23,7 @@ class IntakeConstants:
     _intake_position = 0.48
     _stowed_position = -0.090
 
-    # Intake Wheel Configs (??? - TalonFXS)
+    # Intake Wheel Configs (Random ahh brushed motor - TalonFXS)
     _intake_wheel_configs = TalonFXSConfiguration()
     _intake_wheel_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.BRUSHED_DC)
     _intake_wheel_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)

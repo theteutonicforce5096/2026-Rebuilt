@@ -115,29 +115,17 @@ class RobotContainer:
             )
         )
 
-        # self.controller.povUp().onTrue(
-        #     self.intake.runOnce(
-        #         lambda: self.intake.arm_up()
-        #     )
-        # )
+        self.controller.povUp().onTrue(
+            self.intake.runOnce(
+                lambda: self.intake.arm_up()
+            )
+        )
 
-        # self.controller.povDown().onTrue(
-        #     self.intake.runOnce(
-        #         lambda: self.intake.arm_down()
-        #     )
-        # )
-
-        # self.controller.povDown().onTrue(
-        #     self.intake.runOnce(
-        #         lambda: self.intake.move_arm(9)
-        #     )
-        # )
-
-        # self.controller.povDown().onFalse(
-        #     self.intake.runOnce(
-        #         lambda: self.intake.move_arm(0)
-        #     )
-        # )
+        self.controller.povDown().onTrue(
+            self.intake.runOnce(
+                lambda: self.intake.arm_down()
+            )
+        )
 
         self.controller.x().onTrue(
             SequentialCommandGroup(
