@@ -9,7 +9,7 @@ from wpimath.units import inchesToMeters
 
 
 default_y_dis = inchesToMeters(72 - 21.25)  # 72 in. (hub height) - 21.25 in. (flywheel height)
-default_r = inchesToMeters(2)  # Flywheel radius in meters
+default_r = inchesToMeters(3.95 / 2)  # Flywheel radius in meters
 default_g = -9.8  # m/s^2
 default_θ = 67.5  # Degrees
 

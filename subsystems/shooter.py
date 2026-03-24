@@ -84,7 +84,7 @@ class Shooter(Subsystem):
             self.flywheel_encoder.optimize_bus_utilization()
 
         # Set encoder update frequency to improve velocity PID on flywheel motor
-        # self.flywheel_encoder.get_velocity().set_update_frequency(flywheel_encoder_vel_update_frequency)
+        self.flywheel_encoder.get_velocity().set_update_frequency(flywheel_encoder_vel_update_frequency)
         
         # Create VelocityVoltage request
         self.velocity_pid_request = VelocityVoltage(velocity = 0)

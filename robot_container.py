@@ -60,11 +60,11 @@ class RobotContainer:
         alliance_color = DriverStation.getAlliance()
         if alliance_color == DriverStation.Alliance.kRed:
             self.drivetrain.reset_pose(
-                Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(10), inchesToMeters(158.32), Rotation2d.fromDegrees(0))
+                Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(0))
             )
         else:
             self.drivetrain.reset_pose(
-                Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(10), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
+                Pose2d(inchesToMeters(168.56 - 23.51) - feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
             )
         
         NamedCommands.registerCommand("shot_one", '''command goes here''')

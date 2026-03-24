@@ -1,4 +1,4 @@
-from phoenix6.configs import TalonFXSConfiguration, CANcoderConfiguration
+from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
 from phoenix6 import CANBus, signals
 
 from subsystems.intake import Intake
@@ -32,20 +32,16 @@ class IntakeConstants:
     _intake_wheel_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_wheel_configs.commutation.with_brushed_motor_wiring(signals.BrushedMotorWiringValue.LEADS_A_AND_C)
 
-    # Intake Arm Configs (NEO 550 - TalonFXS)
-    _intake_arm_configs = TalonFXSConfiguration()
-    _intake_arm_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.NEO550_JST)
-    _intake_arm_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
+    # Intake Arm Configs (Falcon500 - TalonFX)
+    _intake_arm_configs = TalonFXConfiguration()
     _intake_arm_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)
-    _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
-    _intake_arm_configs.current_limits.with_stator_current_limit(40) #May need to increase
+    _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
+    _intake_arm_configs.current_limits.with_stator_current_limit(40)
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
-    _intake_arm_configs.external_feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
-    _intake_arm_configs.external_feedback.with_external_feedback_sensor_source(signals.FeedbackSensorSourceValue.FUSED_CANCODER)
-    _intake_arm_configs.external_feedback.with_sensor_to_mechanism_ratio(1.0)
-    _intake_arm_configs.external_feedback.with_rotor_to_sensor_ratio((24 / 18) * 100)
-    _intake_arm_configs.slot0.with_k_g(0)
-    _intake_arm_configs.slot0.with_k_v(0)
+    _intake_arm_configs.feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
+    _intake_arm_configs.feedback.with_feedback_sensor_source(signals.FeedbackSensorSourceValue.FUSED_CANCODER)
+    _intake_arm_configs.feedback.with_sensor_to_mechanism_ratio(1.0)
+    _intake_arm_configs.feedback.with_rotor_to_sensor_ratio(125 * (4/3))
     _intake_arm_configs.slot0.with_k_p(30)
     _intake_arm_configs.slot0.with_k_i(0)
     _intake_arm_configs.slot0.with_k_d(0)

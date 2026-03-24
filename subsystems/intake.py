@@ -1,8 +1,8 @@
 from commands2 import PrintCommand, Subsystem
 from phoenix6 import CANBus
-from phoenix6.configs import CANcoderConfiguration, TalonFXSConfiguration
+from phoenix6.configs import CANcoderConfiguration, TalonFXSConfiguration, TalonFXConfiguration
 from phoenix6.controls import PositionVoltage, VoltageOut
-from phoenix6.hardware import CANcoder, TalonFXS
+from phoenix6.hardware import CANcoder, TalonFXS, TalonFX
 from phoenix6.status_code import StatusCode
 from wpilib import RobotBase
 
@@ -13,7 +13,7 @@ class Intake(Subsystem):
 
     def __init__(self, canbus: CANBus, intake_wheel_id: int, intake_arm_id: int, 
                  intake_arm_encoder_id: int, intake_wheel_configs: TalonFXSConfiguration, 
-                 intake_arm_configs: TalonFXSConfiguration, intake_arm_encoder_configs: CANcoderConfiguration,
+                 intake_arm_configs: TalonFXConfiguration, intake_arm_encoder_configs: CANcoderConfiguration,
                  num_config_attempts: int, intake_position: float, stowed_position: float):
         """
         Constructor for initializing shooter using the specified constants.
@@ -29,14 +29,14 @@ class Intake(Subsystem):
         :param intake_wheel_configs: Configs for the intake wheel
         :type intake_wheel_configs: phoenix6.configs.TalonFXSConfiguration
         :param intake_arm_configs: Configs for the intake arm
-        :type intake_arm_configs: phoenix6.configs.TalonFXSConfiguration
+        :type intake_arm_configs: phoenix6.configs.TalonFXConfiguration
         :param intake_arm_encoder_configs: Configs for the intake arm encoder
         :type intake_arm_encoder_configs: phoenix6.configs.CANcoderConfiguration
         :param num_config_attempts: Number of times to attempt to configure each device
         :type num_config_attempts: int
-        :param intake_position: IT USED TO BE intake_arm_position. IM ASSUMING THIS IS THE ANGLE WHEN THE ARM IS ALL THE WAY DOWN
+        :param intake_position: Encoder position where arm is down
         :type intake_position: float
-        :param stowed_position: IM ASSUMING THIS IS THE ANGLE WHEN ARM IS ALL THE WAY UP
+        :param stowed_position: Encoder position where arm is up
         :type stowed_position: float
         """
 
@@ -44,7 +44,7 @@ class Intake(Subsystem):
         
         # Create motors
         self.intake_wheel = TalonFXS(intake_wheel_id, canbus)
-        self.intake_arm = TalonFXS(intake_arm_id, canbus)
+        self.intake_arm = TalonFX(intake_arm_id, canbus)
         self.intake_arm_encoder = CANcoder(intake_arm_encoder_id, canbus)
 
         # Apply motor configs
@@ -66,17 +66,18 @@ class Intake(Subsystem):
         self.intake_position = intake_position
         self.stowed_position = stowed_position
 
-    def _configure_device(self, device: TalonFXS | CANcoder, 
-                          configs: TalonFXSConfiguration | CANcoderConfiguration, 
+    def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
+                          configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
                           num_attempts: int) -> None:
         """
         Configures a CTRE motor controller or CANcoder with the specified configs, 
         retrying up to num_attempts times if the configuration fails.
         
         :param device: The CTRE motor controller or CANcoder to configure
-        :type device: phoenix6.hardware.TalonFXS | phoenix6.hardware.CANcoder
+        :type device: phoenix6.hardware.TalonFX | phoenix6.hardware.TalonFXS | phoenix6.hardware.CANcoder
         :param configs: The configuration to apply to the device
-        :type configs: phoenix6.configs.TalonFXSConfiguration | phoenix6.configs.CANcoderConfiguration
+        :type configs: phoenix6.configs.TalonFXConfiguration | phoenix6.configs.TalonFXSConfiguration | 
+        phoenix6.configs.CANcoderConfiguration
         :param num_attempts: Number of times to attempt to configure each device
         :type num_attempts: int
         """
@@ -102,13 +103,13 @@ class Intake(Subsystem):
         self.intake_arm.set_control(
             self.position_voltage_request.with_position(position)
         )
-        print(position)
+        # print(position)
 
     def arm_down(self):
         self.set_setpoint(self.intake_position) 
 
-    def move_arm(self, voltage):
-        self.intake_arm.setVoltage(voltage)
+    # def move_arm(self, voltage):
+    #     self.intake_arm.setVoltage(voltage)
         
     
     def arm_up(self):
