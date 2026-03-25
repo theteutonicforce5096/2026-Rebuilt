@@ -23,31 +23,16 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         # Create robot container
         self.robot_container = RobotContainer()
         self.autonomous_command: Command | None = None
-        self.addPeriodic(self.robot_container.refresh_auto_preview_if_needed, 1.0)
 
         if DriverStation.isFMSAttached():
             SignalLogger.start()
-
-    def disabledInit(self):
-        commands2.CommandScheduler.getInstance().cancelAll()
-        self.autonomous_command = None
         
     def autonomousInit(self):
-        if self.autonomous_command is not None:
-            self.autonomous_command.cancel()
-            self.autonomous_command = None
-
-        self.robot_container.ensure_selected_auto_pose_seeded()
-        self.robot_container.create_commands_auto()
-        self.autonomous_command = self.robot_container.get_selected_auto_command()
-        if self.autonomous_command is not None:
-            self.autonomous_command.schedule()
+        commands2.CommandScheduler.getInstance().cancelAll()
+        pass
 
     def teleopInit(self):
-        if self.autonomous_command is not None:
-            self.autonomous_command.cancel()
-            self.autonomous_command = None
-
+        commands2.CommandScheduler.getInstance().cancelAll()
         self.robot_container.create_commands_teleop()
     
     def teleopExit(self):
@@ -55,8 +40,5 @@ class RebuiltRobot(commands2.TimedCommandRobot):
             SignalLogger.stop()
 
     def testInit(self):
-        if self.autonomous_command is not None:
-            self.autonomous_command.cancel()
-            self.autonomous_command = None
-
+        commands2.CommandScheduler.getInstance().cancelAll()
         self.robot_container.create_commands_test()

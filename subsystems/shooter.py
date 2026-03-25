@@ -277,8 +277,10 @@ class Shooter(Subsystem):
         return flywheel_target_velocity, self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
 
     def create_fixed_distance_shoot_command(self, distance_m: float):
-        return self.runOnce(
+        return self.run(
             lambda: self.set_flywheel_velocities(*self.get_fixed_distance_shot_targets(distance_m))
+        ).until(
+            lambda: self.flywheel_motor.get_closed_loop_error().is_near(0, 1)
         )
 
     def create_calculated_shoot_command(self):
