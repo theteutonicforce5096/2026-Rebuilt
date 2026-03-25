@@ -66,7 +66,7 @@ class Vision(Subsystem):
             (self.front_right_camera, self.front_right_camera_pose_est),
         ]
 
-    def _load_april_tag_layout(field_type: str) -> AprilTagFieldLayout:
+    def _load_april_tag_layout(self, field_type: str) -> AprilTagFieldLayout:
         field_layouts = {
             "AndyMark": AprilTagField.k2026RebuiltAndyMark,
             "Welded": AprilTagField.k2026RebuiltWelded,
