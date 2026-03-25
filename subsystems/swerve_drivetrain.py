@@ -61,7 +61,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # Initialize parent classes
         Subsystem.__init__(self)
         swerve.SwerveDrivetrain.__init__(self, drive_motor_type, steer_motor_type, encoder_type, 
-                                         drivetrain_constants, modules)
+                                         drivetrain_constants, odometry_update_frequency, modules)
         
         if utils.is_simulation():
             self._start_sim_thread()
@@ -296,13 +296,13 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         if left_trigger_pressed and right_trigger_pressed:
             scale_factor = 1.0
         else:
-            scale_factor = 0.50
+            scale_factor = 0.75
         
         operator_drive_request = (
             self.field_centric_request
-            .with_velocity_x(limited_vx * scale_factor)
-            .with_velocity_y(limited_vy * scale_factor)
-            .with_rotational_rate(limited_omega * scale_factor)
+            .with_velocity_x(requested_vx * scale_factor)
+            .with_velocity_y(requested_vy * scale_factor)
+            .with_rotational_rate(requested_omega * scale_factor)
             .with_deadband((self.max_linear_speed * scale_factor) * 0.075)
             .with_rotational_deadband((self.max_angular_speed * scale_factor) * 0.075)
         )

@@ -42,7 +42,7 @@
       "IsEncoderInverted": false,
       "IsSteerInverted": true,
       "SelectedEncoderType": "CANcoder",
-      "EncoderOffset": -0.249267578125,
+      "EncoderOffset": -0.2578125,
       "DriveMotorSelectionState": 1,
       "SteerMotorSelectionState": 1,
       "SteerEncoderSelectionState": 1,
@@ -91,7 +91,7 @@
       "IsEncoderInverted": false,
       "IsSteerInverted": true,
       "SelectedEncoderType": "CANcoder",
-      "EncoderOffset": -0.214599609375,
+      "EncoderOffset": -0.22412109375,
       "DriveMotorSelectionState": 1,
       "SteerMotorSelectionState": 1,
       "SteerEncoderSelectionState": 1,
@@ -140,7 +140,7 @@
       "IsEncoderInverted": false,
       "IsSteerInverted": true,
       "SelectedEncoderType": "CANcoder",
-      "EncoderOffset": -0.08642578125,
+      "EncoderOffset": -0.099609375,
       "DriveMotorSelectionState": 1,
       "SteerMotorSelectionState": 1,
       "SteerEncoderSelectionState": 1,
@@ -189,7 +189,7 @@
       "IsEncoderInverted": false,
       "IsSteerInverted": true,
       "SelectedEncoderType": "CANcoder",
-      "EncoderOffset": 0.337158203125,
+      "EncoderOffset": 0.330078125,
       "DriveMotorSelectionState": 1,
       "SteerMotorSelectionState": 1,
       "SteerEncoderSelectionState": 1,
@@ -227,6 +227,6 @@
     "HasVerifiedDrive": true,
     "IsValidConfiguration": true
   },
-  "TeamNumber": 5096,
+  "TeamNumber": 0,
   "schema_version": "1"
 }

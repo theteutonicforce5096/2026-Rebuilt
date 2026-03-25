@@ -19,11 +19,11 @@ class SwerveDrivetrainConstants:
     _max_angular_speed = 16 # Max angular velocity in radians per second 
 
     # Max acceleration of robot (assuming 0.02 second loop time)
-    _max_linear_accel = (1 / 0.1) * 0.02 * _max_linear_speed # Max speed in 0.1 seconds
+    _max_linear_accel = (1 / 0.01) * 0.02 * _max_linear_speed # Max speed in 0.01 seconds
     _max_angular_accel = (1 / 0.1) * 0.02 * _max_angular_speed # Max speed in 0.1 second
 
     # Frequency to run the odometry loop at in hertz
-    _odometry_update_frequency = 300.0
+    _odometry_update_frequency = 250.0
 
     _field_type = default_field_type
 
@@ -35,7 +35,7 @@ class SwerveDrivetrainConstants:
         .with_k_i(0)
         .with_k_d(0.5) # 1.225
         .with_k_s(0.1)
-        .with_k_v(1.91) # 1.499125
+        .with_k_v(1.5) # 1.499125
         .with_static_feedforward_sign(
             signals.StaticFeedforwardSignValue.USE_CLOSED_LOOP_SIGN
         )
@@ -101,9 +101,9 @@ class SwerveDrivetrainConstants:
     # Configs for the Pigeon 2
     _pigeon_configs = configs.Pigeon2Configuration().with_mount_pose(
         configs.MountPoseConfigs()
-        .with_mount_pose_yaw(0.050153765827417374)
-        .with_mount_pose_pitch(1.0930490493774414)
-        .with_mount_pose_roll(1.7595006227493286)
+        .with_mount_pose_yaw(-0.3205808699131012)
+        .with_mount_pose_pitch(-0.43110448122024536)
+        .with_mount_pose_roll(0.033288005739450455)
     )
 
     # CAN bus that the devices are located on;
@@ -175,7 +175,7 @@ class SwerveDrivetrainConstants:
     _front_left_drive_motor_id = 10
     _front_left_steer_motor_id = 20
     _front_left_encoder_id = 0
-    _front_left_encoder_offset: units.rotation = -0.258056640625
+    _front_left_encoder_offset: units.rotation = -0.2578125
     _front_left_steer_motor_inverted = True
     _front_left_encoder_inverted = False
 
@@ -186,7 +186,7 @@ class SwerveDrivetrainConstants:
     _front_right_drive_motor_id = 11
     _front_right_steer_motor_id = 21
     _front_right_encoder_id = 1
-    _front_right_encoder_offset: units.rotation = -0.23291015625
+    _front_right_encoder_offset: units.rotation = -0.22412109375
     _front_right_steer_motor_inverted = True
     _front_right_encoder_inverted = False
 
@@ -197,7 +197,7 @@ class SwerveDrivetrainConstants:
     _back_left_drive_motor_id = 12
     _back_left_steer_motor_id = 22
     _back_left_encoder_id = 2
-    _back_left_encoder_offset: units.rotation = -0.08984375
+    _back_left_encoder_offset: units.rotation = -0.099609375
     _back_left_steer_motor_inverted = True
     _back_left_encoder_inverted = False
 
@@ -208,7 +208,7 @@ class SwerveDrivetrainConstants:
     _back_right_drive_motor_id = 13
     _back_right_steer_motor_id = 23
     _back_right_encoder_id = 3
-    _back_right_encoder_offset: units.rotation = 0.32470703125
+    _back_right_encoder_offset: units.rotation = 0.330078125
     _back_right_steer_motor_inverted = True
     _back_right_encoder_inverted = False
 

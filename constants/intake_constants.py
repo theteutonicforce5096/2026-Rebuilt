@@ -34,7 +34,7 @@ class IntakeConstants:
 
     # Intake Arm Configs (Falcon500 - TalonFX)
     _intake_arm_configs = TalonFXConfiguration()
-    _intake_arm_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)
+    _intake_arm_configs.motor_output.with_inverted(signals.InvertedValue.COUNTER_CLOCKWISE_POSITIVE)
     _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
     _intake_arm_configs.current_limits.with_stator_current_limit(40)
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
