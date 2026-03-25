@@ -86,8 +86,10 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         self.shooter_offset = default_shooter_offset
 
         # Create current alliance variable
-        self.current_alliance = None 
-        self.set_forward_perspective()
+        self.current_alliance = None
+        self.operator_heading_target = Rotation2d()
+        self.operator_was_rotating = False
+        self.operator_heading_reset_threshold = Rotation2d.fromDegrees(45)
 
         # Create requests for controlling swerve drive
         # https://www.chiefdelphi.com/t/motion-magic-velocity-control-for-drive-motors-in-phoenix6-swerve-drive-api/483669/6
@@ -127,6 +129,9 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
         self.rotate_robot_pid_controller = self.rotate_robot_request.heading_controller
         self.rotate_robot_pid_controller.setTolerance(Rotation2d.fromDegrees(1.0).radians())
+
+        self.set_forward_perspective()
+        self.reset_operator_heading_tracking()
 
         self._configure_auto_builder()
 
@@ -263,6 +268,17 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             self.set_operator_perspective_forward(Rotation2d.fromDegrees(0))
             self.current_alliance = DriverStation.Alliance.kBlue
 
+    def reset_operator_heading_tracking(self):
+        """
+        Sync the teleop heading lock target to the current operator-perspective heading.
+        """
+
+        self.operator_heading_target = (
+            self.get_state().pose.rotation() - self.get_operator_forward_direction()
+        )
+        self.operator_was_rotating = False
+        self.field_centric_facing_angle_request.heading_controller.reset()
+
     def get_robot_tilt(self) -> tuple[float, float]:
         """
         Get the current pitch and roll in degrees of the robot from the Pigeon 2.
@@ -292,6 +308,9 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         current_vx = current_state.speeds.vx
         current_vy = current_state.speeds.vy
         current_omega = current_state.speeds.omega
+        current_rotation_operator_perspective = (
+            current_state.pose.rotation() - self.get_operator_forward_direction()
+        )
 
         if left_trigger_pressed and right_trigger_pressed:
             max_linear_speed = self.max_linear_speed
@@ -337,19 +356,26 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         else:
             limited_omega = 0
 
-        if limited_omega == 0:        
-            if self.current_alliance == DriverStation.Alliance.kRed:
-                current_rotation_operator_perspective = self.get_state().pose.rotation().rotateBy(Rotation2d.fromDegrees(180))
-            else:   
-                current_rotation_operator_perspective = self.get_state().pose.rotation()
+        if limited_omega == 0:
+            current_heading_error = abs(
+                (self.operator_heading_target - current_rotation_operator_perspective).degrees()
+            )
+            if (
+                self.operator_was_rotating
+                or current_heading_error >= self.operator_heading_reset_threshold.degrees()
+            ):
+                self.operator_heading_target = current_rotation_operator_perspective
+                self.field_centric_facing_angle_request.heading_controller.reset()
 
+            self.operator_was_rotating = False
             operator_drive_request = (
                 self.field_centric_facing_angle_request
                 .with_velocity_x(limited_vx)
                 .with_velocity_y(limited_vy)
-                .with_target_direction(current_rotation_operator_perspective)
+                .with_target_direction(self.operator_heading_target)
             )
         else:
+            self.operator_was_rotating = True
             operator_drive_request = (
                 self.field_centric_request
                 .with_velocity_x(limited_vx)

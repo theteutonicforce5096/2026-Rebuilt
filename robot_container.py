@@ -114,6 +114,7 @@ class RobotContainer:
 
     def create_commands_auto(self):
         self.drivetrain.set_forward_perspective()
+        self.drivetrain.reset_operator_heading_tracking()
         self.intake.runOnce(
             lambda: self.intake.arm_down()
         ).schedule()
@@ -121,11 +122,18 @@ class RobotContainer:
     def create_commands_teleop(self):
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain.set_forward_perspective()
+        self.drivetrain.reset_operator_heading_tracking()
 
     def create_button_bindings(self):
         # Set button binding for reseting field centric heading
         (self.controller.leftBumper() & self.controller.rightBumper()).onTrue(
-            self.drivetrain.runOnce(lambda: self.drivetrain.seed_field_centric())
+            self.drivetrain.runOnce(
+                lambda: (
+                    self.drivetrain.seed_field_centric(),
+                    self.drivetrain.set_forward_perspective(),
+                    self.drivetrain.reset_operator_heading_tracking(),
+                )
+            )
         )
 
         # Set default command for drivetrain
