@@ -30,7 +30,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                  drivetrain_constants: swerve.SwerveDrivetrainConstants,
                  modules: list[swerve.SwerveModuleConstants],
                  odometry_update_frequency: float, max_linear_speed: float, max_angular_speed: float,
-                 max_linear_accel: float, max_angular_accel: float, field_type: str):
+                 max_linear_rate_of_change: float, max_angular_rate_of_change: float, field_type: str):
         """
         Constructor for initializing swerve drivetrain using the specified constants.
 
@@ -50,10 +50,10 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         :type max_linear_speed: float
         :param max_angular_speed: Max angular velocity of drivetrain in radians per second. 
         :type max_angular_speed: float
-        :param max_linear_accel: Max linear acceleration of drivetrain in meters per second squared.
-        :type max_linear_accel: float
-        :param max_angular_accel: Max angular acceleration of drivetrain in radians per second squared.
-        :type max_angular_accel: float
+        :param max_linear_rate_of_change: Max linear rate of change of drivetrain in meters per second.
+        :type max_linear_rate_of_change: float
+        :param max_angular_rate_of_change: Max angular rate of change of drivetrain in radians per second.
+        :type max_angular_rate_of_change: float
         :param field_type: Current field variant used for field geometry.
         :type field_type: str
         """
@@ -77,8 +77,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # Create max speed and max accel variables
         self.max_linear_speed = max_linear_speed
         self.max_angular_speed = max_angular_speed
-        self.max_linear_accel = max_linear_accel
-        self.max_angular_accel = max_angular_accel
+        self.max_linear_rate_of_change = max_linear_rate_of_change
+        self.max_angular_rate_of_change = max_angular_rate_of_change
 
         self.field_type = field_type
 
@@ -89,7 +89,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         self.current_alliance = None 
         self.set_forward_perspective()
 
-        # Create request for controlling swerve drive
+        # Create requests for controlling swerve drive
         # https://www.chiefdelphi.com/t/motion-magic-velocity-control-for-drive-motors-in-phoenix6-swerve-drive-api/483669/6
         self.field_centric_request = (
             swerve.requests.FieldCentric()
@@ -97,6 +97,15 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
             .with_desaturate_wheel_speeds(True)
+        )
+
+        self.field_centric_facing_angle_request = (
+            swerve.requests.FieldCentricFacingAngle()
+            .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
+            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
+            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
+            .with_desaturate_wheel_speeds(True)
+            .with_heading_pid(10, 0, 0)
         )
 
         # Create Apply Robot Speeds Request for PathPlanner
@@ -109,9 +118,10 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
         self.rotate_robot_request = (
             swerve.requests.FieldCentricFacingAngle()
+            .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.BLUE_ALLIANCE)
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
-            .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.BLUE_ALLIANCE)
+            .with_desaturate_wheel_speeds(True)
             .with_heading_pid(10, 0, 0)
         )
 
@@ -282,30 +292,70 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         current_vx = current_state.speeds.vx
         current_vy = current_state.speeds.vy
         current_omega = current_state.speeds.omega
-        
-        # Square or cube inputs
-        requested_vx = abs(forward_speed) * forward_speed * self.max_linear_speed
-        requested_vy = abs(strafe_speed) * strafe_speed * self.max_linear_speed
-        requested_omega = rotation_speed * rotation_speed * rotation_speed * self.max_angular_speed
-        
-        # Clamp requested velocity to a window around actual velocity
-        limited_vx = max(current_vx - self.max_linear_accel, min(requested_vx, current_vx + self.max_linear_accel))
-        limited_vy = max(current_vy - self.max_linear_accel, min(requested_vy, current_vy + self.max_linear_accel))
-        limited_omega = max(current_omega - self.max_angular_accel, min(requested_omega, current_omega + self.max_angular_accel))
 
         if left_trigger_pressed and right_trigger_pressed:
-            scale_factor = 1.0
+            max_linear_speed = self.max_linear_speed
+            max_angular_speed = self.max_angular_speed
         else:
-            scale_factor = 0.75
-        
-        operator_drive_request = (
-            self.field_centric_request
-            .with_velocity_x(requested_vx * scale_factor)
-            .with_velocity_y(requested_vy * scale_factor)
-            .with_rotational_rate(requested_omega * scale_factor)
-            .with_deadband((self.max_linear_speed * scale_factor) * 0.075)
-            .with_rotational_deadband((self.max_angular_speed * scale_factor) * 0.075)
-        )
+            max_linear_speed = self.max_linear_speed * 0.75
+            max_angular_speed = self.max_angular_speed * 0.5
+
+        # Square or cube inputs
+        if abs(forward_speed) > 0.075:
+            requested_vx = abs(forward_speed) * forward_speed * max_linear_speed
+            requested_vx_rate_of_change = requested_vx - current_vx
+            if requested_vx_rate_of_change > self.max_linear_rate_of_change:
+                limited_vx = current_vx + self.max_linear_rate_of_change
+            elif requested_vx_rate_of_change < -self.max_linear_rate_of_change:
+                limited_vx = current_vx - self.max_linear_rate_of_change
+            else:
+                limited_vx = requested_vx
+        else:
+            limited_vx = 0
+
+        if abs(strafe_speed) > 0.075:
+            requested_vy = abs(strafe_speed) * strafe_speed * max_linear_speed
+            requested_vy_rate_of_change = requested_vy - current_vy
+            if requested_vy_rate_of_change > self.max_linear_rate_of_change:
+                limited_vy = current_vy + self.max_linear_rate_of_change
+            elif requested_vy_rate_of_change < -self.max_linear_rate_of_change:
+                limited_vy = current_vy - self.max_linear_rate_of_change
+            else:
+                limited_vy = requested_vy
+        else:
+            limited_vy = 0
+
+        if abs(rotation_speed) > 0.075:
+            requested_omega = rotation_speed * rotation_speed * rotation_speed * max_angular_speed
+            requested_omega_rate_of_change = requested_omega - current_omega
+            if requested_omega_rate_of_change > self.max_angular_rate_of_change:
+                limited_omega = current_omega + self.max_angular_rate_of_change
+            elif requested_omega_rate_of_change < -self.max_angular_rate_of_change:
+                limited_omega = current_omega - self.max_angular_rate_of_change
+            else:
+                limited_omega = requested_omega
+        else:
+            limited_omega = 0
+
+        if limited_omega == 0:        
+            if self.current_alliance == DriverStation.Alliance.kRed:
+                current_rotation_operator_perspective = self.get_state().pose.rotation().rotateBy(Rotation2d.fromDegrees(180))
+            else:   
+                current_rotation_operator_perspective = self.get_state().pose.rotation()
+
+            operator_drive_request = (
+                self.field_centric_facing_angle_request
+                .with_velocity_x(limited_vx)
+                .with_velocity_y(limited_vy)
+                .with_target_direction(current_rotation_operator_perspective)
+            )
+        else:
+            operator_drive_request = (
+                self.field_centric_request
+                .with_velocity_x(limited_vx)
+                .with_velocity_y(limited_vy)
+                .with_rotational_rate(limited_omega)
+            )
 
         return operator_drive_request
     

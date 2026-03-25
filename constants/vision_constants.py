@@ -19,7 +19,7 @@ class VisionConstants:
     # (back_camera, front_left_camera, front_right_camera)
     _camera_std_dev_factors = (0.75, 0.5, 0.5)
 
-    # Reject vision measurements when robot speed is above this speed
+    # Reference speeds used to scale vision standard deviations during fast motion
     _max_linear_speed = SwerveDrivetrainConstants._max_linear_speed * 0.75
     _max_angular_speed = SwerveDrivetrainConstants._max_angular_speed * 0.75
 

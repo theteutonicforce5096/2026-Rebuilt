@@ -236,10 +236,6 @@ class RobotContainer:
             )
         )
 
-    def create_commands_teleop(self):   
-        # Set the forward perspective of the robot for field oriented driving
-        self.drivetrain.set_forward_perspective()
-
     def create_commands_test(self):
         # Set the SysId routine to run
         self.shooter.set_sys_id_routine()

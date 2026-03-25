@@ -83,7 +83,7 @@ class Vision(Subsystem):
                 camera_index,
                 camera,
                 pose_est,
-                current_state,
+                current_state
             )
 
             if measurement == None:
@@ -92,17 +92,13 @@ class Vision(Subsystem):
             pose, timestamp, std_devs = measurement
             self.add_vision_measurement(pose, timestamp, std_devs)
 
-    def reject_pose_estimate(self, current_state: swerve.SwerveDrivetrain.SwerveDriveState, pose: Pose3d) -> bool:
-        current_linear_speed = hypot(current_state.speeds.vx, current_state.speeds.vy)
-        current_angular_speed = current_state.speeds.omega
+    def reject_pose_estimate(self, pose: Pose3d) -> bool:
         pitch_deg, roll_deg = self.get_robot_tilt()
 
         return not (
             -0.25 < pose.Z() < 0.5
             and 0.0 < pose.X() < self.april_tag_layout.getFieldLength()
             and 0.0 < pose.Y() < self.april_tag_layout.getFieldWidth()
-            and current_linear_speed <= self.max_linear_speed
-            and abs(current_angular_speed) <= self.max_angular_speed
             and abs(pitch_deg) <= self.max_tilt_deg
             and abs(roll_deg) <= self.max_tilt_deg
         )
@@ -126,14 +122,27 @@ class Vision(Subsystem):
 
         return total_distance / tag_count 
 
-    def calc_std_dev(self, estimated_pose: EstimatedRobotPose, camera_index: int):
+    def speed_factor(current_speed: float, max_speed: float) -> float:
+        speed_ratio = current_speed / max_speed
+        if speed_ratio <= 0.5:
+            return 1.0
+        else:
+            return speed_ratio / 0.5
+    
+    def calc_std_dev(self, estimated_pose: EstimatedRobotPose, current_state: swerve.SwerveDrivetrain.SwerveDriveState,
+                     camera_index: int):
         avg_tag_distance = self.get_average_tag_distance(estimated_pose)
+        current_linear_speed = abs(hypot(current_state.speeds.vx, current_state.speeds.vy))
+        current_angular_speed = abs(current_state.speeds.omega)
 
         tag_count = len(estimated_pose.targetsUsed)
         if avg_tag_distance is None or tag_count == 0:
             return None
 
         distance_factor = (avg_tag_distance ** 2.0) / tag_count
+
+        linear_speed_factor = self.speed_factor(current_linear_speed, self.max_linear_speed)
+        angular_speed_factor = self.speed_factor(current_angular_speed, self.max_angular_speed)
 
         camera_factor = (
             self.camera_std_dev_factors[camera_index]
@@ -145,12 +154,14 @@ class Vision(Subsystem):
             self.linear_std_dev_baseline
             * distance_factor
             * camera_factor
+            * linear_speed_factor
         )
 
         angular_std_dev = (
             self.angular_std_dev_baseline
             * distance_factor
             * camera_factor
+            * angular_speed_factor
         )
 
         return (linear_std_dev, linear_std_dev, angular_std_dev)
@@ -168,11 +179,11 @@ class Vision(Subsystem):
 
         pose = pose_est.estimateCoprocMultiTagPose(latest_result)
 
-        if pose is None or self.reject_pose_estimate(current_state,pose.estimatedPose):
+        if pose is None or self.reject_pose_estimate(pose.estimatedPose):
             return None
 
         return (
             pose.estimatedPose.toPose2d(),
             pose.timestampSeconds,
-            self.calc_std_dev(pose, camera_index),
+            self.calc_std_dev(pose, current_state, camera_index),
         )
