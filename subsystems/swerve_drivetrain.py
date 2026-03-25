@@ -95,7 +95,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             swerve.requests.FieldCentric()
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
+            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
             .with_desaturate_wheel_speeds(True)
         )
 
@@ -103,14 +103,14 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         self._apply_robot_speeds = (
             swerve.requests.ApplyRobotSpeeds()
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
+            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
             .with_desaturate_wheel_speeds(True)
         )
 
         self.rotate_robot_request = (
             swerve.requests.FieldCentricFacingAngle()
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
+            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.BLUE_ALLIANCE)
             .with_heading_pid(10, 0, 0)
         )
@@ -288,7 +288,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         requested_vy = abs(strafe_speed) * strafe_speed * self.max_linear_speed
         requested_omega = rotation_speed * rotation_speed * rotation_speed * self.max_angular_speed
         
-        # Clamp requested velocity to a window around ACTUAL velocity
+        # Clamp requested velocity to a window around actual velocity
         limited_vx = max(current_vx - self.max_linear_accel, min(requested_vx, current_vx + self.max_linear_accel))
         limited_vy = max(current_vy - self.max_linear_accel, min(requested_vy, current_vy + self.max_linear_accel))
         limited_omega = max(current_omega - self.max_angular_accel, min(requested_omega, current_omega + self.max_angular_accel))
@@ -296,15 +296,15 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         if left_trigger_pressed and right_trigger_pressed:
             scale_factor = 1.0
         else:
-            scale_factor = 0.75
+            scale_factor = 0.50
         
         operator_drive_request = (
             self.field_centric_request
-            .with_velocity_x(requested_vx * scale_factor)
-            .with_velocity_y(requested_vy * scale_factor)
-            .with_rotational_rate(requested_omega * scale_factor)
+            .with_velocity_x(limited_vx * scale_factor)
+            .with_velocity_y(limited_vy * scale_factor)
+            .with_rotational_rate(limited_omega * scale_factor)
             .with_deadband((self.max_linear_speed * scale_factor) * 0.075)
-            .with_rotational_deadband((self.max_angular_speed * scale_factor) * 0.05)
+            .with_rotational_deadband((self.max_angular_speed * scale_factor) * 0.075)
         )
 
         return operator_drive_request

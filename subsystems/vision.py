@@ -66,15 +66,12 @@ class Vision(Subsystem):
             (self.front_right_camera, self.front_right_camera_pose_est),
         ]
 
-    @staticmethod
     def _load_april_tag_layout(field_type: str) -> AprilTagFieldLayout:
         field_layouts = {
             "AndyMark": AprilTagField.k2026RebuiltAndyMark,
             "Welded": AprilTagField.k2026RebuiltWelded,
         }
         april_tag_field = field_layouts.get(field_type)
-        if april_tag_field is None:
-            raise ValueError(f"Unsupported field type: {field_type}")
 
         return AprilTagFieldLayout.loadField(april_tag_field)
 
@@ -129,8 +126,7 @@ class Vision(Subsystem):
 
         return total_distance / tag_count 
 
-    def calc_std_dev(self, estimated_pose: EstimatedRobotPose, camera_index: int,
-                     latency_ms: float):
+    def calc_std_dev(self, estimated_pose: EstimatedRobotPose, camera_index: int):
         avg_tag_distance = self.get_average_tag_distance(estimated_pose)
 
         tag_count = len(estimated_pose.targetsUsed)
@@ -145,25 +141,16 @@ class Vision(Subsystem):
             else 1.0
         )
 
-        nominal_latency_ms = 100
-        latency_factor = (
-            max(latency_ms, nominal_latency_ms) / nominal_latency_ms
-            if nominal_latency_ms > 0.0
-            else 1.0
-        )
-
         linear_std_dev = (
             self.linear_std_dev_baseline
             * distance_factor
             * camera_factor
-            * latency_factor
         )
 
         angular_std_dev = (
             self.angular_std_dev_baseline
             * distance_factor
             * camera_factor
-            * latency_factor
         )
 
         return (linear_std_dev, linear_std_dev, angular_std_dev)
@@ -184,10 +171,8 @@ class Vision(Subsystem):
         if pose is None or self.reject_pose_estimate(current_state,pose.estimatedPose):
             return None
 
-        latency_ms = latest_result.getLatencyMillis()
-
         return (
             pose.estimatedPose.toPose2d(),
             pose.timestampSeconds,
-            self.calc_std_dev(pose, camera_index, latency_ms),
+            self.calc_std_dev(pose, camera_index),
         )

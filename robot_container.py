@@ -242,14 +242,14 @@ class RobotContainer:
 
     def create_commands_test(self):
         # Set the SysId routine to run
-        self.drivetrain.set_sys_id_routine()
+        self.shooter.set_sys_id_routine()
 
         # Set button bindings for starting and stopping SignalLogger
         self.controller.leftBumper().onTrue(commands2.cmd.runOnce(SignalLogger.start))
         self.controller.rightBumper().onTrue(commands2.cmd.runOnce(SignalLogger.stop))
 
         # Set button bindings for performing various parts of SysID routine
-        self.controller.y().whileTrue(self.drivetrain.sys_id_dynamic(SysIdRoutine.Direction.kForward))
-        self.controller.a().whileTrue(self.drivetrain.sys_id_dynamic(SysIdRoutine.Direction.kReverse))
-        self.controller.b().whileTrue(self.drivetrain.sys_id_quasistatic(SysIdRoutine.Direction.kForward))
-        self.controller.x().whileTrue(self.drivetrain.sys_id_quasistatic(SysIdRoutine.Direction.kReverse))
+        self.controller.y().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kForward))
+        self.controller.a().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kReverse))
+        self.controller.b().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kForward))
+        self.controller.x().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kReverse))
