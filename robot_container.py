@@ -1,14 +1,26 @@
+from pathlib import Path
+
 import commands2
-from commands2 import ParallelCommandGroup, ParallelDeadlineGroup, RepeatCommand, SequentialCommandGroup, WaitCommand, WaitUntilCommand
+from commands2 import (
+    Command,
+    DeferredCommand,
+    ParallelCommandGroup,
+    ParallelDeadlineGroup,
+    RepeatCommand,
+    SequentialCommandGroup,
+    WaitCommand,
+    WaitUntilCommand,
+)
 from commands2.sysid import SysIdRoutine
 from phoenix6 import SignalLogger
 
-from pathplannerlib.auto import NamedCommands
+from pathplannerlib.auto import AutoBuilder, NamedCommands, PathPlannerAuto
+from pathplannerlib.util import FlippingUtil
 
-from wpilib import DriverStation
 
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import inchesToMeters, feetToMeters
+from wpilib import DriverStation, SmartDashboard, getDeployDirectory, reportWarning
 
 from constants.shot_calculator_constants import get_hub_center
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
@@ -17,20 +29,24 @@ from constants.hopper_constants import HopperConstants
 from constants.intake_constants import IntakeConstants
 from constants.vision_constants import VisionConstants
 
+
 class RobotContainer:
+    AUTO_SHOOT_SPINUP_SECONDS = 0.75
+    AUTO_INTAKE_VOLTS = 12.0
+
     def __init__(self):
         # Define max speed variables
         self.max_linear_speed = SwerveDrivetrainConstants._max_linear_speed
         self.max_angular_rate = SwerveDrivetrainConstants._max_angular_speed
 
-        #Create controller
+        # Create controller
         self.controller = commands2.button.CommandXboxController(0)
-        
+
         # Create drivetrain subsystem
         self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
 
         launcher_offset = self.drivetrain.shooter_offset.translation()
-                     
+
         # Create shooter subsystem
         self.shooter = ShooterConstants.create_shooter(
             self.drivetrain.get_state,
@@ -43,17 +59,17 @@ class RobotContainer:
             launcher_offset.y,
         )
 
-        # #Create hopper subsystem
+        # Create hopper subsystem
         self.hopper = HopperConstants.create_hopper()
 
-        # #Create intake subsystem
+        # Create intake subsystem
         self.intake = IntakeConstants.create_intake()
 
         # Create vision subsystem
         self.camera = VisionConstants.create_vision(
             self.drivetrain.add_vision_measurement,
             self.drivetrain.get_state,
-            self.drivetrain.get_robot_tilt
+            self.drivetrain.get_robot_tilt,
         )
 
         # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
@@ -69,20 +85,162 @@ class RobotContainer:
         
         NamedCommands.registerCommand("shot_one", '''command goes here''')
         NamedCommands.registerCommand("shot_two", '''command goes here''')
+        self._available_auto_names = self._discover_auto_names()
+        self._last_observed_auto_signature: tuple[str | None, bool] | None = None
+        self._last_seeded_auto_signature: tuple[str | None, bool] | None = None
+        self._selected_auto_pose_seeded = False
+
+        self._register_named_commands()
+
+        self.auto_chooser = AutoBuilder.buildAutoChooser()
+        SmartDashboard.putData("Auto Chooser", self.auto_chooser)
 
         self.create_button_bindings()
 
-    def create_commands_auto(self):
-        pass
+    def _discover_auto_names(self) -> set[str]:
+        auto_dir = Path(getDeployDirectory()) / "pathplanner" / "autos"
+        if not auto_dir.exists():
+            return set()
 
-    def create_commands_teleop(self):   
+        return {auto_file.stem for auto_file in auto_dir.glob("*.auto")}
+
+    def _register_named_commands(self):
+        NamedCommands.registerCommand(
+            "Run Intake",
+            DeferredCommand(lambda: self._build_run_intake_command(), self.intake),
+        )
+        NamedCommands.registerCommand(
+            "Turn Off Intake",
+            DeferredCommand(lambda: self._build_turn_off_intake_command(), self.intake),
+        )
+        NamedCommands.registerCommand(
+            "Run Shooter 2m",
+            DeferredCommand(lambda: self._build_run_shooter_command(2.0), self.shooter, self.hopper),
+        )
+        NamedCommands.registerCommand(
+            "Run Shooter 3m",
+            DeferredCommand(lambda: self._build_run_shooter_command(3.0), self.shooter, self.hopper),
+        )
+
+    def _build_run_intake_command(self) -> Command:
+        return SequentialCommandGroup(
+            self.intake.runOnce(lambda: self.intake.arm_down()),
+            self.intake.runOnce(lambda: self.intake.set_intake_speed(self.AUTO_INTAKE_VOLTS)),
+        )
+
+    def _build_turn_off_intake_command(self) -> Command:
+        return self.intake.runOnce(lambda: self.intake.set_intake_speed(0))
+
+    def _build_run_shooter_command(self, distance_m: float) -> Command:
+        return SequentialCommandGroup(
+            self.shooter.create_fixed_distance_shoot_command(distance_m),
+            WaitCommand(self.AUTO_SHOOT_SPINUP_SECONDS),
+            self.hopper.create_feed_cycle_command(),
+            ParallelCommandGroup(
+                self.hopper.create_stop_command(),
+                self.shooter.create_stop_command(),
+            ),
+        )
+
+    def _get_selected_auto_signature(self) -> tuple[str | None, bool]:
+        return (self.get_selected_auto_name(), AutoBuilder.shouldFlip())
+
+    def create_commands_auto(self):
+        self.drivetrain.set_forward_perspective()
+        self.intake.runOnce(
+            lambda: self.intake.arm_down()
+        ).schedule()
+
+    def create_commands_teleop(self):
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain.set_forward_perspective()
 
-        # self.intake.runOnce(
-        #     lambda: self.intake.arm_down()
-        # ).schedule()
-        
+    def get_selected_auto_command(self) -> Command | None:
+        selected_name = self.get_selected_auto_name()
+        if selected_name is None:
+            return None
+
+        selected_command = self.auto_chooser.getSelected()
+        if selected_command is None:
+            return None
+
+        return selected_command
+
+    def get_selected_auto_name(self) -> str | None:
+        selected_command = self.auto_chooser.getSelected()
+        if selected_command is None:
+            return None
+
+        selected_name = selected_command.getName()
+        if selected_name not in self._available_auto_names:
+            return None
+
+        return selected_name
+
+    def get_selected_auto_start_pose(self) -> Pose2d | None:
+        selected_auto_name = self.get_selected_auto_name()
+        if selected_auto_name is None:
+            return None
+
+        try:
+            path_group = PathPlannerAuto.getPathGroupFromAutoFile(selected_auto_name)
+        except Exception as exc:
+            reportWarning(
+                f"Unable to load the starting pose for auto '{selected_auto_name}': {exc}",
+                False,
+            )
+            return None
+
+        if len(path_group) == 0:
+            return None
+
+        start_path = path_group[0]
+        start_pose = start_path.getStartingHolonomicPose()
+        if start_pose is None:
+            start_pose = start_path.getStartingDifferentialPose()
+
+        if AutoBuilder.shouldFlip():
+            start_pose = FlippingUtil.flipFieldPose(start_pose)
+
+        return start_pose
+
+    def refresh_auto_preview_if_needed(self) -> None:
+        if not DriverStation.isDisabled():
+            return
+
+        auto_signature = self._get_selected_auto_signature()
+        if auto_signature == self._last_observed_auto_signature:
+            return
+
+        self._last_observed_auto_signature = auto_signature
+        self._selected_auto_pose_seeded = False
+
+        start_pose = self.get_selected_auto_start_pose()
+        if start_pose is None:
+            self._last_seeded_auto_signature = None
+            return
+
+        self.drivetrain.reset_pose(start_pose)
+        self._last_seeded_auto_signature = auto_signature
+        self._selected_auto_pose_seeded = True
+
+    def ensure_selected_auto_pose_seeded(self) -> None:
+        auto_signature = self._get_selected_auto_signature()
+        start_pose = self.get_selected_auto_start_pose()
+
+        self._last_observed_auto_signature = auto_signature
+
+        if start_pose is None:
+            self._last_seeded_auto_signature = None
+            self._selected_auto_pose_seeded = False
+            return
+
+        if self._last_seeded_auto_signature != auto_signature or not self._selected_auto_pose_seeded:
+            self.drivetrain.reset_pose(start_pose)
+
+        self._last_seeded_auto_signature = auto_signature
+        self._selected_auto_pose_seeded = True
+
     def create_button_bindings(self):
         # Set button binding for reseting field centric heading
         (self.controller.leftBumper() & self.controller.rightBumper()).onTrue(
@@ -111,7 +269,7 @@ class RobotContainer:
                 ),
                 self.intake.runOnce(
                     lambda: self.intake.set_intake_speed(0)
-                )   
+                )
             )
         )
 
@@ -153,7 +311,7 @@ class RobotContainer:
         self.controller.b().onTrue(
             SequentialCommandGroup(
                 ParallelDeadlineGroup(
-                    SequentialCommandGroup(        
+                    SequentialCommandGroup(
                         commands2.InstantCommand(
                             lambda: self.shooter.reset_calculated_shot_state()
                         ),
@@ -267,9 +425,9 @@ class RobotContainer:
 
 
     def create_commands_test(self):
-        # # Set the SysId routine to run
+        # Set the SysId routine to run
         self.drivetrain.set_sys_id_routine()
-    
+
         # Set button bindings for starting and stopping SignalLogger
         self.controller.leftBumper().onTrue(commands2.cmd.runOnce(SignalLogger.start))
         self.controller.rightBumper().onTrue(commands2.cmd.runOnce(SignalLogger.stop))

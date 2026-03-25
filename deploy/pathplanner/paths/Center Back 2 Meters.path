@@ -16,12 +16,12 @@
     },
     {
       "anchor": {
-        "x": 1.574636878438077,
-        "y": 4.033744036509909
+        "x": 1.75,
+        "y": 4.25463152642431
       },
       "prevControl": {
-        "x": 1.974636878438077,
-        "y": 4.033744036509909
+        "x": 2.1499999999999995,
+        "y": 4.25463152642431
       },
       "nextControl": null,
       "isLocked": false,
@@ -45,10 +45,10 @@
     "rotation": 0.0
   },
   "reversed": false,
-  "folder": "Imported Online",
+  "folder": null,
   "idealStartingState": {
     "velocity": 0,
-    "rotation": 0.0
+    "rotation": 180.0
   },
   "useDefaultConstraints": true
 }

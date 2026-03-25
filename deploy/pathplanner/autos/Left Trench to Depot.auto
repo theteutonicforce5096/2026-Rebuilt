@@ -7,19 +7,19 @@
         {
           "type": "path",
           "data": {
-            "pathName": null
+            "pathName": "Left Trench to Depot and Back"
           }
         },
         {
           "type": "named",
           "data": {
-            "name": null
+            "name": "Run Shooter 3m"
           }
         }
       ]
     }
   },
-  "resetOdom": true,
+  "resetOdom": false,
   "folder": null,
   "choreoAuto": false
 }
