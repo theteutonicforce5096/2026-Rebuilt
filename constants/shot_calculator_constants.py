@@ -44,8 +44,8 @@ class Config:
     launcher_offset_x: float = 0.20
     launcher_offset_y: float = 0.0
 
-    min_scoring_distance: float = 0.5
-    max_scoring_distance: float = 5.0
+    min_scoring_distance: float = 1.0
+    max_scoring_distance: float = 10.0
 
     max_iterations: int = 25
     convergence_tolerance: float = 0.001

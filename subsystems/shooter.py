@@ -1,7 +1,15 @@
 from typing import Any, Callable, Final
 
 from commands2 import Subsystem
-from commands2 import DeferredCommand, PrintCommand, SequentialCommandGroup, WaitUntilCommand
+from commands2 import (
+    DeferredCommand,
+    ParallelCommandGroup,
+    ParallelDeadlineGroup,
+    PrintCommand,
+    RepeatCommand,
+    SequentialCommandGroup,
+    WaitUntilCommand,
+)
 
 from phoenix6 import CANBus, SignalLogger
 from phoenix6.controls import VelocityVoltage, VoltageOut
@@ -14,7 +22,7 @@ from ntcore import NetworkTableInstance
 from wpilib import RobotBase, SendableChooser, Timer
 from wpilib.shuffleboard import Shuffleboard
 from wpilib.sysid import SysIdRoutineLog
-from wpimath.geometry import Translation2d
+from wpimath.geometry import Rotation2d, Transform2d, Translation2d
 from wpimath.kinematics import ChassisSpeeds
 
 from constants.shot_calculator import ShotCalculator
@@ -22,6 +30,7 @@ from constants.shot_calculator_constants import (
     Config as ShotCalculatorConfig,
     LaunchParameters,
     ShotInputs,
+    calc_shooter_to_hub_distance,
     calc_shot_profile,
 )
 
@@ -30,7 +39,7 @@ class Shooter(Subsystem):
     Class for controlling shooter.
     """
 
-    DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS: Final[float] = 26.5
+    DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS: Final[float] = 25
     CALCULATED_FEED_CONFIDENCE_THRESHOLD: Final[float] = 50.0
 
     def __init__(self, canbus: CANBus, flywheel_motor_id: int, flywheel_intake_motor_id: int, 
@@ -164,6 +173,7 @@ class Shooter(Subsystem):
             )
         )
         self._latest_calculated_shot: LaunchParameters | None = None
+        self._last_flywheel_target_rps = 0.0
 
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
@@ -234,15 +244,16 @@ class Shooter(Subsystem):
 
     def _apply_calculated_shot(self):
         self._latest_calculated_shot = self._calculate_launch_parameters()
+        should_run_calculated_shot = self.should_feed_calculated_shot(self._latest_calculated_shot)
 
         flywheel_target_velocity = (
             self._latest_calculated_shot.flywheel_rps
-            if self._latest_calculated_shot is not None
+            if should_run_calculated_shot
             else 0.0
         )
         intake_motor_velocity = (
             self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
-            if self._latest_calculated_shot is not None
+            if should_run_calculated_shot and self.is_flywheel_at_setpoint()
             else 0.0
         )
 
@@ -263,24 +274,96 @@ class Shooter(Subsystem):
     def get_latest_calculated_shot(self) -> LaunchParameters | None:
         return self._latest_calculated_shot
 
+    def is_flywheel_at_setpoint(self, tolerance_rps: float = 1.0) -> bool:
+        return (
+            self._last_flywheel_target_rps > 0.0
+            and self.flywheel_motor.get_closed_loop_error().is_near(0, tolerance_rps)
+        )
+
     def create_manual_shoot_command(self):
         return DeferredCommand(
             lambda: self.shoot(
                 self.desired_ball_speed_sub.get(),
-                self.desired_flywheel_intake_speed_sub.get()
+                (
+                    self.desired_flywheel_intake_speed_sub.get()
+                    if self.is_flywheel_at_setpoint()
+                    else 0.0
+                )
             ),
             self
+        )
+
+    def create_manual_feed_command(self, hopper):
+        return DeferredCommand(
+            lambda: (
+                hopper.create_feed_cycle_command()
+                if self.is_flywheel_at_setpoint()
+                else hopper.create_stop_command()
+            ),
+            hopper
         )
 
     def get_fixed_distance_shot_targets(self, distance_m: float) -> tuple[float, float]:
         flywheel_target_velocity, _ = calc_shot_profile(distance_m)
         return flywheel_target_velocity, self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
 
+    def get_current_auto_shot_targets(self) -> tuple[float, float, float]:
+        current_state = self._get_current_swerve_state()
+        shooter_offset = Transform2d(
+            Translation2d(
+                self.shot_calculator.config.launcher_offset_x,
+                self.shot_calculator.config.launcher_offset_y,
+            ),
+            Rotation2d(),
+        )
+        distance_m = calc_shooter_to_hub_distance(
+            current_state.pose,
+            self._get_hub_center(),
+            shooter_offset,
+        )
+        flywheel_target_velocity, _ = self.shot_calculator.get_profile_for_distance(distance_m)
+        return distance_m, flywheel_target_velocity, self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
+
     def create_fixed_distance_shoot_command(self, distance_m: float):
         return self.run(
             lambda: self.set_flywheel_velocities(*self.get_fixed_distance_shot_targets(distance_m))
         ).until(
             lambda: self.flywheel_motor.get_closed_loop_error().is_near(0, 1)
+        )
+
+    def create_auto_run_shooter_command(self, hopper):
+        return DeferredCommand(
+            lambda: self._build_auto_run_shooter_command(hopper),
+            self, 
+            hopper
+        )
+
+    def _build_auto_run_shooter_command(self, hopper):
+        _, flywheel_target_velocity, intake_target_velocity = self.get_current_auto_shot_targets()
+        return SequentialCommandGroup(
+            self.runOnce(lambda: self.reset_empty_time()),
+            self.runOnce(lambda: self.set_flywheel_velocities(flywheel_target_velocity, 0.0)),
+            WaitUntilCommand(lambda: self.is_flywheel_at_setpoint()),
+            ParallelDeadlineGroup(
+                WaitUntilCommand(lambda: self.detect_empty()),
+                self.run(
+                    lambda: self.set_flywheel_velocities(
+                        flywheel_target_velocity,
+                        (
+                            intake_target_velocity
+                            if self.is_flywheel_at_setpoint()
+                            else 0.0
+                        ),
+                    )
+                ),
+                RepeatCommand(
+                    self.create_manual_feed_command(hopper)
+                ),
+            ),
+            ParallelCommandGroup(
+                hopper.create_stop_command(),
+                self.create_stop_command(),
+            ),
         )
 
     def create_calculated_shoot_command(self):
@@ -292,7 +375,10 @@ class Shooter(Subsystem):
         return DeferredCommand(
             lambda: (
                 hopper.create_feed_cycle_command()
-                if self.should_feed_calculated_shot(self._latest_calculated_shot)
+                if (
+                    self.should_feed_calculated_shot(self._latest_calculated_shot)
+                    and self.is_flywheel_at_setpoint()
+                )
                 else hopper.create_stop_command()
             ),
             hopper
@@ -310,6 +396,7 @@ class Shooter(Subsystem):
         )
     
     def set_flywheel_velocities(self, flywheel_target_velocity, intake_motor_velocity):
+        self._last_flywheel_target_rps = flywheel_target_velocity
         self.flywheel_motor.set_control(
             self.velocity_pid_request.with_velocity(flywheel_target_velocity)
         )
@@ -350,6 +437,7 @@ class Shooter(Subsystem):
 
 #Detect amp surge functions (to determine if the hopper is empty)
     def detect_empty(self):
+        print(self.flywheel_intake_motor.get_closed_loop_error().is_near(0, 1))
         if self.flywheel_intake_motor.get_closed_loop_error().is_near(0, 1) == True:
             self.surging = False
 

@@ -29,7 +29,10 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         
     def autonomousInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
-        pass
+        self.robot_container.create_commands_auto()
+        self.autonomous_command = self.robot_container.get_selected_auto_command()
+        if self.autonomous_command is not None:
+            self.autonomous_command.schedule()
 
     def teleopInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()

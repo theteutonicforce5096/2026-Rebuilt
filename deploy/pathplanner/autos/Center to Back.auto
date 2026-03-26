@@ -13,13 +13,13 @@
         {
           "type": "named",
           "data": {
-            "name": "Run Shooter 2m"
+            "name": "Auto Run Shooter"
           }
         }
       ]
     }
   },
-  "resetOdom": false,
+  "resetOdom": true,
   "folder": null,
   "choreoAuto": false
 }
