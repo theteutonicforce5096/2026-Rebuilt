@@ -1,7 +1,7 @@
 from typing import Callable, Any
 from math import pi
 
-from commands2 import Subsystem
+from commands2 import FunctionalCommand, Subsystem
 from commands2.sysid import SysIdRoutine
 
 from phoenix6 import swerve, utils, SignalLogger
@@ -30,7 +30,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                  drivetrain_constants: swerve.SwerveDrivetrainConstants,
                  modules: list[swerve.SwerveModuleConstants],
                  odometry_update_frequency: float, max_linear_speed: float, max_angular_speed: float,
-                 max_linear_rate_of_change: float, max_angular_rate_of_change: float, field_type: str):
+                 max_linear_rate_of_change: float, max_angular_rate_of_change: float,
+                 field_type: str, wheel_radius: float):
         """
         Constructor for initializing swerve drivetrain using the specified constants.
 
@@ -81,6 +82,10 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         self.max_angular_rate_of_change = max_angular_rate_of_change
 
         self.field_type = field_type
+        self.wheel_radius = wheel_radius
+        self._drive_base_radius = sum(
+            module_location.norm() for module_location in self.module_locations
+        ) / len(self.module_locations)
 
         # Create shooter position variable
         self.shooter_offset = default_shooter_offset
@@ -522,3 +527,63 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         :type direction: SysIdRoutine.Direction
         """
         return self.sys_id_routine_to_apply.dynamic(direction)
+
+    def create_effective_wheel_radius_characterization_command(self):
+        characterization_omega_rad_per_sec = 0.5
+        initial_yaw_deg = 0.0
+        initial_distances_m = [0.0] * len(self.modules)
+
+        def initialize():
+            nonlocal initial_yaw_deg, initial_distances_m
+            initial_yaw_deg = self.pigeon2.get_yaw().value_as_double
+            initial_distances_m = [
+                self.get_module(module_index).get_position(True).distance
+                for module_index in range(len(self.modules))
+            ]
+
+        def execute():
+            self.set_control(
+                self.field_centric_request
+                .with_velocity_x(0.0)
+                .with_velocity_y(0.0)
+                .with_rotational_rate(characterization_omega_rad_per_sec)
+            )
+
+            current_yaw_deg = self.pigeon2.get_yaw().value_as_double
+            yaw_delta_rad = abs(current_yaw_deg - initial_yaw_deg) * pi / 180.0
+            wheel_distance_delta_m = [
+                abs(self.get_module(module_index).get_position(True).distance - initial_distances_m[module_index])
+                for module_index in range(len(self.modules))
+            ]
+            average_wheel_delta_m = sum(wheel_distance_delta_m) / len(wheel_distance_delta_m)
+
+            if average_wheel_delta_m <= 1e-9 or yaw_delta_rad <= 1e-9:
+                return
+
+            effective_wheel_radius_m = (
+                self.wheel_radius
+                * self._drive_base_radius
+                * yaw_delta_rad
+                / average_wheel_delta_m
+            )
+            print(
+                "Effective wheel radius:"
+                f" {effective_wheel_radius_m:.6f} m"
+                f" ({effective_wheel_radius_m / 0.0254:.3f} in)"
+            )
+
+        def end(interrupted: bool):
+            self.set_control(
+                self.field_centric_request
+                .with_velocity_x(0.0)
+                .with_velocity_y(0.0)
+                .with_rotational_rate(0.0)
+            )
+
+        return FunctionalCommand(
+            initialize,
+            execute,
+            end,
+            lambda: False,
+            self,
+        )

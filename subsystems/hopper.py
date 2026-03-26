@@ -149,9 +149,9 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
     def create_feed_cycle_command(self):
         return SequentialCommandGroup(
             self.run_hopper(20, 3),
-            WaitCommand(0.75),
+            WaitCommand(0.4),
             self.run_hopper(20, -3),
-            WaitCommand(0.25)
+            WaitCommand(0.1)
         )
 
     def create_stop_command(self):

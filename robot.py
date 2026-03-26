@@ -44,4 +44,4 @@ class RebuiltRobot(commands2.TimedCommandRobot):
 
     def testInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
-        # self.robot_container.create_commands_test()
+        self.robot_container.create_commands_test()

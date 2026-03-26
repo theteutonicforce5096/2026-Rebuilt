@@ -285,4 +285,5 @@ class SwerveDrivetrainConstants:
             cls._max_linear_rate_of_change,
             cls._max_angular_rate_of_change,
             cls._field_type,
+            cls._wheel_radius,
         )
