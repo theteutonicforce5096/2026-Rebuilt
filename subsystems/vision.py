@@ -122,7 +122,7 @@ class Vision(Subsystem):
 
         return total_distance / tag_count 
 
-    def speed_factor(current_speed: float, max_speed: float) -> float:
+    def speed_factor(self, current_speed: float, max_speed: float) -> float:
         speed_ratio = current_speed / max_speed
         if speed_ratio <= 0.5:
             return 1.0
@@ -185,5 +185,5 @@ class Vision(Subsystem):
         return (
             pose.estimatedPose.toPose2d(),
             pose.timestampSeconds,
-            self.calc_std_dev(pose, current_state, camera_index),
+            self.calc_std_dev(pose, current_state, camera_index)
         )

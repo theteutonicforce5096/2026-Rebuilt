@@ -36,7 +36,7 @@ class ShooterConstants:
     # _flywheel_motor_configs.external_feedback.with_rotor_to_sensor_ratio(1.0)
     _flywheel_motor_configs.slot0.with_k_s(0.11618)
     _flywheel_motor_configs.slot0.with_k_v(0.10922)
-    _flywheel_motor_configs.slot0.with_k_p(0.175)
+    _flywheel_motor_configs.slot0.with_k_p(0.125)
     _flywheel_motor_configs.slot0.with_k_i(0)
     _flywheel_motor_configs.slot0.with_k_d(0)
 

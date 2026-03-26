@@ -20,8 +20,8 @@ class IntakeConstants:
     _num_config_attempts = 3
 
     # Arm Position Constants #TODO confirm values
-    _intake_position = 0.48
-    _stowed_position = -0.090
+    _intake_position = 0.49 #0.490479 rotations
+    _stowed_position = -0.085 #-0.085449 rotations
 
     # Intake Wheel Configs (Random ahh brushed motor - TalonFXS)
     _intake_wheel_configs = TalonFXSConfiguration()

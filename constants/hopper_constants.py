@@ -21,18 +21,18 @@ class HopperConstants:
     # mecanum Wheel Configs (TalonFX)
     _mecanum_wheel_configs = TalonFXConfiguration()
     _mecanum_wheel_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
-    _mecanum_wheel_configs.current_limits.with_stator_current_limit(20)
+    _mecanum_wheel_configs.current_limits.with_stator_current_limit(40)
     _mecanum_wheel_configs.current_limits.with_stator_current_limit_enable(True)
     _mecanum_wheel_configs.slot0.with_k_s(0.15736)
     _mecanum_wheel_configs.slot0.with_k_v(0.122)
-    _mecanum_wheel_configs.slot0.with_k_p(0.6)
+    _mecanum_wheel_configs.slot0.with_k_p(0.5)
     _mecanum_wheel_configs.slot0.with_k_i(0)
     _mecanum_wheel_configs.slot0.with_k_d(0)
 
     # Agitator Wheel Configs (TalonFX)
     _agitator_wheel_configs = TalonFXConfiguration()
     _agitator_wheel_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
-    _agitator_wheel_configs.current_limits.with_stator_current_limit(20)
+    _agitator_wheel_configs.current_limits.with_stator_current_limit(80)
     _agitator_wheel_configs.current_limits.with_stator_current_limit_enable(True)
     
     @classmethod
