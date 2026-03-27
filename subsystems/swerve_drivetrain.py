@@ -112,7 +112,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
             .with_desaturate_wheel_speeds(True)
-            .with_heading_pid(10, 0, 0)
+            .with_heading_pid(7.5, 0, 0)
         )
 
         # Create Apply Robot Speeds Request for PathPlanner
@@ -129,7 +129,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
             .with_desaturate_wheel_speeds(True)
-            .with_heading_pid(10, 0, 0)
+            .with_heading_pid(7.5, 0, 0)
         )
 
         self.rotate_robot_pid_controller = self.rotate_robot_request.heading_controller
