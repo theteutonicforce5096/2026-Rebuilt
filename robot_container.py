@@ -108,6 +108,7 @@ class RobotContainer:
         self.drivetrain.set_forward_perspective()
         self.drivetrain.reset_operator_heading_tracking()
 
+        self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.run_hopper(0, 0),
         self.shooter.set_flywheel_velocities(0, 0)
@@ -231,6 +232,6 @@ class RobotContainer:
         )
 
     def create_commands_test(self):
-        self.controller.x().whileTrue(
+        self.controller.x().onTrue(
             self.drivetrain.create_effective_wheel_radius_characterization_command()
         )

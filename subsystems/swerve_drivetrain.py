@@ -6,7 +6,7 @@ from commands2.sysid import SysIdRoutine
 
 from phoenix6 import swerve, utils, SignalLogger
 
-from wpilib import DriverStation, Field2d, Notifier, RobotController, SendableChooser, SmartDashboard
+from wpilib import DriverStation, Field2d, Notifier, RobotController, SendableChooser, SmartDashboard, Timer
 from wpilib.shuffleboard import Shuffleboard
 from wpilib.sysid import SysIdRoutineLog
 from wpimath.geometry import Rotation2d, Translation2d
@@ -529,9 +529,11 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         return self.sys_id_routine_to_apply.dynamic(direction)
 
     def create_effective_wheel_radius_characterization_command(self):
-        characterization_omega_rad_per_sec = 0.5
+        ramp_duration_sec = 1.0
+        characterization_duration_sec = 2.0
         initial_yaw_deg = 0.0
         initial_distances_m = [0.0] * len(self.modules)
+        timer = Timer()
 
         def initialize():
             nonlocal initial_yaw_deg, initial_distances_m
@@ -540,17 +542,36 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                 self.get_module(module_index).get_position(True).distance
                 for module_index in range(len(self.modules))
             ]
+            timer.restart()
 
         def execute():
+            elapsed_sec = timer.get()
+            if elapsed_sec < ramp_duration_sec:
+                requested_omega_rad_per_sec = self.max_angular_speed * (elapsed_sec / ramp_duration_sec)
+            else:
+                requested_omega_rad_per_sec = self.max_angular_speed * max(
+                    0.0,
+                    (characterization_duration_sec - elapsed_sec) / ramp_duration_sec,
+                )
+
             self.set_control(
                 self.field_centric_request
                 .with_velocity_x(0.0)
                 .with_velocity_y(0.0)
-                .with_rotational_rate(characterization_omega_rad_per_sec)
+                .with_rotational_rate(requested_omega_rad_per_sec)
             )
 
-            current_yaw_deg = self.pigeon2.get_yaw().value_as_double
-            yaw_delta_rad = abs(current_yaw_deg - initial_yaw_deg) * pi / 180.0
+        def end(interrupted: bool):
+            timer.stop()
+            self.set_control(
+                self.field_centric_request
+                .with_velocity_x(0.0)
+                .with_velocity_y(0.0)
+                .with_rotational_rate(0.0)
+            )
+
+            final_yaw_deg = self.pigeon2.get_yaw().value_as_double
+            yaw_delta_rad = abs(final_yaw_deg - initial_yaw_deg) * pi / 180.0
             wheel_distance_delta_m = [
                 abs(self.get_module(module_index).get_position(True).distance - initial_distances_m[module_index])
                 for module_index in range(len(self.modules))
@@ -558,6 +579,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             average_wheel_delta_m = sum(wheel_distance_delta_m) / len(wheel_distance_delta_m)
 
             if average_wheel_delta_m <= 1e-9 or yaw_delta_rad <= 1e-9:
+                print("Effective wheel radius characterization did not collect enough movement data.")
                 return
 
             effective_wheel_radius_m = (
@@ -572,18 +594,10 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                 f" ({effective_wheel_radius_m / 0.0254:.3f} in)"
             )
 
-        def end(interrupted: bool):
-            self.set_control(
-                self.field_centric_request
-                .with_velocity_x(0.0)
-                .with_velocity_y(0.0)
-                .with_rotational_rate(0.0)
-            )
-
         return FunctionalCommand(
             initialize,
             execute,
             end,
-            lambda: False,
+            lambda: timer.get() >= characterization_duration_sec,
             self,
         )
