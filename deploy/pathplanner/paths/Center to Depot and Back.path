@@ -32,15 +32,15 @@
     },
     {
       "anchor": {
-        "x": 0.7,
+        "x": 0.625,
         "y": 5.96
       },
       "prevControl": {
-        "x": 0.450000741063377,
+        "x": 0.37500074106337705,
         "y": 5.959391287309685
       },
       "nextControl": {
-        "x": 1.5806292223507905,
+        "x": 1.5056292223507906,
         "y": 5.9621442070884045
       },
       "isLocked": false,
@@ -106,7 +106,19 @@
     }
   ],
   "pointTowardsZones": [],
-  "eventMarkers": [],
+  "eventMarkers": [
+    {
+      "name": "Run Intake",
+      "waypointRelativePos": 1.0870488322717622,
+      "endWaypointRelativePos": null,
+      "command": {
+        "type": "named",
+        "data": {
+          "name": "Run Intake"
+        }
+      }
+    }
+  ],
   "globalConstraints": {
     "maxVelocity": 3.0,
     "maxAcceleration": 3.0,

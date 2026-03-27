@@ -159,7 +159,7 @@ class Shooter(Subsystem):
         self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed in Rotations per Second").subscribe(60)
         self.desired_ball_speed_sub.get()
         self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").publish()
-        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").subscribe(40)
+        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").subscribe(20)
         self.desired_flywheel_intake_speed_sub.get()
 
         self._get_current_swerve_state = get_current_swerve_state
@@ -437,7 +437,6 @@ class Shooter(Subsystem):
 
 #Detect amp surge functions (to determine if the hopper is empty)
     def detect_empty(self):
-        print(self.flywheel_intake_motor.get_closed_loop_error().is_near(0, 1))
         if self.flywheel_intake_motor.get_closed_loop_error().is_near(0, 1) == True:
             self.surging = False
 

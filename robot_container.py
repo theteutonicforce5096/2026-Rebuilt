@@ -56,16 +56,16 @@ class RobotContainer:
             self.drivetrain.get_robot_tilt,
         )
 
-        # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
-        alliance_color = DriverStation.getAlliance()
-        if alliance_color == DriverStation.Alliance.kRed:
-            self.drivetrain.reset_pose(
-                Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(0))
-            )
-        else:
-            self.drivetrain.reset_pose(
-                Pose2d(inchesToMeters(168.56 - 23.51) - feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
-            )
+        # # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
+        # alliance_color = DriverStation.getAlliance()
+        # if alliance_color == DriverStation.Alliance.kRed:
+        #     self.drivetrain.reset_pose(
+        #         Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(0))
+        #     )
+        # else:
+        #     self.drivetrain.reset_pose(
+        #         Pose2d(inchesToMeters(168.56 - 23.51) - feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
+        #     )
         
         self._last_observed_auto_signature: tuple[str | None, bool] | None = None
         self._last_seeded_auto_signature: tuple[str | None, bool] | None = None
