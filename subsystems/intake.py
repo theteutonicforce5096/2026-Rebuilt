@@ -59,6 +59,7 @@ class Intake(Subsystem):
 
         # Create PID control requests
         self.voltage_request = VoltageOut(output = 0)
+        self.arm_voltage_request = VoltageOut(output = 0)
         self.position_voltage_request = PositionVoltage(position = 0)
         # Placeholder values, will need to be tuned
 
@@ -105,13 +106,31 @@ class Intake(Subsystem):
         )
         # print(position)
 
+    def set_arm_voltage(self, arm_voltage):
+        self.intake_arm.set_control(
+            self.arm_voltage_request.with_output(arm_voltage)
+        )
+
     def arm_down(self):
         self.set_setpoint(self.intake_position) 
         print("trying")
         
     def arm_up(self):
-        self.set_setpoint(self.stowed_position)  
-      
+        self.set_setpoint(self.stowed_position)
+
+    def arm_down_manual(self):
+        return self.run(
+            lambda: self.set_arm_voltage(9.0)
+        ).withTimeout(0.5).andThen(
+            self.runOnce(lambda: self.set_arm_voltage(0.0))
+        )
+
+    def arm_up_manual(self):
+        return self.run(
+            lambda: self.set_arm_voltage(-9.0)
+        ).withTimeout(0.5).andThen(
+            self.runOnce(lambda: self.set_arm_voltage(0.0))
+        )
 
         
 

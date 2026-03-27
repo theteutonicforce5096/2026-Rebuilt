@@ -331,19 +331,37 @@ class Shooter(Subsystem):
             lambda: self.flywheel_motor.get_closed_loop_error().is_near(0, 1)
         )
 
-    def create_auto_run_shooter_command(self, hopper):
+    def create_auto_run_shooter_command(self, hopper, drivetrain):
         return DeferredCommand(
-            lambda: self._build_auto_run_shooter_command(hopper),
+            lambda: self._build_auto_run_shooter_command(hopper, drivetrain),
             self, 
-            hopper
+            hopper,
+            drivetrain,
         )
 
-    def _build_auto_run_shooter_command(self, hopper):
+    def _build_auto_run_shooter_command(self, hopper, drivetrain):
         _, flywheel_target_velocity, intake_target_velocity = self.get_current_auto_shot_targets()
+        alignment_timeout = Timer()
+
+        def ready_to_feed():
+            return self.is_flywheel_at_setpoint() and (
+                drivetrain.is_hub_alignment_within_tolerance(2.5)
+                or alignment_timeout.hasElapsed(1.0)
+            )
+
         return SequentialCommandGroup(
             self.runOnce(lambda: self.reset_empty_time()),
-            self.runOnce(lambda: self.set_flywheel_velocities(flywheel_target_velocity, 0.0)),
-            WaitUntilCommand(lambda: self.is_flywheel_at_setpoint()),
+            self.runOnce(lambda: alignment_timeout.restart()),
+            ParallelDeadlineGroup(
+                WaitUntilCommand(ready_to_feed),
+                self.run(
+                    lambda: self.set_flywheel_velocities(
+                        flywheel_target_velocity,
+                        0.0,
+                    )
+                ),
+                drivetrain.create_hold_hub_alignment_command(),
+            ),
             ParallelDeadlineGroup(
                 WaitUntilCommand(lambda: self.detect_empty()),
                 self.run(
@@ -356,13 +374,13 @@ class Shooter(Subsystem):
                         ),
                     )
                 ),
-                RepeatCommand(
-                    self.create_manual_feed_command(hopper)
-                ),
+                RepeatCommand(self.create_manual_feed_command(hopper)),
+                drivetrain.create_hold_hub_alignment_command(),
             ),
             ParallelCommandGroup(
                 hopper.create_stop_command(),
                 self.create_stop_command(),
+                drivetrain.create_stop_command(),
             ),
         )
 

@@ -16,19 +16,24 @@
     },
     {
       "anchor": {
-        "x": 1.75,
-        "y": 4.25463152642431
+        "x": 2.0,
+        "y": 4.225
       },
       "prevControl": {
-        "x": 2.1499999999999995,
-        "y": 4.25463152642431
+        "x": 2.3999999999999995,
+        "y": 4.225
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": null
+      "linkedName": "Center End"
     }
   ],
-  "rotationTargets": [],
+  "rotationTargets": [
+    {
+      "waypointRelativePos": 0.1160464638157894,
+      "rotationDegrees": 90.0
+    }
+  ],
   "constraintZones": [],
   "pointTowardsZones": [],
   "eventMarkers": [],
@@ -48,7 +53,7 @@
   "folder": null,
   "idealStartingState": {
     "velocity": 0,
-    "rotation": 180.0
+    "rotation": 90.0
   },
   "useDefaultConstraints": true
 }

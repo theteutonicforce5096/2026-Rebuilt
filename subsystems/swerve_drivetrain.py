@@ -462,17 +462,38 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
         self.set_control(request)
 
-    def auto_align_to_hub(self):
-        """
-        Rotate the robot to face the hub from the shooter position.
-        """
+    def get_hub_alignment_error(self) -> Rotation2d:
+        return self._get_hub_alignment_angle() - self.get_state().pose.rotation()
 
+    def is_hub_alignment_within_tolerance(self, tolerance_deg: float = 2.5) -> bool:
+        return abs(self.get_hub_alignment_error().degrees()) <= tolerance_deg
+
+    def create_hold_hub_alignment_command(self):
         return self.runOnce(
             lambda: self.rotate_robot_pid_controller.reset()
         ).andThen(
             self.run(
                 lambda: self._apply_alignment_target(self._get_hub_alignment_angle())
-            ).until(self.rotate_robot_pid_controller.atSetpoint)
+            )
+        )
+
+    def create_stop_command(self):
+        return self.runOnce(
+            lambda: self.set_control(
+                self.field_centric_request
+                .with_velocity_x(0.0)
+                .with_velocity_y(0.0)
+                .with_rotational_rate(0.0)
+            )
+        )
+
+    def auto_align_to_hub(self):
+        """
+        Rotate the robot to face the hub from the shooter position.
+        """
+
+        return self.create_hold_hub_alignment_command().until(
+            self.rotate_robot_pid_controller.atSetpoint
         )
 
     def auto_align_to_shot_angle(
@@ -530,7 +551,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
     def create_effective_wheel_radius_characterization_command(self):
         ramp_duration_sec = 1.0
-        characterization_duration_sec = 2.0
+        hold_duration_sec = 0.5
+        characterization_duration_sec = (2.0 * ramp_duration_sec) + hold_duration_sec
         initial_yaw_deg = 0.0
         initial_distances_m = [0.0] * len(self.modules)
         timer = Timer()
@@ -548,6 +570,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             elapsed_sec = timer.get()
             if elapsed_sec < ramp_duration_sec:
                 requested_omega_rad_per_sec = self.max_angular_speed * (elapsed_sec / ramp_duration_sec)
+            elif elapsed_sec < (ramp_duration_sec + hold_duration_sec):
+                requested_omega_rad_per_sec = self.max_angular_speed
             else:
                 requested_omega_rad_per_sec = self.max_angular_speed * max(
                     0.0,
