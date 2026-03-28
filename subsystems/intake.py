@@ -1,10 +1,11 @@
-from commands2 import PrintCommand, Subsystem, SequentialCommandGroup, WaitCommand
+from commands2 import PrintCommand, Subsystem, SequentialCommandGroup, WaitCommand, RepeatCommand, ParallelCommandGroup
 from phoenix6 import CANBus
 from phoenix6.configs import CANcoderConfiguration, TalonFXSConfiguration, TalonFXConfiguration
 from phoenix6.controls import PositionVoltage, VoltageOut
 from phoenix6.hardware import CANcoder, TalonFXS, TalonFX
 from phoenix6.status_code import StatusCode
 from wpilib import RobotBase
+from ntcore import NetworkTableInstance
 
 class Intake(Subsystem):
     """
@@ -66,6 +67,21 @@ class Intake(Subsystem):
         # Arm Positions because apparently we need those
         self.intake_position = intake_position
         self.stowed_position = stowed_position
+
+        # Networktables stuffs
+        self._network_table_instance = NetworkTableInstance.getDefault()
+        self._intake_table = self._network_table_instance.getTable("Intake State")
+
+        self.intake_wheel_voltage_pub = self._intake_table.getFloatTopic("Intake Wheel Voltage").publish()
+        self.intake_wheel_voltage_sub = self._intake_table.getFloatTopic("Intake Wheel Voltage").subscribe(0) 
+
+    def get_intake_wheel_voltage(self):
+        return self.run(
+            lambda: self.intake_wheel_voltage_pub.set(
+                self.intake_wheel.get_motor_voltage().value
+            )
+        ).withTimeout(18)
+                
 
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
