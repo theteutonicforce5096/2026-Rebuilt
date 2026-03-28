@@ -28,7 +28,7 @@ class IntakeConstants:
     _intake_wheel_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.BRUSHED_DC)
     _intake_wheel_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
     _intake_wheel_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
-    _intake_wheel_configs.current_limits.with_stator_current_limit(20)
+    _intake_wheel_configs.current_limits.with_stator_current_limit(25)
     _intake_wheel_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_wheel_configs.commutation.with_brushed_motor_wiring(signals.BrushedMotorWiringValue.LEADS_A_AND_C)
 
@@ -36,7 +36,7 @@ class IntakeConstants:
     _intake_arm_configs = TalonFXConfiguration()
     _intake_arm_configs.motor_output.with_inverted(signals.InvertedValue.COUNTER_CLOCKWISE_POSITIVE)
     _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
-    _intake_arm_configs.current_limits.with_stator_current_limit(30) #TODO 
+    _intake_arm_configs.current_limits.with_stator_current_limit(25) #TODO 
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_arm_configs.feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
     _intake_arm_configs.feedback.with_feedback_sensor_source(signals.FeedbackSensorSourceValue.FUSED_CANCODER)

@@ -159,9 +159,9 @@ class Vision(Subsystem):
 
         angular_std_dev = (
             self.angular_std_dev_baseline
-            * distance_factor
-            * camera_factor
-            * angular_speed_factor
+            # * distance_factor
+            # * camera_factor
+            # * angular_speed_factor
         )
 
         return (linear_std_dev, linear_std_dev, angular_std_dev)

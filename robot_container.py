@@ -123,7 +123,7 @@ class RobotContainer:
                 lambda: (
                     self.drivetrain.seed_field_centric(),
                     self.drivetrain.set_forward_perspective(),
-                    self.drivetrain.reset_operator_heading_tracking(),
+                    self.drivetrain.reset_operator_heading_tracking()
                 )
             )
         )
@@ -154,7 +154,7 @@ class RobotContainer:
             )
         )
 
-#GPT stuffs
+#GPT stuffs (bad)
         # self.controller.povUp().onTrue(
         #     self.intake.runOnce(
         #         lambda: self.intake.arm_up_manual()
@@ -167,7 +167,6 @@ class RobotContainer:
         #     )
         # )
 
-# #Jimmy stuffs
 #         self.controller.povLeft().onTrue(
 
 #             self.intake.arm_down_please()
@@ -206,6 +205,9 @@ class RobotContainer:
                     # )
                 ),
                 commands2.ParallelCommandGroup(
+                    self.intake.runOnce(
+                        lambda: self.intake.set_intake_speed(0)
+                    ),
                     self.hopper.create_stop_command(),
                     self.shooter.create_stop_command()
                 )
@@ -231,18 +233,21 @@ class RobotContainer:
                     ),
                     commands2.RepeatCommand(
                         self.shooter.create_calculated_feed_command(self.hopper)
-                    ),
-                    commands2.RepeatCommand(
-                        self.drivetrain.auto_align_to_shot_angle(
-                            self.shooter.get_latest_calculated_shot
-                        )
-                    ),
+                    )
+                    # commands2.RepeatCommand(
+                    #     self.drivetrain.auto_align_to_shot_angle(
+                    #         self.shooter.get_latest_calculated_shot
+                    #     )
+                    # ),
                 ).until(
                     lambda: self.controller.getHID().getYButton()
                 ),
                 commands2.ParallelCommandGroup(
+                    self.intake.runOnce(
+                        lambda: self.intake.set_intake_speed(0)
+                    ),
                     self.hopper.create_stop_command(),
-                    self.shooter.create_stop_command(),
+                    self.shooter.create_stop_command()
                 )
             )
         )

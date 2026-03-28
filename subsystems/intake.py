@@ -117,19 +117,19 @@ class Intake(Subsystem):
     def arm_up(self):
         self.set_setpoint(self.stowed_position)
 
-    def arm_down_manual(self):
-        return self.run(
-            lambda: self.set_arm_voltage(9.0)
-        ).withTimeout(0.5).andThen(
-            self.runOnce(lambda: self.set_arm_voltage(0.0))
-        )
+    # def arm_down_manual(self):
+    #     return self.run(
+    #         lambda: self.set_arm_voltage(9.0)
+    #     ).withTimeout(0.5).andThen(
+    #         self.runOnce(lambda: self.set_arm_voltage(0.0))
+    #     )
 
-    def arm_up_manual(self):
-        return self.run(
-            lambda: self.set_arm_voltage(-9.0)
-        ).withTimeout(0.5).andThen(
-            self.runOnce(lambda: self.set_arm_voltage(0.0))
-        )
+    # def arm_up_manual(self):
+    #     return self.run(
+    #         lambda: self.set_arm_voltage(-9.0)
+    #     ).withTimeout(0.5).andThen(
+    #         self.runOnce(lambda: self.set_arm_voltage(0.0))
+    #     )
 
 # Jimmy version cuz gpt bad
     def arm_down_please(self):

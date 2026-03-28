@@ -17,7 +17,7 @@ class VisionConstants:
 
     # Per-camera multipliers applied to the vision standard deviations
     # (back_camera, front_left_camera, front_right_camera)
-    _camera_std_dev_factors = (0.5, 0.25, 0.25)
+    _camera_std_dev_factors = (1.0, 0.5, 0.50)
 
     # Reference speeds used to scale vision standard deviations during fast motion
     _max_linear_speed = SwerveDrivetrainConstants._max_linear_speed * 0.75

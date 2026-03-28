@@ -466,10 +466,10 @@ class Shooter(Subsystem):
             # every time there is an amp surge, the empty_time timestamp resets
             # when no surge occurs, empty_time stops updating
             # So, empty_time = timestamp of last surge
-            # We detect that the hopper is empty when its been over 3 seconds since the last surge
+            # We detect that the hopper is empty when its been over 1.5 seconds since the last surge
     
         return (
-            (Timer.getFPGATimestamp() - self.empty_time) >= 3
+            (Timer.getFPGATimestamp() - self.empty_time) >= 1.5
         )
     
     def reset_empty_time(self):

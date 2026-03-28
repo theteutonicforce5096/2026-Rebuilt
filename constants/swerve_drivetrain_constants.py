@@ -21,8 +21,8 @@ class SwerveDrivetrainConstants:
     _max_angular_speed = 16 # Max angular velocity in radians per second 
 
     # Max rate of change of robot (assuming loop cycle time of 0.02 seconds)
-    _max_linear_rate_of_change = (1 / 0.1) * 0.02 * _max_linear_speed # Max speed in 0.25 seconds
-    _max_angular_rate_of_change = (1 / 0.25) * 0.02 * _max_angular_speed # Max speed in 0.5 seconds
+    _max_linear_rate_of_change = (1 / 0.20) * 0.02 * _max_linear_speed # Max speed in 0.25 seconds
+    _max_angular_rate_of_change = (1 / 0.40) * 0.02 * _max_angular_speed # Max speed in 0.5 seconds
 
     # Frequency to run the odometry loop at in hertz
     _odometry_update_frequency = 250.0
@@ -84,6 +84,12 @@ class SwerveDrivetrainConstants:
     _drive_initial_configs = configs.TalonFXConfiguration().with_motor_output(
         configs.MotorOutputConfigs()
         .with_neutral_mode(signals.NeutralModeValue.BRAKE)
+    ).with_current_limits(
+        configs.CurrentLimitsConfigs()
+        # Swerve azimuth does not require much torque output, so we can set a relatively low
+        # stator current limit to help avoid brownouts without impacting performance.
+        .with_supply_current_limit(70.0)
+        .with_supply_current_limit_enable(True)
     )
 
     _steer_initial_configs = configs.TalonFXConfiguration().with_motor_output(
