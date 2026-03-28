@@ -20,8 +20,8 @@ class IntakeConstants:
     _num_config_attempts = 3
 
     # Arm Position Constants #TODO confirm values
-    _intake_position = -0.49 #0.490479 rotations
-    _stowed_position = -0.1 #-0.085449 rotations
+    _intake_position = 0.495 #0.490479 rotations
+    _stowed_position = 0.89 #-0.085449 rotations
 
     # Intake Wheel Configs (Random ahh brushed motor - TalonFXS)
     _intake_wheel_configs = TalonFXSConfiguration()
@@ -36,18 +36,20 @@ class IntakeConstants:
     _intake_arm_configs = TalonFXConfiguration()
     _intake_arm_configs.motor_output.with_inverted(signals.InvertedValue.COUNTER_CLOCKWISE_POSITIVE)
     _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
-    _intake_arm_configs.current_limits.with_stator_current_limit(40) #TODO 
+    _intake_arm_configs.current_limits.with_stator_current_limit(30) #TODO 
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_arm_configs.feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
     _intake_arm_configs.feedback.with_feedback_sensor_source(signals.FeedbackSensorSourceValue.FUSED_CANCODER)
     _intake_arm_configs.feedback.with_sensor_to_mechanism_ratio(1.0)
     _intake_arm_configs.feedback.with_rotor_to_sensor_ratio(125 * (4/3))
-    _intake_arm_configs.slot0.with_k_p(5)
+    _intake_arm_configs.closed_loop_general.with_continuous_wrap(True)
+    _intake_arm_configs.slot0.with_k_p(25)
     _intake_arm_configs.slot0.with_k_i(0)
     _intake_arm_configs.slot0.with_k_d(0)
 
     _intake_arm_encoder_configs = CANcoderConfiguration()
-    _intake_arm_encoder_configs.magnet_sensor.sensor_direction = signals.SensorDirectionValue.CLOCKWISE_POSITIVE
+    _intake_arm_encoder_configs.magnet_sensor.with_sensor_direction(signals.SensorDirectionValue.CLOCKWISE_POSITIVE)
+    _intake_arm_encoder_configs.magnet_sensor.with_absolute_sensor_discontinuity_point(1)
 
     @classmethod
     def create_intake(cls) -> Intake:

@@ -13,8 +13,8 @@ class RebuiltRobot(commands2.TimedCommandRobot):
     """
     
     def robotInit(self):
-        # Enable switchable channel on the REV PDH
-        PowerDistribution().setSwitchableChannel(True)
+        # Doesn't work: Enable switchable channel on the REV PDH
+        # PowerDistribution().setSwitchableChannel(True)
     
         # Disable Phoenix 6 Auto Signal Logging
         SignalLogger.enable_auto_logging(False)

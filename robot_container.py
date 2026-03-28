@@ -167,21 +167,26 @@ class RobotContainer:
         #     )
         # )
 
-#Jimmy stuffs
-        # self.controller.povDown().onTrue(
-        #     self.intake.arm_down_please()
-        # )
+# #Jimmy stuffs
+#         self.controller.povLeft().onTrue(
 
-        # self.controller.povUp().onTrue(
-        #     self.intake.arm_up_please()
-        # )
+#             self.intake.arm_down_please()
+#         )
+
+#         self.controller.povRight().onTrue(
+#             self.intake.arm_up_please()
+#         )
 
         self.controller.povDown().onTrue(
-            self.intake.arm_down()
+            self.intake.runOnce(
+                lambda: self.intake.arm_down()
+            )
         )
 
         self.controller.povUp().onTrue(
-            self.intake.arm_up()
+            self.intake.runOnce(
+                lambda: self.intake.arm_up()
+            )
         )
     
         self.controller.x().onTrue(
@@ -232,13 +237,13 @@ class RobotContainer:
                             self.shooter.get_latest_calculated_shot
                         )
                     ),
+                ).until(
+                    lambda: self.controller.getHID().getYButton()
                 ),
                 commands2.ParallelCommandGroup(
                     self.hopper.create_stop_command(),
                     self.shooter.create_stop_command(),
                 )
-            ).until(
-                lambda: self.controller.getHID().getYButton()
             )
         )
 
