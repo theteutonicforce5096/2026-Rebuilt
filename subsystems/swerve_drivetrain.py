@@ -112,7 +112,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
             .with_desaturate_wheel_speeds(True)
-            .with_heading_pid(7.5, 0, 0)
+            .with_heading_pid(8, 0, 0)
         )
 
         # Create Apply Robot Speeds Request for PathPlanner
@@ -335,6 +335,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             else:
                 limited_vx = requested_vx
         else:
+            requested_vx = 0
             limited_vx = 0
 
         if abs(strafe_speed) > 0.075:
@@ -347,6 +348,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             else:
                 limited_vy = requested_vy
         else:
+            requested_vy = 0
             limited_vy = 0
 
         if abs(rotation_speed) > 0.075:
@@ -359,6 +361,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             else:
                 limited_omega = requested_omega
         else:
+            requested_omega = 0
             limited_omega = 0
 
         if limited_omega == 0:
@@ -375,17 +378,17 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             self.operator_was_rotating = False
             operator_drive_request = (
                 self.field_centric_facing_angle_request
-                .with_velocity_x(limited_vx)
-                .with_velocity_y(limited_vy)
+                .with_velocity_x(requested_vx)
+                .with_velocity_y(requested_vy)
                 .with_target_direction(self.operator_heading_target)
             )
         else:
             self.operator_was_rotating = True
             operator_drive_request = (
                 self.field_centric_request
-                .with_velocity_x(limited_vx)
-                .with_velocity_y(limited_vy)
-                .with_rotational_rate(limited_omega)
+                .with_velocity_x(requested_vx)
+                .with_velocity_y(requested_vy)
+                .with_rotational_rate(requested_omega)
             )
 
         return operator_drive_request

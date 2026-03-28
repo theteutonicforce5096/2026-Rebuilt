@@ -154,6 +154,15 @@ class RobotContainer:
             )
         )
 
+        self.controller.povRight().onTrue(
+            commands2.ParallelCommandGroup(
+                self.intake.runOnce(
+                    lambda: self.intake.set_intake_speed(-12)
+                ),
+                self.hopper.run_hopper(-20, -3)
+            )
+        )
+
 #GPT stuffs (bad)
         # self.controller.povUp().onTrue(
         #     self.intake.runOnce(

@@ -13,15 +13,15 @@ class VisionConstants:
 
     # Vision measurement baseline standard deviations
     _linear_std_dev_baseline = 1.0
-    _angular_std_dev_baseline = 10000.0 * pi
+    _angular_std_dev_baseline = 1000000.0 * pi
 
     # Per-camera multipliers applied to the vision standard deviations
     # (back_camera, front_left_camera, front_right_camera)
-    _camera_std_dev_factors = (1.0, 0.5, 0.50)
+    _camera_std_dev_factors = (0.75, 0.35, 0.35)
 
     # Reference speeds used to scale vision standard deviations during fast motion
-    _max_linear_speed = SwerveDrivetrainConstants._max_linear_speed * 0.75
-    _max_angular_speed = SwerveDrivetrainConstants._max_angular_speed * 0.75
+    _max_linear_speed = SwerveDrivetrainConstants._max_linear_speed * 0.25
+    _max_angular_speed = SwerveDrivetrainConstants._max_angular_speed * 0.25
 
     # Reject vision measurements when robot tilt exceeds this threshold in degrees
     _max_tilt_deg = 5.0

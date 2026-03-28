@@ -21,8 +21,8 @@ class SwerveDrivetrainConstants:
     _max_angular_speed = 16 # Max angular velocity in radians per second 
 
     # Max rate of change of robot (assuming loop cycle time of 0.02 seconds)
-    _max_linear_rate_of_change = (1 / 0.20) * 0.02 * _max_linear_speed # Max speed in 0.25 seconds
-    _max_angular_rate_of_change = (1 / 0.40) * 0.02 * _max_angular_speed # Max speed in 0.5 seconds
+    _max_linear_rate_of_change = (1 / 0.3) * 0.02 * _max_linear_speed # Max speed in 0.25 seconds
+    _max_angular_rate_of_change = (1 / 0.5) * 0.02 * _max_angular_speed # Max speed in 0.5 seconds
 
     # Frequency to run the odometry loop at in hertz
     _odometry_update_frequency = 250.0
@@ -76,7 +76,7 @@ class SwerveDrivetrainConstants:
     # Essentially used as stator current limit for the drive motors
     # https://v6.docs.ctr-electronics.com/en/2024/docs/api-reference/mechanisms/swerve/swerve-builder-api.html
     # https://v6.docs.ctr-electronics.com/en/latest/docs/hardware-reference/talonfx/improving-performance-with-current-limits.html#preventing-brownouts
-    _slip_current: units.ampere = 80.0
+    _slip_current: units.ampere = 60.0
 
     # Initial configs for the drive and steer motors and the azimuth encoder; these cannot be null.
     # Some configs will be overwritten; check the `with_*_initial_configs()` API documentation.
@@ -99,7 +99,7 @@ class SwerveDrivetrainConstants:
         configs.CurrentLimitsConfigs()
         # Swerve azimuth does not require much torque output, so we can set a relatively low
         # stator current limit to help avoid brownouts without impacting performance.
-        .with_stator_current_limit(60.0)
+        .with_stator_current_limit(50.0)
         .with_stator_current_limit_enable(True)
     )
         
