@@ -101,7 +101,7 @@ class RobotContainer:
         )
 
     def create_commands_auto(self):
-        self.intake.arm_down_manual()
+        self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.run_hopper(0, 0),
         self.shooter.set_flywheel_velocities(0, 0)
@@ -168,12 +168,20 @@ class RobotContainer:
         # )
 
 #Jimmy stuffs
+        # self.controller.povDown().onTrue(
+        #     self.intake.arm_down_please()
+        # )
+
+        # self.controller.povUp().onTrue(
+        #     self.intake.arm_up_please()
+        # )
+
         self.controller.povDown().onTrue(
-            self.intake.arm_down_please()
+            self.intake.arm_down()
         )
 
         self.controller.povUp().onTrue(
-            self.intake.arm_up_please()
+            self.intake.arm_up()
         )
     
         self.controller.x().onTrue(

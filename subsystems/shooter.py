@@ -81,20 +81,20 @@ class Shooter(Subsystem):
         # Create motors and encoder
         self.flywheel_motor = TalonFXS(flywheel_motor_id, canbus)
         self.flywheel_intake_motor = TalonFX(flywheel_intake_motor_id, canbus)
-        self.flywheel_encoder = CANcoder(flywheel_encoder_id, canbus)
+        # self.flywheel_encoder = CANcoder(flywheel_encoder_id, canbus)
         
         # Apply motor and encoder configs
         self._configure_device(self.flywheel_motor, flywheel_motor_configs, num_config_attempts)
         self._configure_device(self.flywheel_intake_motor, flywheel_intake_motor_configs, num_config_attempts)
-        self._configure_device(self.flywheel_encoder, flywheel_encoder_configs, num_config_attempts)
+        # self._configure_device(self.flywheel_encoder, flywheel_encoder_configs, num_config_attempts)
        
         if RobotBase.isSimulation() == False:
             self.flywheel_motor.optimize_bus_utilization()
             self.flywheel_intake_motor.optimize_bus_utilization()
-            self.flywheel_encoder.optimize_bus_utilization()
+            # self.flywheel_encoder.optimize_bus_utilization()
 
         # Set encoder update frequency to improve velocity PID on flywheel motor
-        self.flywheel_encoder.get_velocity().set_update_frequency(flywheel_encoder_vel_update_frequency)
+        # self.flywheel_encoder.get_velocity().set_update_frequency(flywheel_encoder_vel_update_frequency)
         
         # Create VelocityVoltage request
         self.velocity_pid_request = VelocityVoltage(velocity = 0)

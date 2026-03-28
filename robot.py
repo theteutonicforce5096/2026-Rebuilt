@@ -2,7 +2,7 @@ import time
 import commands2
 
 from commands2 import Command
-from wpilib import DriverStation
+from wpilib import DriverStation, PowerDistribution
 from phoenix6 import utils, SignalLogger
 
 from robot_container import RobotContainer
@@ -13,6 +13,9 @@ class RebuiltRobot(commands2.TimedCommandRobot):
     """
     
     def robotInit(self):
+        # Enable switchable channel on the REV PDH
+        PowerDistribution().setSwitchableChannel(True)
+    
         # Disable Phoenix 6 Auto Signal Logging
         SignalLogger.enable_auto_logging(False)
 

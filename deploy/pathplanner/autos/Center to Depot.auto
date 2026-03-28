@@ -7,6 +7,18 @@
         {
           "type": "path",
           "data": {
+            "pathName": "Center to Back 2 Meters"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "Auto Run Shooter"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
             "pathName": "Center to Depot and Back"
           }
         },

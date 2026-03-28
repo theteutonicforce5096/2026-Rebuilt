@@ -113,7 +113,6 @@ class Intake(Subsystem):
 
     def arm_down(self):
         self.set_setpoint(self.intake_position) 
-        print("trying")
         
     def arm_up(self):
         self.set_setpoint(self.stowed_position)
