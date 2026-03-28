@@ -3,90 +3,94 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 3.544,
-        "y": 7.425
+        "x": 2.7734120370370374,
+        "y": 7.153665436921297
       },
       "prevControl": null,
       "nextControl": {
-        "x": 2.3390537605572455,
-        "y": 7.316065834603397
+        "x": 3.2539798863645206,
+        "y": 7.184167368353623
       },
-      "isLocked": false,
-      "linkedName": "Trench Start Left"
+      "isLocked": true,
+      "linkedName": "Left Trench Hub"
     },
     {
       "anchor": {
-        "x": 1.2150222222222222,
-        "y": 5.9497833333333325
+        "x": 2.0166601562500004,
+        "y": 5.96
       },
       "prevControl": {
-        "x": 2.45160026197793,
-        "y": 5.974784896840242
+        "x": 2.802450510707682,
+        "y": 5.96
       },
       "nextControl": {
-        "x": 0.6801382812469717,
-        "y": 5.938968864380155
+        "x": 1.2983344625136237,
+        "y": 5.96
       },
       "isLocked": false,
       "linkedName": null
     },
     {
       "anchor": {
-        "x": 0.8,
-        "y": 5.9497833333333325
+        "x": 0.72,
+        "y": 5.96
       },
       "prevControl": {
-        "x": 1.3183632074649825,
-        "y": 5.9497833333333325
+        "x": 1.2193351849260443,
+        "y": 5.96
       },
       "nextControl": {
-        "x": 0.55,
-        "y": 5.9497833333333325
+        "x": 0.2206648150739553,
+        "y": 5.96
+      },
+      "isLocked": false,
+      "linkedName": "depot"
+    },
+    {
+      "anchor": {
+        "x": 2.0,
+        "y": 5.96
+      },
+      "prevControl": {
+        "x": 1.4560793797323452,
+        "y": 5.96
+      },
+      "nextControl": {
+        "x": 2.543920620267655,
+        "y": 5.96
       },
       "isLocked": false,
       "linkedName": null
     },
     {
       "anchor": {
-        "x": 1.215,
-        "y": 5.9497833333333325
+        "x": 2.7734120370370374,
+        "y": 7.153665436921297
       },
       "prevControl": {
-        "x": 0.9078329262184113,
-        "y": 5.930287253776896
-      },
-      "nextControl": {
-        "x": 2.1841335711815746,
-        "y": 6.011294825994178
-      },
-      "isLocked": false,
-      "linkedName": "Depot"
-    },
-    {
-      "anchor": {
-        "x": 4.518385390281014,
-        "y": 7.4208522393280285
-      },
-      "prevControl": {
-        "x": 3.4862182050839188,
-        "y": 7.2343374613527205
+        "x": 2.52739637816232,
+        "y": 7.10920989071569
       },
       "nextControl": null,
-      "isLocked": false,
-      "linkedName": "Trench Exit Left"
+      "isLocked": true,
+      "linkedName": "Left Trench Hub"
     }
   ],
   "rotationTargets": [
     {
-      "waypointRelativePos": 3.152796052631579,
+      "waypointRelativePos": 0.9984375000000002,
+      "rotationDegrees": 180.0
+    },
+    {
+      "waypointRelativePos": 2.9173930921052635,
       "rotationDegrees": 180.0
     }
   ],
   "constraintZones": [
     {
       "name": "Constraints Zone",
-      "minWaypointRelativePos": 1.0,
-      "maxWaypointRelativePos": 3.0734011627907,
+      "minWaypointRelativePos": 1.2741901993355473,
+      "maxWaypointRelativePos": 2.8009240033222613,
       "constraints": {
         "maxVelocity": 0.4,
         "maxAcceleration": 3.0,
@@ -101,7 +105,7 @@
   "eventMarkers": [
     {
       "name": "Run Intake",
-      "waypointRelativePos": 0.7580460963455151,
+      "waypointRelativePos": 1.3595307308970102,
       "endWaypointRelativePos": null,
       "command": {
         "type": "named",
@@ -112,7 +116,7 @@
     },
     {
       "name": "Turn Off Intake",
-      "waypointRelativePos": 2.9776266611295705,
+      "waypointRelativePos": 2.8790490033222587,
       "endWaypointRelativePos": null,
       "command": {
         "type": "named",
@@ -132,13 +136,13 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": -82.5
+    "rotation": -52.000190505693446
   },
   "reversed": false,
   "folder": null,
   "idealStartingState": {
     "velocity": 0,
-    "rotation": 180.0
+    "rotation": -52.000190505693446
   },
   "useDefaultConstraints": true
 }
