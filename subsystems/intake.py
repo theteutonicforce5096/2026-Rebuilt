@@ -1,4 +1,4 @@
-from commands2 import PrintCommand, Subsystem
+from commands2 import PrintCommand, Subsystem, SequentialCommandGroup, WaitCommand
 from phoenix6 import CANBus
 from phoenix6.configs import CANcoderConfiguration, TalonFXSConfiguration, TalonFXConfiguration
 from phoenix6.controls import PositionVoltage, VoltageOut
@@ -132,7 +132,26 @@ class Intake(Subsystem):
             self.runOnce(lambda: self.set_arm_voltage(0.0))
         )
 
-        
-
+# Jimmy version cuz gpt bad
+    def arm_down_please(self):
+        return SequentialCommandGroup(
+            self.runOnce(
+                lambda: self.set_arm_voltage(-9.0)
+            ),
+            WaitCommand(.5),
+            self.runOnce(
+                lambda: self.set_arm_voltage(0.0)
+            )
+        )
     
+    def arm_up_please(self):
+        return SequentialCommandGroup(
+            self.runOnce(
+                lambda: self.set_arm_voltage(9.0)
+            ),
+            WaitCommand(.5),
+            self.runOnce(
+                lambda: self.set_arm_voltage(0.0)
+            )
+        )
             

@@ -154,16 +154,26 @@ class RobotContainer:
             )
         )
 
-        self.controller.povUp().onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_up_manual()
-            )
+#GPT stuffs
+        # self.controller.povUp().onTrue(
+        #     self.intake.runOnce(
+        #         lambda: self.intake.arm_up_manual()
+        #     )
+        # )
+
+        # self.controller.povDown().onTrue(
+        #     self.intake.runOnce(
+        #         lambda: self.intake.arm_down_manual()
+        #     )
+        # )
+
+#Jimmy stuffs
+        self.controller.povDown().onTrue(
+            self.intake.arm_down_please()
         )
 
-        self.controller.povDown().onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_down_manual()
-            )
+        self.controller.povUp().onTrue(
+            self.intake.arm_up_please()
         )
     
         self.controller.x().onTrue(
