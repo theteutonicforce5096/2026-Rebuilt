@@ -5,15 +5,9 @@
     "data": {
       "commands": [
         {
-          "type": "path",
-          "data": {
-            "pathName": "Center to Back 2 Meters"
-          }
-        },
-        {
           "type": "named",
           "data": {
-            "name": "Auto Run Shooter"
+            "name": "Run Intake"
           }
         },
         {

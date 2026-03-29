@@ -9,7 +9,7 @@ from phoenix6 import swerve, utils, SignalLogger
 from wpilib import DriverStation, Field2d, Notifier, RobotController, SendableChooser, SmartDashboard, Timer
 from wpilib.shuffleboard import Shuffleboard
 from wpilib.sysid import SysIdRoutineLog
-from wpimath.geometry import Rotation2d, Translation2d
+from wpimath.geometry import Rotation2d, Translation2d, Pose2d
 from wpimath.kinematics import ChassisSpeeds
 
 from pathplannerlib.auto import AutoBuilder, RobotConfig
@@ -284,6 +284,16 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         self.operator_was_rotating = False
         self.field_centric_facing_angle_request.heading_controller.reset()
 
+    def reset_pose_hub(self):
+        if self.current_alliance == DriverStation.Alliance.kBlue:
+            self.reset_pose(
+                Pose2d(3.581, 4.036, Rotation2d.fromDegrees(180))
+            )
+        else:
+            self.reset_pose(
+                12.959, 4.036, Rotation2d.fromDegrees(0)
+            )
+
     def get_robot_tilt(self) -> tuple[float, float]:
         """
         Get the current pitch and roll in degrees of the robot from the Pigeon 2.
@@ -553,8 +563,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         return self.sys_id_routine_to_apply.dynamic(direction)
 
     def create_effective_wheel_radius_characterization_command(self):
-        ramp_duration_sec = 1.0
-        hold_duration_sec = 0.5
+        ramp_duration_sec = 2
+        hold_duration_sec = 1
         characterization_duration_sec = (2.0 * ramp_duration_sec) + hold_duration_sec
         initial_yaw_deg = 0.0
         initial_distances_m = [0.0] * len(self.modules)
@@ -572,11 +582,11 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         def execute():
             elapsed_sec = timer.get()
             if elapsed_sec < ramp_duration_sec:
-                requested_omega_rad_per_sec = self.max_angular_speed * (elapsed_sec / ramp_duration_sec)
+                requested_omega_rad_per_sec = (self.max_angular_speed * 0.5) * (elapsed_sec / ramp_duration_sec)
             elif elapsed_sec < (ramp_duration_sec + hold_duration_sec):
-                requested_omega_rad_per_sec = self.max_angular_speed
+                requested_omega_rad_per_sec = self.max_angular_speed * 0.5
             else:
-                requested_omega_rad_per_sec = self.max_angular_speed * max(
+                requested_omega_rad_per_sec = (self.max_angular_speed * 0.5) * max(
                     0.0,
                     (characterization_duration_sec - elapsed_sec) / ramp_duration_sec,
                 )
@@ -585,7 +595,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                 self.field_centric_request
                 .with_velocity_x(0.0)
                 .with_velocity_y(0.0)
-                .with_rotational_rate(requested_omega_rad_per_sec)
+                .with_rotational_rate(-requested_omega_rad_per_sec)
             )
 
         def end(interrupted: bool):

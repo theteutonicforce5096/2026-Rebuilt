@@ -163,6 +163,12 @@ class RobotContainer:
             )
         )
 
+        self.controller.povLeft().onTrue(
+            self.drivetrain.runOnce(
+                lambda: self.drivetrain.reset_pose_hub()
+            )
+        )
+
 #GPT stuffs (bad)
         # self.controller.povUp().onTrue(
         #     self.intake.runOnce(
@@ -233,10 +239,10 @@ class RobotContainer:
                         lambda: self.shooter.reset_empty_time()
                     )
                 ),
-                commands2.ParallelDeadlineGroup(
-                    commands2.WaitUntilCommand(
-                        lambda: self.shooter.detect_empty()
-                    ),
+                commands2.ParallelCommandGroup(
+                    # commands2.WaitUntilCommand(
+                    #     lambda: self.shooter.detect_empty()
+                    # ),
                     commands2.RepeatCommand(
                         self.shooter.create_calculated_shoot_command()
                     ),
@@ -272,6 +278,10 @@ class RobotContainer:
         )
 
     def create_commands_test(self):
+        self.intake.set_intake_speed(0)
+        self.hopper.run_hopper(0, 0),
+        self.shooter.set_flywheel_velocities(0, 0)
+
         self.controller.x().onTrue(
             self.drivetrain.create_effective_wheel_radius_characterization_command()
         )

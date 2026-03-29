@@ -92,13 +92,19 @@ class Vision(Subsystem):
             pose, timestamp, std_devs = measurement
             self.add_vision_measurement(pose, timestamp, std_devs)
 
-    def reject_pose_estimate(self, pose: Pose3d) -> bool:
+    def reject_pose_estimate(self, pose: Pose3d, current_state: swerve.SwerveDrivetrain.SwerveDriveState) -> bool:
+        current_vx = abs(current_state.speeds.vx)
+        current_vy = abs(current_state.speeds.vy)
+        current_omega = abs(current_state.speeds.omega)
         pitch_deg, roll_deg = self.get_robot_tilt()
 
         return not (
             -0.25 < pose.Z() < 0.5
             and 0.0 < pose.X() < self.april_tag_layout.getFieldLength()
             and 0.0 < pose.Y() < self.april_tag_layout.getFieldWidth()
+            and current_vx <= self.max_linear_speed
+            and current_vy <= self.max_linear_speed
+            and current_omega <= self.max_angular_speed
             and abs(pitch_deg) <= self.max_tilt_deg
             and abs(roll_deg) <= self.max_tilt_deg
         )
@@ -179,7 +185,7 @@ class Vision(Subsystem):
 
         pose = pose_est.estimateCoprocMultiTagPose(latest_result)
 
-        if pose is None or self.reject_pose_estimate(pose.estimatedPose):
+        if pose is None or self.reject_pose_estimate(pose.estimatedPose, current_state):
             return None
 
         return (

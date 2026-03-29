@@ -129,7 +129,7 @@ class SwerveDrivetrainConstants:
 
     _drive_gear_ratio = 5.67
     _steer_gear_ratio = 12.1
-    _wheel_radius: units.meter = inchesToMeters(2)
+    _wheel_radius: units.meter = 0.050147 #inchesToMeters(1.974)
 
     _invert_left_side = False
     _invert_right_side = True

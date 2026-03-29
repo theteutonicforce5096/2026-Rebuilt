@@ -39,7 +39,7 @@ class Shooter(Subsystem):
     Class for controlling shooter.
     """
 
-    DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS: Final[float] = 25
+    DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS: Final[float] = 30
     CALCULATED_FEED_CONFIDENCE_THRESHOLD: Final[float] = 50.0
 
     def __init__(self, canbus: CANBus, flywheel_motor_id: int, flywheel_intake_motor_id: int, 
@@ -469,7 +469,7 @@ class Shooter(Subsystem):
             # We detect that the hopper is empty when its been over 1.5 seconds since the last surge
     
         return (
-            (Timer.getFPGATimestamp() - self.empty_time) >= 1.5
+            (Timer.getFPGATimestamp() - self.empty_time) >= 12
         )
     
     def reset_empty_time(self):

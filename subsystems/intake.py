@@ -4,7 +4,7 @@ from phoenix6.configs import CANcoderConfiguration, TalonFXSConfiguration, Talon
 from phoenix6.controls import PositionVoltage, VoltageOut
 from phoenix6.hardware import CANcoder, TalonFXS, TalonFX
 from phoenix6.status_code import StatusCode
-from wpilib import RobotBase
+from wpilib import RobotBase, SmartDashboard
 
 class Intake(Subsystem):
     """
@@ -66,6 +66,10 @@ class Intake(Subsystem):
         # Arm Positions because apparently we need those
         self.intake_position = intake_position
         self.stowed_position = stowed_position
+
+    def periodic(self):
+        intake_wheel_voltage = self.intake_wheel.get_motor_voltage().value_as_double
+        SmartDashboard.putData("Intake Status", intake_wheel_voltage)
 
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
