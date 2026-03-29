@@ -76,12 +76,13 @@ class Intake(Subsystem):
         self.intake_wheel_voltage_sub = self._intake_table.getFloatTopic("Intake Wheel Voltage").subscribe(0) 
 
     def get_intake_wheel_voltage(self):
-        return self.run(
-            lambda: self.intake_wheel_voltage_pub.set(
-                self.intake_wheel.get_motor_voltage().value
+        return RepeatCommand(
+            self.runOnce(
+                lambda: self.intake_wheel_voltage_pub.set(
+                    self.intake_wheel.get_motor_voltage().value
+                )
             )
-        ).withTimeout(18)
-                
+        ).withTimeout(18)                
 
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
