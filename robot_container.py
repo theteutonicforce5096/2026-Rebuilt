@@ -173,19 +173,6 @@ class RobotContainer:
             )
         )
 
-#GPT stuffs (bad)
-        # self.controller.povUp().onTrue(
-        #     self.intake.runOnce(
-        #         lambda: self.intake.arm_up_manual()
-        #     )
-        # )
-
-        # self.controller.povDown().onTrue(
-        #     self.intake.runOnce(
-        #         lambda: self.intake.arm_down_manual()
-        #     )
-        # )
-
 #         self.controller.povLeft().onTrue(
 
 #             self.intake.arm_down_please()
@@ -242,10 +229,10 @@ class RobotContainer:
                 commands2.SequentialCommandGroup(
                     commands2.InstantCommand(
                         lambda: self.shooter.reset_calculated_shot_state()
-                    ),
-                    commands2.InstantCommand(
-                        lambda: self.shooter.reset_empty_time()
                     )
+                    # commands2.InstantCommand(
+                    #     lambda: self.shooter.reset_empty_time()
+                    # )
                 ),
                 commands2.ParallelCommandGroup(
                     # commands2.WaitUntilCommand(
@@ -271,6 +258,17 @@ class RobotContainer:
                     ),
                     self.hopper.create_stop_command(),
                     self.shooter.create_stop_command()
+                )
+            )
+        )
+
+        self.controller.rightTrigger().onTrue(
+            commands2.SequentialCommandGroup(
+                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
+                self.shooter.create_auto_run_shooter_command(
+                    self.hopper,
+                    self.drivetrain
                 )
             )
         )

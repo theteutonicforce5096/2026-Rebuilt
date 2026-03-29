@@ -14,7 +14,7 @@ class Intake(Subsystem):
     def __init__(self, canbus: CANBus, intake_wheel_id: int, intake_arm_id: int, 
                  intake_arm_encoder_id: int, intake_wheel_configs: TalonFXSConfiguration, 
                  intake_arm_configs: TalonFXConfiguration, intake_arm_encoder_configs: CANcoderConfiguration,
-                 num_config_attempts: int, intake_position: float, stowed_position: float):
+                 num_config_attempts: int, intake_position: float, stowed_position: float, shooting_position: float):
         """
         Constructor for initializing shooter using the specified constants.
 
@@ -38,6 +38,8 @@ class Intake(Subsystem):
         :type intake_position: float
         :param stowed_position: Encoder position where arm is up
         :type stowed_position: float
+        :param shooting_position: Encoder position where the arm is at an intermediate position
+        :type shooting_position: float
         """
 
         Subsystem.__init__(self) 
@@ -64,9 +66,9 @@ class Intake(Subsystem):
         # Placeholder values, will need to be tuned
 
         # Arm Positions because apparently we need those
-        self.intake_position = intake_position
-        self.stowed_position = stowed_position
-        self.shooting_position = 0.75
+        self.intake_position = intake_position #0.495
+        self.stowed_position = stowed_position #0.89
+        self.shooting_position = shooting_position #0.75
 
     def periodic(self):
         intake_wheel_voltage = self.intake_wheel.get_motor_voltage().value_as_double
@@ -125,40 +127,26 @@ class Intake(Subsystem):
     def arm_down_intermediate(self):
         self.set_setpoint(self.shooting_position)
 
-    # def arm_down_manual(self):
-    #     return self.run(
-    #         lambda: self.set_arm_voltage(9.0)
-    #     ).withTimeout(0.5).andThen(
-    #         self.runOnce(lambda: self.set_arm_voltage(0.0))
+    # Manual arm commands using VoltageOut (not needed)
+    # def arm_down_please(self):
+    #     return SequentialCommandGroup(
+    #         self.runOnce(
+    #             lambda: self.set_arm_voltage(-9.0)
+    #         ),
+    #         WaitCommand(.5),
+    #         self.runOnce(
+    #             lambda: self.set_arm_voltage(0.0)
+    #         )
     #     )
-
-    # def arm_up_manual(self):
-    #     return self.run(
-    #         lambda: self.set_arm_voltage(-9.0)
-    #     ).withTimeout(0.5).andThen(
-    #         self.runOnce(lambda: self.set_arm_voltage(0.0))
-    #     )
-
-# Jimmy version cuz gpt bad
-    def arm_down_please(self):
-        return SequentialCommandGroup(
-            self.runOnce(
-                lambda: self.set_arm_voltage(-9.0)
-            ),
-            WaitCommand(.5),
-            self.runOnce(
-                lambda: self.set_arm_voltage(0.0)
-            )
-        )
     
-    def arm_up_please(self):
-        return SequentialCommandGroup(
-            self.runOnce(
-                lambda: self.set_arm_voltage(9.0)
-            ),
-            WaitCommand(.5),
-            self.runOnce(
-                lambda: self.set_arm_voltage(0.0)
-            )
-        )
+    # def arm_up_please(self):
+    #     return SequentialCommandGroup(
+    #         self.runOnce(
+    #             lambda: self.set_arm_voltage(9.0)
+    #         ),
+    #         WaitCommand(.5),
+    #         self.runOnce(
+    #             lambda: self.set_arm_voltage(0.0)
+    #         )
+    #     )
             
