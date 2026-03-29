@@ -94,9 +94,12 @@ class RobotContainer:
 
         NamedCommands.registerCommand(
             "Auto Run Shooter",
-            self.shooter.create_auto_run_shooter_command(
-                self.hopper,
-                self.drivetrain,
+            commands2.ParallelCommandGroup(
+                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                self.shooter.create_auto_run_shooter_command(
+                    self.hopper,
+                    self.drivetrain,
+                )
             )
         )
 
@@ -159,7 +162,8 @@ class RobotContainer:
                 self.intake.runOnce(
                     lambda: self.intake.set_intake_speed(-12)
                 ),
-                self.hopper.run_hopper(-20, -3)
+                self.hopper.run_hopper(-20, -3),
+                self.shooter.set_flywheel_velocities(-30, -30)
             )
         )
 
