@@ -69,7 +69,7 @@ class Intake(Subsystem):
 
     def periodic(self):
         intake_wheel_voltage = self.intake_wheel.get_motor_voltage().value_as_double
-        SmartDashboard.putData("Intake Status", intake_wheel_voltage)
+        SmartDashboard.putNumber("Intake Status", intake_wheel_voltage)
 
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
