@@ -264,16 +264,16 @@ class RobotContainer:
             )
         )
 
-        self.controller.rightTrigger().onTrue(
-            commands2.SequentialCommandGroup(
-                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
-                self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
-                self.shooter.create_auto_run_shooter_command(
-                    self.hopper,
-                    self.drivetrain
-                )
-            )
-        )
+        # self.controller.rightTrigger().onTrue(
+        #     commands2.SequentialCommandGroup(
+        #         self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+        #         self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
+        #         self.shooter.create_auto_run_shooter_command(
+        #             self.hopper,
+        #             self.drivetrain
+        #         )
+        #     )
+        # )
 
         self.controller.y().onTrue(
             commands2.ParallelCommandGroup(
