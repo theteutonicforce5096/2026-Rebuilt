@@ -40,7 +40,7 @@ class ShooterConstants:
     _flywheel_motor_configs.slot0.with_k_i(0)
     _flywheel_motor_configs.slot0.with_k_d(0)
 
-    # Flywheel Intake Motor Configs (Falcon 500 - TalonFX)
+    # Flywheel Intake Motor Configs (KrakenX60 - TalonFX)
     _flywheel_intake_motor_configs = TalonFXConfiguration()
     _flywheel_intake_motor_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
     _flywheel_intake_motor_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)

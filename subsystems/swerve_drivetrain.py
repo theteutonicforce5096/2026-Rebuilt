@@ -330,9 +330,12 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         if left_trigger_pressed and right_trigger_pressed:
             max_linear_speed = self.max_linear_speed
             max_angular_speed = self.max_angular_speed
+        elif left_trigger_pressed:
+            max_linear_speed = self.max_linear_speed * 0.25
+            max_angular_speed = self.max_angular_speed * 0.25
         else:
-            max_linear_speed = self.max_linear_speed * 0.75
-            max_angular_speed = self.max_angular_speed * 0.5
+            max_linear_speed = self.max_linear_speed * 0.50
+            max_angular_speed = self.max_angular_speed * 0.50
 
         # Square or cube inputs
         if abs(forward_speed) > 0.075:

@@ -67,6 +67,7 @@ class Intake(Subsystem):
         self.intake_position = intake_position
         self.stowed_position = stowed_position
         self.shooting_position = 0.75
+        self.current_setpoint = None
 
     def periodic(self):
         intake_wheel_voltage = self.intake_wheel.get_motor_voltage().value_as_double
@@ -109,6 +110,8 @@ class Intake(Subsystem):
         self.intake_arm.set_control(
             self.position_voltage_request.with_position(position)
         )
+
+        self.current_setpoint = position
         # print(position)
 
     def set_arm_voltage(self, arm_voltage):

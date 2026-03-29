@@ -95,7 +95,10 @@ class RobotContainer:
         NamedCommands.registerCommand(
             "Auto Run Shooter",
             commands2.ParallelCommandGroup(
-                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                commands2.SequentialCommandGroup(
+                    commands2.WaitCommand(5),
+                    self.intake.runOnce(lambda: self.intake.arm_down_intermediate())
+                ),
                 self.shooter.create_auto_run_shooter_command(
                     self.hopper,
                     self.drivetrain,
@@ -204,12 +207,12 @@ class RobotContainer:
         self.controller.povUp().onTrue(
             self.intake.runOnce(
                 lambda: self.intake.arm_up()
+                # lambda: self.intake.set_setpoint(self.intake.current_setpoint + 0.025)
             )
         )
     
         self.controller.x().onTrue(
             commands2.SequentialCommandGroup(
-                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
                 self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
                 commands2.ParallelDeadlineGroup(
                     commands2.WaitUntilCommand(
@@ -237,7 +240,6 @@ class RobotContainer:
 
         self.controller.b().onTrue(
             commands2.SequentialCommandGroup(
-                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
                 self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
                 commands2.SequentialCommandGroup(
                     commands2.InstantCommand(

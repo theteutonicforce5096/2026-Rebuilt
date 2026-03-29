@@ -183,7 +183,7 @@ class SwerveDrivetrainConstants:
     _front_left_drive_motor_id = 10
     _front_left_steer_motor_id = 20
     _front_left_encoder_id = 0
-    _front_left_encoder_offset: units.rotation = -0.2578125
+    _front_left_encoder_offset: units.rotation = -0.25439453125
     _front_left_steer_motor_inverted = True
     _front_left_encoder_inverted = False
 
@@ -194,7 +194,7 @@ class SwerveDrivetrainConstants:
     _front_right_drive_motor_id = 11
     _front_right_steer_motor_id = 21
     _front_right_encoder_id = 1
-    _front_right_encoder_offset: units.rotation = -0.22412109375
+    _front_right_encoder_offset: units.rotation = -0.2099609375
     _front_right_steer_motor_inverted = True
     _front_right_encoder_inverted = False
 
@@ -205,7 +205,7 @@ class SwerveDrivetrainConstants:
     _back_left_drive_motor_id = 12
     _back_left_steer_motor_id = 22
     _back_left_encoder_id = 2
-    _back_left_encoder_offset: units.rotation = -0.099609375
+    _back_left_encoder_offset: units.rotation = -0.1005859375
     _back_left_steer_motor_inverted = True
     _back_left_encoder_inverted = False
 
@@ -216,7 +216,7 @@ class SwerveDrivetrainConstants:
     _back_right_drive_motor_id = 13
     _back_right_steer_motor_id = 23
     _back_right_encoder_id = 3
-    _back_right_encoder_offset: units.rotation = 0.330078125
+    _back_right_encoder_offset: units.rotation = 0.344482421875
     _back_right_steer_motor_inverted = True
     _back_right_encoder_inverted = False
 

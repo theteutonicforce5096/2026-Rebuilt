@@ -43,7 +43,7 @@ class IntakeConstants:
     _intake_arm_configs.feedback.with_sensor_to_mechanism_ratio(1.0)
     _intake_arm_configs.feedback.with_rotor_to_sensor_ratio(125 * (4/3))
     _intake_arm_configs.closed_loop_general.with_continuous_wrap(True)
-    _intake_arm_configs.slot0.with_k_p(25)
+    _intake_arm_configs.slot0.with_k_p(27.5)
     _intake_arm_configs.slot0.with_k_i(0)
     _intake_arm_configs.slot0.with_k_d(0)
 
