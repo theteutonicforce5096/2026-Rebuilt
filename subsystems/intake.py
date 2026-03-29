@@ -66,7 +66,7 @@ class Intake(Subsystem):
         # Arm Positions because apparently we need those
         self.intake_position = intake_position
         self.stowed_position = stowed_position
-        self.shooting_position = 0.65
+        self.shooting_position = 0.75
 
     def periodic(self):
         intake_wheel_voltage = self.intake_wheel.get_motor_voltage().value_as_double

@@ -209,6 +209,8 @@ class RobotContainer:
     
         self.controller.x().onTrue(
             commands2.SequentialCommandGroup(
+                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
                 commands2.ParallelDeadlineGroup(
                     commands2.WaitUntilCommand(
                         lambda: self.controller.getHID().getYButton()
@@ -235,6 +237,8 @@ class RobotContainer:
 
         self.controller.b().onTrue(
             commands2.SequentialCommandGroup(
+                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
                 commands2.SequentialCommandGroup(
                     commands2.InstantCommand(
                         lambda: self.shooter.reset_calculated_shot_state()
