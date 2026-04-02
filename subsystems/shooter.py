@@ -1,0 +1,635 @@
+from typing import Any, Callable, Final
+
+from commands2 import Subsystem
+from commands2 import (
+    DeferredCommand,
+    ParallelCommandGroup,
+    ParallelDeadlineGroup,
+    PrintCommand,
+    RepeatCommand,
+    SequentialCommandGroup,
+    WaitUntilCommand,
+)
+
+from phoenix6 import CANBus, SignalLogger
+from phoenix6.controls import VelocityVoltage, VoltageOut
+from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration
+from phoenix6.hardware import TalonFX, TalonFXS
+from phoenix6.status_code import StatusCode
+
+from commands2.sysid import SysIdRoutine
+from ntcore import NetworkTableInstance
+from wpilib import RobotBase, SendableChooser, Timer
+from wpilib.shuffleboard import Shuffleboard
+from wpilib.sysid import SysIdRoutineLog
+from wpimath.geometry import Rotation2d, Transform2d, Translation2d
+from wpimath.kinematics import ChassisSpeeds
+
+from constants.shot_calculator import ShotCalculator
+from constants.shot_calculator_constants import (
+    Config as ShotCalculatorConfig,
+    LaunchParameters,
+    ShotInputs,
+    calc_shooter_to_hub_distance,
+    calc_shot_profile,
+)
+
+class Shooter(Subsystem):
+    """
+    Class for controlling shooter.
+    """
+
+    DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS: Final[float] = 40
+    CALCULATED_FEED_CONFIDENCE_THRESHOLD: Final[float] = 50.0
+
+    def __init__(self, canbus: CANBus, flywheel_motor_id: int, flywheel_intake_motor_id: int,
+                 flywheel_motor_configs: TalonFXSConfiguration,
+                 flywheel_intake_motor_configs: TalonFXConfiguration,
+                 num_config_attempts: int,
+                 get_current_swerve_state: Callable[[], Any],
+                 get_robot_tilt: Callable[[], tuple[float, float]],
+                 get_hub_center: Callable[[], Translation2d],
+                 launcher_offset_x: float, launcher_offset_y: float):
+        """
+        Constructor for initializing shooter using the specified constants.
+
+        :param canbus: CANBus instance that electronics are on
+        :type canbus: phoenix6.CANBus
+        :param flywheel_motor_id: CAN ID of the flywheel motor
+        :type flywheel_motor_id: int
+        :param flywheel_intake_motor_id: CAN ID of the flywheel intake motor
+        :type flywheel_intake_motor_id: int
+        :param flywheel_motor_configs: Configs for the flywheel motor
+        :type flywheel_motor_configs: phoenix6.configs.TalonFXSConfiguration
+        :param flywheel_intake_motor_configs: Configs for the flywheel intake motor
+        :type flywheel_intake_motor_configs: phoenix6.configs.TalonFXConfiguration
+        :param num_config_attempts: Number of times to attempt to configure each device
+        :type num_config_attempts: int
+        :param get_current_swerve_state: Function that returns the drivetrain state used by the shot solver.
+        :type get_current_swerve_state: Callable[[], Any]
+        :param get_robot_tilt: Function that returns the current robot pitch and roll in degrees.
+        :type get_robot_tilt: Callable[[], tuple[float, float]]
+        :param get_hub_center: Function that returns the current hub center translation for the active alliance.
+        :type get_hub_center: Callable[[], wpimath.geometry.Translation2d]
+        :param launcher_offset_x: Forward launcher offset from the robot reference point in meters.
+        :type launcher_offset_x: float
+        :param launcher_offset_y: Lateral launcher offset from the robot reference point in meters.
+        :type launcher_offset_y: float
+        """
+
+        # Initialize parent classes
+        Subsystem.__init__(self)
+
+        # Create motors
+        self.flywheel_motor = TalonFXS(flywheel_motor_id, canbus)
+        self.flywheel_intake_motor = TalonFX(flywheel_intake_motor_id, canbus)
+
+        # Apply motor configs
+        self._configure_device(self.flywheel_motor, flywheel_motor_configs, num_config_attempts)
+        self._configure_device(self.flywheel_intake_motor, flywheel_intake_motor_configs, num_config_attempts)
+
+        if RobotBase.isSimulation() == False:
+            self.flywheel_motor.optimize_bus_utilization()
+            self.flywheel_intake_motor.optimize_bus_utilization()
+
+        # Create VelocityVoltage request
+        self.velocity_pid_request = VelocityVoltage(velocity = 0)
+        self.intake_velocity_pid_request = VelocityVoltage(velocity = 0) 
+        
+        self.voltage_request = VoltageOut(output = 0)
+
+        # Empty detection variable       
+        self.empty_time = None
+        self.has_surged = False
+
+        # What to publish over networktables for shooter
+        self._network_table_instance = NetworkTableInstance.getDefault()
+
+        #Create SysId routine for characterizing flywheel motor
+        self.flywheel_motor_sys_id_routine = SysIdRoutine(
+            SysIdRoutine.Config(
+                rampRate = 0.5,
+                stepVoltage = 9.0,
+                timeout = 15.0,
+                recordState = lambda state: SignalLogger.write_string(
+                    "SysId_Flywheel_Motor_State", SysIdRoutineLog.stateEnumToString(state)
+                )
+            ),
+            SysIdRoutine.Mechanism(
+                lambda output: self.flywheel_motor.set_control(self.voltage_request.with_output(output)),
+                lambda log: None,
+                self,
+            ),
+        )
+
+        #Create SysId routine for characterizing flywheel intake motor
+        self.flywheel_intake_motor_sys_id_routine = SysIdRoutine(
+            SysIdRoutine.Config(
+                rampRate = 0.5,
+                stepVoltage = 9.0,
+                timeout = 15.0,
+                recordState = lambda state: SignalLogger.write_string(
+                    "SysId_Flywheel_Intake_Motor_State", SysIdRoutineLog.stateEnumToString(state)
+                )
+            ),
+            SysIdRoutine.Mechanism(
+                lambda output: self.flywheel_intake_motor.set_control(self.voltage_request.with_output(output)),
+                lambda log: None,
+                self,
+            ),
+        )
+
+        # Create widget for selecting SysId routine and set default value
+        self.sys_id_routine_to_apply = self.flywheel_motor_sys_id_routine
+        self.sys_id_routines = SendableChooser()
+        self.sys_id_routines.setDefaultOption("Flywheel Motor Routine", self.flywheel_motor_sys_id_routine)
+        self.sys_id_routines.addOption("Flywheel Intake Motor Routine", self.flywheel_intake_motor_sys_id_routine)
+
+        # Send widget to Shuffleboard 
+        Shuffleboard.getTab("SysId").add(f"Routines", self.sys_id_routines).withSize(2, 1)
+
+        # Shooter state
+        self._shooter_table = self._network_table_instance.getTable("Shooter State")
+        self.desired_ball_speed = self._shooter_table.getFloatTopic("Desired Ball Speed in Rotations per Second").publish() 
+        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic("Desired Ball Speed in Rotations per Second").subscribe(60)
+        self.desired_ball_speed_sub.get()
+        self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").publish()
+        self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic("Desired Flywheel Intake Speed in Rotations per Second").subscribe(40)
+        self.desired_flywheel_intake_speed_sub.get()
+
+        self._get_current_swerve_state = get_current_swerve_state
+        self._get_robot_tilt = get_robot_tilt
+        self._get_hub_center = get_hub_center
+
+        self.shot_calculator = ShotCalculator(
+            ShotCalculatorConfig(
+                launcher_offset_x = launcher_offset_x,
+                launcher_offset_y = launcher_offset_y,
+            )
+        )
+        self._latest_calculated_shot: LaunchParameters | None = None
+        self._last_flywheel_target_rps = 0.0
+
+    def _configure_device(self, device: TalonFX | TalonFXS,
+                          configs: TalonFXConfiguration | TalonFXSConfiguration,
+                          num_attempts: int) -> None:
+        """
+        Configures a CTRE motor controller with the specified configs,
+        retrying up to num_attempts times if the configuration fails.
+
+        :param device: The CTRE motor controller to configure.
+        :type device: phoenix6.hardware.TalonFX | phoenix6.hardware.TalonFXS
+        :param configs: The configuration to apply to the device
+        :type configs: phoenix6.configs.TalonFXConfiguration | phoenix6.configs.TalonFXSConfiguration
+        :param num_attempts: Number of times to attempt to configure each device
+        :type num_attempts: int
+        """
+        for _ in range(num_attempts):
+            status_code: StatusCode = device.configurator.apply(configs)
+            if status_code.is_ok():
+                break
+        if not status_code.is_ok():
+            PrintCommand(f"Device with CAN ID {device.device_id} failed to config with error: {status_code.name}").schedule()
+        
+    def set_sys_id_routine(self):
+        """
+        Set the SysId Routine to run based off of the routine chosen in Shuffleboard.
+        """
+        self.sys_id_routine_to_apply = self.sys_id_routines.getSelected()
+
+    def sys_id_quasistatic(self, direction: SysIdRoutine.Direction):
+        """
+        Runs the SysId Quasistatic test in the given direction for the routine specified by self.sys_id_routine_to_apply.
+
+        :param direction: Direction of the SysId Quasistatic test
+        :type direction: SysIdRoutine.Direction
+        """
+        return self.sys_id_routine_to_apply.quasistatic(direction)
+
+    def sys_id_dynamic(self, direction: SysIdRoutine.Direction):
+        """
+        Runs the SysId Dynamic test in the given direction for the routine specified by self.sys_id_routine_to_apply.
+
+        :param direction: Direction of the SysId Dynamic test
+        :type direction: SysIdRoutine.Direction
+        """
+        return self.sys_id_routine_to_apply.dynamic(direction)
+
+    def _build_shot_inputs(self) -> ShotInputs:
+        """
+        Gather the current drivetrain and vision state for the shot solver.
+        """
+        current_state = self._get_current_swerve_state()
+        pitch_deg, roll_deg = self._get_robot_tilt()
+
+        return ShotInputs(
+            robot_pose = current_state.pose,
+            field_velocity = ChassisSpeeds.fromRobotRelativeSpeeds(
+                current_state.speeds,
+                current_state.pose.rotation()
+            ),
+            robot_velocity = current_state.speeds,
+            hub_center = self._get_hub_center(),
+            hub_forward = Translation2d(1.0, 0.0),
+            vision_confidence = 1.0,
+            pitch_deg = pitch_deg,
+            roll_deg = roll_deg,
+        )
+
+    def _calculate_launch_parameters(self) -> LaunchParameters | None:
+        """
+        Run the shot calculator for the current robot state.
+        """
+        return self.shot_calculator.calculate(self._build_shot_inputs())
+
+    def _apply_calculated_shot(self):
+        """
+        Apply the latest calculated shot and gate intake/feed on confidence and speed.
+        """
+        self._latest_calculated_shot = self._calculate_launch_parameters()
+        should_run_calculated_shot = self.should_feed_calculated_shot(self._latest_calculated_shot)
+
+        flywheel_target_velocity = (
+            self._latest_calculated_shot.flywheel_rps
+            if should_run_calculated_shot
+            else 0.0
+        )
+        intake_motor_velocity = (
+            self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
+            if should_run_calculated_shot and self.is_flywheel_at_setpoint()
+            else 0.0
+        )
+
+        self.set_flywheel_velocities(flywheel_target_velocity, intake_motor_velocity)
+
+
+    @staticmethod
+    def should_feed_calculated_shot(launch_parameters: LaunchParameters | None) -> bool:
+        """
+        Return whether the current calculated shot is confident enough to feed.
+
+        :param launch_parameters: Latest calculated launch parameters, if any.
+        :type launch_parameters: constants.shot_calculator_constants.LaunchParameters | None
+        :returns: True when the calculated shot is valid and above the confidence threshold.
+        :rtype: bool
+        """
+        return (
+            launch_parameters is not None
+            and launch_parameters.confidence >= Shooter.CALCULATED_FEED_CONFIDENCE_THRESHOLD
+        )
+
+    def reset_calculated_shot_state(self):
+        """
+        Clear warm-start state and the last cached calculated shot.
+        """
+        self.shot_calculator.reset_warm_start()
+        self._latest_calculated_shot = None
+
+    def get_latest_calculated_shot(self) -> LaunchParameters | None:
+        """
+        Return the most recently calculated launch parameters, if any.
+        """
+        return self._latest_calculated_shot
+
+    def is_flywheel_at_setpoint(self, tolerance_rps: float = 1.0) -> bool:
+        """
+        Check whether the main flywheel is within the requested closed-loop tolerance.
+
+        :param tolerance_rps: Closed-loop error tolerance in rotations per second.
+        :type tolerance_rps: float
+        :returns: True when the commanded flywheel target has been reached within tolerance.
+        :rtype: bool
+        """
+        return (
+            self._last_flywheel_target_rps > 0.0
+            and self.flywheel_motor.get_closed_loop_error().is_near(0, tolerance_rps)
+        )
+
+    def create_manual_shoot_command(self):
+        """
+        Build the manual shoot command from the NetworkTables-set targets.
+        """
+        return DeferredCommand(
+            lambda: self.shoot(
+                self.desired_ball_speed_sub.get(),
+                (
+                    self.desired_flywheel_intake_speed_sub.get()
+                    if self.is_flywheel_at_setpoint()
+                    else 0.0
+                )
+            ),
+            self
+        )
+
+    def create_manual_feed_command(self, hopper):
+        """
+        Feed manually only once the main flywheel has reached speed.
+
+        :param hopper: Hopper subsystem used to feed balls toward the shooter.
+        :type hopper: subsystems.hopper.Hopper
+        :returns: Deferred command that either feeds or holds the hopper stopped.
+        :rtype: commands2.Command
+        """
+        return DeferredCommand(
+            lambda: (
+                hopper.create_feed_cycle_command()
+                if self.is_flywheel_at_setpoint()
+                else hopper.create_stop_command()
+            ),
+            hopper
+        )
+
+    def get_fixed_distance_shot_targets(self, distance_m: float) -> tuple[float, float]:
+        """
+        Return the baseline flywheel and intake targets for a fixed-distance shot.
+
+        :param distance_m: Shooter-to-hub distance in meters.
+        :type distance_m: float
+        :returns: Tuple of flywheel target RPS and flywheel-intake target RPS.
+        :rtype: tuple[float, float]
+        """
+        flywheel_target_velocity, _ = calc_shot_profile(distance_m)
+        return flywheel_target_velocity, self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
+
+    def get_current_auto_shot_targets(self) -> tuple[float, float, float]:
+        """
+        Measure the current shooter-to-hub distance and return static auto-shot targets.
+        """
+        current_state = self._get_current_swerve_state()
+        shooter_offset = Transform2d(
+            Translation2d(
+                self.shot_calculator.config.launcher_offset_x,
+                self.shot_calculator.config.launcher_offset_y,
+            ),
+            Rotation2d(),
+        )
+        distance_m = calc_shooter_to_hub_distance(
+            current_state.pose,
+            self._get_hub_center(),
+            shooter_offset,
+        )
+        flywheel_target_velocity, _ = self.shot_calculator.get_profile_for_distance(distance_m)
+        return distance_m, flywheel_target_velocity, self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
+
+    def create_fixed_distance_shoot_command(self, distance_m: float):
+        """
+        Spin the flywheel to a fixed-distance target until it reaches speed.
+
+        :param distance_m: Shooter-to-hub distance in meters.
+        :type distance_m: float
+        :returns: Command that spins the flywheel to the fixed-distance setpoint.
+        :rtype: commands2.Command
+        """
+        return self.run(
+            lambda: self.set_flywheel_velocities(*self.get_fixed_distance_shot_targets(distance_m))
+        ).until(
+            lambda: self.flywheel_motor.get_closed_loop_error().is_near(0, 1)
+        )
+
+    def create_auto_run_shooter_command(self, hopper, drivetrain):
+        """
+        Defer auto-shot target capture until the command is actually scheduled.
+
+        :param hopper: Hopper subsystem used to feed balls.
+        :type hopper: subsystems.hopper.Hopper
+        :param drivetrain: Drivetrain subsystem used for hub alignment during the shot.
+        :type drivetrain: subsystems.swerve_drivetrain.SwerveDrivetrain
+        :returns: Deferred autonomous shooter command.
+        :rtype: commands2.Command
+        """
+        return DeferredCommand(
+            lambda: self._build_auto_run_shooter_command(hopper, drivetrain),
+            self, 
+            hopper,
+            drivetrain,
+        )
+
+    def _build_auto_run_shooter_command(self, hopper, drivetrain):
+        """
+        Build the static auto-shot sequence with alignment and empty detection.
+
+        :param hopper: Hopper subsystem used to feed balls.
+        :type hopper: subsystems.hopper.Hopper
+        :param drivetrain: Drivetrain subsystem used for hub alignment during the shot.
+        :type drivetrain: subsystems.swerve_drivetrain.SwerveDrivetrain
+        :returns: Fully constructed autonomous shooter command sequence.
+        :rtype: commands2.Command
+        """
+        _, flywheel_target_velocity, intake_target_velocity = self.get_current_auto_shot_targets()
+        alignment_timeout = Timer()
+
+        def ready_to_feed():
+            """
+            Gate feeding on flywheel readiness plus alignment or timeout.
+
+            :returns: True when the shooter is ready to begin feeding.
+            :rtype: bool
+            """
+            return self.is_flywheel_at_setpoint() and (
+                drivetrain.is_hub_alignment_within_tolerance(2.5)
+                or alignment_timeout.hasElapsed(1.0)
+            )
+
+        return SequentialCommandGroup(
+            self.runOnce(lambda: self.reset_empty_time()),
+            self.runOnce(lambda: alignment_timeout.restart()),
+            ParallelDeadlineGroup(
+                WaitUntilCommand(ready_to_feed),
+                self.run(
+                    lambda: self.set_flywheel_velocities(
+                        flywheel_target_velocity,
+                        0.0,
+                    )
+                ),
+                drivetrain.create_hold_hub_alignment_command(),
+            ),
+            ParallelDeadlineGroup(
+                WaitUntilCommand(lambda: self.detect_empty()),
+                self.run(
+                    lambda: self.set_flywheel_velocities(
+                        flywheel_target_velocity,
+                        (
+                            intake_target_velocity
+                            if self.is_flywheel_at_setpoint()
+                            else 0.0
+                        ),
+                    )
+                ),
+                RepeatCommand(self.create_manual_feed_command(hopper)),
+                drivetrain.create_hold_hub_alignment_command(),
+            ),
+            ParallelCommandGroup(
+                hopper.create_stop_command(),
+                self.create_stop_command(),
+                drivetrain.create_stop_command(),
+            ),
+        )
+
+    def create_calculated_shoot_command(self):
+        """
+        Recompute and apply the current calculated shoot-on-the-move shot.
+        """
+        return self.runOnce(
+            lambda: self._apply_calculated_shot()
+        )
+
+    def create_calculated_feed_command(self, hopper):
+        """
+        Feed only when the calculated shot is confident and the flywheel is ready.
+
+        :param hopper: Hopper subsystem used to feed balls.
+        :type hopper: subsystems.hopper.Hopper
+        :returns: Deferred command that either feeds or holds the hopper stopped.
+        :rtype: commands2.Command
+        """
+        return DeferredCommand(
+            lambda: (
+                hopper.create_feed_cycle_command()
+                if (
+                    self.should_feed_calculated_shot(self._latest_calculated_shot)
+                    and self.is_flywheel_at_setpoint()
+                )
+                else hopper.create_stop_command()
+            ),
+            hopper
+        )
+
+    def create_stop_command(self):
+        """
+        Build a one-shot command that stops both shooter motors.
+        """
+        return self.runOnce(
+            lambda: self.set_flywheel_velocities(0, 0)
+        )
+    
+#Shoot functions
+    def shoot(self, flywheel_target_velocity, intake_motor_velocity):
+        """
+        Build a one-shot command that applies shooter velocity setpoints.
+
+        :param flywheel_target_velocity: Desired main flywheel velocity in rotations per second.
+        :type flywheel_target_velocity: float
+        :param intake_motor_velocity: Desired flywheel-intake velocity in rotations per second.
+        :type intake_motor_velocity: float
+        :returns: Command that applies the requested shooter setpoints once.
+        :rtype: commands2.Command
+        """
+        return self.runOnce(
+            lambda: self.set_flywheel_velocities(flywheel_target_velocity, intake_motor_velocity)
+        )
+    
+    def set_flywheel_velocities(self, flywheel_target_velocity, intake_motor_velocity):
+        """
+        Apply the requested flywheel and flywheel-intake closed-loop velocities.
+
+        :param flywheel_target_velocity: Desired main flywheel velocity in rotations per second.
+        :type flywheel_target_velocity: float
+        :param intake_motor_velocity: Desired flywheel-intake velocity in rotations per second.
+        :type intake_motor_velocity: float
+        """
+        self._last_flywheel_target_rps = flywheel_target_velocity
+        self.flywheel_motor.set_control(
+            self.velocity_pid_request.with_velocity(flywheel_target_velocity)
+        )
+        self.flywheel_intake_motor.set_control(
+            self.intake_velocity_pid_request.with_velocity(intake_motor_velocity)
+        )
+        # Okay changed this to the seperate PID request crossing finguers
+    
+    def set_voltage(self, motor: TalonFX | TalonFXS, voltage, duration):
+        """
+        Build a timed open-loop voltage command for one shooter motor.
+
+        :param motor: Shooter motor to drive in open loop.
+        :type motor: phoenix6.hardware.TalonFX | phoenix6.hardware.TalonFXS
+        :param voltage: Voltage to apply to the motor.
+        :type voltage: float
+        :param duration: Length of time to apply the voltage in seconds.
+        :type duration: float
+        :returns: Timed voltage command for the requested motor.
+        :rtype: commands2.Command
+        """
+        return self.run(
+            lambda: motor.set_control(
+                self.voltage_request.with_output(voltage)
+            )
+        ).withTimeout(duration)
+        
+    def stop(self):
+        """
+        Schedule an immediate stop for both shooter motors.
+        """
+        SequentialCommandGroup(
+            # self.runOnce(lambda: self.flywheel_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(target_velocity * .75))),
+            # self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .75))),
+            # WaitCommand(.25),
+            # self.runOnce(lambda: self.flywheel_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(target_velocity * .5))),
+            # self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .5))),
+            # WaitCommand(.25),
+            # self.runOnce(lambda: self.flywheel_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(target_velocity * .25))),
+            # self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+            #     self.velocity_pid_request.with_velocity(flywheel_intake_velocity_rps * .25))),
+            # WaitCommand(.25),
+            self.runOnce(lambda: self.flywheel_motor.set_control(
+                self.velocity_pid_request.with_velocity(0))),
+            self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+                self.velocity_pid_request.with_velocity(0)))
+        ).schedule()
+
+#Detect amp surge functions (to determine if the hopper is empty)
+    def detect_empty(self):
+        """
+        Detect hopper-empty behavior by timing the last intake-motor surge.
+        """
+        if self.flywheel_intake_motor.get_closed_loop_error().is_near(0, 1) == True:
+            self.surging = False
+
+        elif self.flywheel_intake_motor.get_closed_loop_error().is_near(0, 1) == False:
+            self.surging = True
+
+        if self.surging == True:
+            self.empty_time = Timer.getFPGATimestamp()
+            # every time there is an amp surge, the empty_time timestamp resets
+            # when no surge occurs, empty_time stops updating
+            # So, empty_time = timestamp of last surge
+            # We detect that the hopper is empty when its been over 1.5 seconds since the last surge
+    
+        return (
+            (Timer.getFPGATimestamp() - self.empty_time) >= 3
+        )
+    
+    def reset_empty_time(self):
+        """
+        Reset the empty-detection timer before starting a feed sequence.
+        """
+        self.empty_time = Timer.getFPGATimestamp()
+        self.surging = True
+
+    # def stop_networktable(self):
+    #     SequentialCommandGroup(
+    #         self.runOnce(lambda: self.flywheel_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * .75))),
+    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * .75))),
+    #         WaitCommand(.25),
+    #         self.runOnce(lambda: self.flywheel_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * .5))),
+    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * .5))),
+    #         WaitCommand(.25),
+    #         self.runOnce(lambda: self.flywheel_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(self.desired_ball_speed_sub.get() * .25))),
+    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(self.desired_flywheel_intake_speed_sub.get() * .25))),
+    #         WaitCommand(.25),
+    #         self.runOnce(lambda: self.flywheel_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(0))),
+    #         self.runOnce(lambda: self.flywheel_intake_motor.set_control(
+    #             self.velocity_pid_request.with_velocity(0)))
+    #     ).schedule()
+        

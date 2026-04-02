@@ -1,7 +1,10 @@
 from phoenix6 import CANBus, configs, hardware, signals, swerve, units
 from wpimath.units import inchesToMeters
 
+from constants.shot_calculator_constants import default_field_type
 from subsystems.swerve_drivetrain import SwerveDrivetrain
+
+from wpimath.filter import SlewRateLimiter
 
 class SwerveDrivetrainConstants:
     """
@@ -10,23 +13,31 @@ class SwerveDrivetrainConstants:
     """
 
     # Robot configuration
-    robot_length = 0.838 # Length of the robot in meters
-    robot_width = 0.838 # Width of the robot in meters
+    _robot_length = 0.838 # Length of the robot in meters
+    _robot_width = 0.838 # Width of the robot in meters
 
     # Max speeds of drivetrain
-    max_linear_speed = 5.25 # Max linear speed in meters per second
-    max_angular_rate = 12.5 # Max angular velocity in radians per second 
+    _max_linear_speed = 5.25 # Max linear speed in meters per second
+    _max_angular_speed = 16 # Max angular velocity in radians per second 
+
+    # Max rate of change of robot (assuming loop cycle time of 0.02 seconds)
+    _max_linear_rate_of_change = (1 / 0.25) * 0.02 * _max_linear_speed # Max speed in 0.25 seconds
+    _max_angular_rate_of_change = (1 / 0.5) * 0.02 * _max_angular_speed # Max speed in 0.5 seconds
+
+    # Frequency to run the odometry loop at in hertz
+    _odometry_update_frequency = 250.0
+
+    _field_type = default_field_type
 
     # The steer motor uses any SwerveModule.SteerRequestType control request with the
     # output type specified by SwerveModuleConstants.SteerMotorClosedLoopOutput
     _steer_gains = (
         configs.Slot0Configs()
-        .with_k_p(100) #140
+        .with_k_p(100) #25
         .with_k_i(0)
-        .with_k_d(0.5) #2.5
+        .with_k_d(0.5) # 1.225
         .with_k_s(0.1)
-        .with_k_v(1.91)
-        .with_k_a(0)
+        .with_k_v(1.5) # 1.499125
         .with_static_feedforward_sign(
             signals.StaticFeedforwardSignValue.USE_CLOSED_LOOP_SIGN
         )
@@ -36,11 +47,11 @@ class SwerveDrivetrainConstants:
     # output type specified by SwerveModuleConstants.DriveMotorClosedLoopOutput
     _drive_gains = (
         configs.Slot0Configs()
-        .with_k_p(5)
+        .with_k_p(0.1)
         .with_k_i(0)
         .with_k_d(0)
-        .with_k_s(2.5)
-        .with_k_v(0)
+        .with_k_s(0)
+        .with_k_v(0.124)
     )
 
     # The closed-loop output type to use for the steer motors;
@@ -49,7 +60,7 @@ class SwerveDrivetrainConstants:
 
     # The closed-loop output type to use for the drive motors;
     # This affects the PID/FF gains for the drive motors
-    _drive_closed_loop_output = swerve.ClosedLoopOutputType.TORQUE_CURRENT_FOC
+    _drive_closed_loop_output = swerve.ClosedLoopOutputType.VOLTAGE
 
     # The type of motor used for the drive motor
     _drive_motor_type = swerve.DriveMotorArrangement.TALON_FX_INTEGRATED
@@ -65,13 +76,26 @@ class SwerveDrivetrainConstants:
     # Essentially used as stator current limit for the drive motors
     # https://v6.docs.ctr-electronics.com/en/2024/docs/api-reference/mechanisms/swerve/swerve-builder-api.html
     # https://v6.docs.ctr-electronics.com/en/latest/docs/hardware-reference/talonfx/improving-performance-with-current-limits.html#preventing-brownouts
-    _slip_current: units.ampere = 80.0
+    _slip_current: units.ampere = 100.0
 
     # Initial configs for the drive and steer motors and the azimuth encoder; these cannot be null.
     # Some configs will be overwritten; check the `with_*_initial_configs()` API documentation.
     # https://api.ctr-electronics.com/phoenix6/latest/python/autoapi/phoenix6/swerve/swerve_module_constants/index.html#phoenix6.swerve.swerve_module_constants.SwerveModuleConstants.drive_motor_initial_configs
-    _drive_initial_configs = configs.TalonFXConfiguration()
-    _steer_initial_configs = configs.TalonFXConfiguration().with_current_limits(
+    _drive_initial_configs = configs.TalonFXConfiguration().with_motor_output(
+        configs.MotorOutputConfigs()
+        .with_neutral_mode(signals.NeutralModeValue.BRAKE)
+    ).with_current_limits(
+        configs.CurrentLimitsConfigs()
+        # Swerve azimuth does not require much torque output, so we can set a relatively low
+        # stator current limit to help avoid brownouts without impacting performance.
+        .with_supply_current_limit(70.0)
+        .with_supply_current_limit_enable(True)
+    )
+
+    _steer_initial_configs = configs.TalonFXConfiguration().with_motor_output(
+        configs.MotorOutputConfigs()
+        .with_neutral_mode(signals.NeutralModeValue.BRAKE)
+    ).with_current_limits(
         configs.CurrentLimitsConfigs()
         # Swerve azimuth does not require much torque output, so we can set a relatively low
         # stator current limit to help avoid brownouts without impacting performance.
@@ -85,9 +109,9 @@ class SwerveDrivetrainConstants:
     # Configs for the Pigeon 2
     _pigeon_configs = configs.Pigeon2Configuration().with_mount_pose(
         configs.MountPoseConfigs()
-        .with_mount_pose_yaw(-82.1805419921875)
-        .with_mount_pose_pitch(0.3210149109363556)
-        .with_mount_pose_roll(0.3210149109363556)
+        .with_mount_pose_yaw(-0.3205808699131012)
+        .with_mount_pose_pitch(-0.43110448122024536)
+        .with_mount_pose_roll(0.033288005739450455)
     )
 
     # CAN bus that the devices are located on;
@@ -105,7 +129,7 @@ class SwerveDrivetrainConstants:
 
     _drive_gear_ratio = 5.67
     _steer_gear_ratio = 12.1
-    _wheel_radius: units.meter = inchesToMeters(2)
+    _wheel_radius: units.meter = 0.050147 #inchesToMeters(1.974)
 
     _invert_left_side = False
     _invert_right_side = True
@@ -159,7 +183,7 @@ class SwerveDrivetrainConstants:
     _front_left_drive_motor_id = 10
     _front_left_steer_motor_id = 20
     _front_left_encoder_id = 0
-    _front_left_encoder_offset: units.rotation = -0.249755859375
+    _front_left_encoder_offset: units.rotation = -0.25439453125
     _front_left_steer_motor_inverted = True
     _front_left_encoder_inverted = False
 
@@ -170,7 +194,7 @@ class SwerveDrivetrainConstants:
     _front_right_drive_motor_id = 11
     _front_right_steer_motor_id = 21
     _front_right_encoder_id = 1
-    _front_right_encoder_offset: units.rotation = -0.224853515625
+    _front_right_encoder_offset: units.rotation = -0.2099609375
     _front_right_steer_motor_inverted = True
     _front_right_encoder_inverted = False
 
@@ -181,7 +205,7 @@ class SwerveDrivetrainConstants:
     _back_left_drive_motor_id = 12
     _back_left_steer_motor_id = 22
     _back_left_encoder_id = 2
-    _back_left_encoder_offset: units.rotation = -0.102294921875
+    _back_left_encoder_offset: units.rotation = -0.1005859375
     _back_left_steer_motor_inverted = True
     _back_left_encoder_inverted = False
 
@@ -192,7 +216,7 @@ class SwerveDrivetrainConstants:
     _back_right_drive_motor_id = 13
     _back_right_steer_motor_id = 23
     _back_right_encoder_id = 3
-    _back_right_encoder_offset: units.rotation = 0.330078125
+    _back_right_encoder_offset: units.rotation = 0.344482421875
     _back_right_steer_motor_inverted = True
     _back_right_encoder_inverted = False
 
@@ -247,7 +271,12 @@ class SwerveDrivetrainConstants:
     @classmethod
     def create_drivetrain(cls) -> SwerveDrivetrain:
         """
-        Creates a SwerveDrivetrain instance.
+        Creates a SwerveDrivetrain instance using the configured constant values.
+
+        :param cls: SwerveDrivetrainConstants class used as the source of the drivetrain constants.
+        :type cls: type[SwerveDrivetrainConstants]
+        :returns: Configured swerve drivetrain subsystem.
+        :rtype: subsystems.swerve_drivetrain.SwerveDrivetrain
         """
 
         return SwerveDrivetrain(
@@ -258,9 +287,14 @@ class SwerveDrivetrainConstants:
             [
                 cls.front_left,
                 cls.front_right,
-                cls.back_left,
+                cls.back_left, 
                 cls.back_right,
             ],
-            cls.max_linear_speed,
-            cls.max_angular_rate
+            cls._odometry_update_frequency,
+            cls._max_linear_speed,
+            cls._max_angular_speed,
+            cls._max_linear_rate_of_change,
+            cls._max_angular_rate_of_change,
+            cls._field_type,
+            cls._wheel_radius,
         )
