@@ -41,6 +41,10 @@ _hub_positions = {
 
 @dataclass
 class Config:
+    """
+    Tunable parameters for the shoot-on-the-move solver.
+    """
+
     launcher_offset_x: float = 0.20
     launcher_offset_y: float = 0.0
 
@@ -74,6 +78,10 @@ class Config:
 
 @dataclass(frozen=True, slots=True)
 class ShotInputs:
+    """
+    Snapshot of drivetrain, field, and vision state for one shot solve.
+    """
+
     robot_pose: Pose2d
     field_velocity: ChassisSpeeds
     robot_velocity: ChassisSpeeds
@@ -86,6 +94,10 @@ class ShotInputs:
 
 @dataclass(frozen=True, slots=True)
 class LaunchParameters:
+    """
+    Output of the shot solver for a single calculated shot.
+    """
+
     flywheel_rps: float
     time_of_flight_sec: float
     drive_angle: Rotation2d
@@ -102,10 +114,27 @@ def _calc_profile_velocity_mps(
     θ: float = default_θ,
     g: float = default_g,
 ):
+    """
+    Return the baseline launch velocity in meters per second for a shot.
+
+    :param x_dis: Horizontal shooter-to-target distance in meters.
+    :type x_dis: float
+    :param y_dis: Vertical distance from shooter exit to target entry in meters.
+    :type y_dis: float
+    :param θ: Launch angle in degrees above horizontal.
+    :type θ: float
+    :param g: Gravitational acceleration in meters per second squared.
+    :type g: float
+    :returns: Baseline launch velocity in meters per second.
+    :rtype: float
+    """
     return calc_velocity(x_dis, y_dis, θ, g)
 
 
 def _get_default_alliance_color():
+    """
+    Resolve the current alliance, defaulting to blue when unavailable.
+    """
     alliance_color = DriverStation.getAlliance()
     if alliance_color == DriverStation.Alliance.kRed:
         return DriverStation.Alliance.kRed
@@ -118,6 +147,13 @@ def get_hub_center(
 ):
     """
         Function to get the hub center translation for the current field setup.
+
+        :param field_type: Active field variant name used to choose the hub coordinates.
+        :type field_type: str
+        :param alliance_color: Alliance used to select the correct hub position, or None to infer it.
+        :type alliance_color: wpilib.DriverStation.Alliance | None
+        :returns: Hub center translation for the requested field and alliance.
+        :rtype: wpimath.geometry.Translation2d
     """
 
     resolved_alliance = alliance_color if alliance_color is not None else _get_default_alliance_color()
@@ -135,6 +171,15 @@ def calc_shooter_to_hub_distance(
 ):
     """
         Function to get the shooter-to-hub distance in meters from pose geometry.
+
+        :param robot_pose: Current robot pose on the field.
+        :type robot_pose: wpimath.geometry.Pose2d
+        :param hub_center: Field translation of the hub center.
+        :type hub_center: wpimath.geometry.Translation2d
+        :param shooter_offset: Transform from robot reference point to shooter exit point.
+        :type shooter_offset: wpimath.geometry.Transform2d
+        :returns: Shooter-to-hub distance in meters.
+        :rtype: float
     """
 
     shooter_pose = robot_pose.transformBy(shooter_offset)
@@ -151,6 +196,17 @@ def calc_distance_to_hub(
     """
         Function to get the shooter-to-hub distance in meters using the
         drivetrain's field geometry defaults.
+
+        :param robot_pose: Current robot pose on the field.
+        :type robot_pose: wpimath.geometry.Pose2d
+        :param field_type: Active field variant name used to choose hub coordinates.
+        :type field_type: str
+        :param alliance_color: Alliance used to select the correct hub position, or None to infer it.
+        :type alliance_color: wpilib.DriverStation.Alliance | None
+        :param shooter_offset: Transform from robot reference point to shooter exit point.
+        :type shooter_offset: wpimath.geometry.Transform2d
+        :returns: Shooter-to-hub distance in meters.
+        :rtype: float
     """
 
     return calc_shooter_to_hub_distance(
@@ -172,6 +228,19 @@ def calc_x_dis(
 
         If given a Pose2d, heading is respected. If given raw x/y, a zero
         heading pose is assumed to preserve older call sites.
+
+        :param robot_pose_or_x: Either a full robot pose or the raw field x position in meters.
+        :type robot_pose_or_x: wpimath.geometry.Pose2d | float
+        :param y_pose: Raw field y position in meters when using x/y inputs.
+        :type y_pose: float | None
+        :param field_type: Active field variant name used to choose hub coordinates.
+        :type field_type: str
+        :param alliance_color: Alliance used to select the correct hub position, or None to infer it.
+        :type alliance_color: wpilib.DriverStation.Alliance | None
+        :param shooter_offset: Transform from robot reference point to shooter exit point.
+        :type shooter_offset: wpimath.geometry.Transform2d
+        :returns: Shooter-to-hub distance in meters.
+        :rtype: float
     """
 
     if isinstance(robot_pose_or_x, Pose2d):
@@ -251,6 +320,17 @@ def calc_time_of_flight(
     """
         Function to get shot time of flight in seconds from the same baseline
         model used for launch velocity.
+
+        :param x_dis: Horizontal shooter-to-target distance in meters.
+        :type x_dis: float
+        :param y_dis: Vertical distance from shooter exit to target entry in meters.
+        :type y_dis: float
+        :param θ: Launch angle in degrees above horizontal.
+        :type θ: float
+        :param g: Gravitational acceleration in meters per second squared.
+        :type g: float
+        :returns: Baseline time of flight in seconds.
+        :rtype: float
     """
 
     ideal_velocity_mps = _calc_profile_velocity_mps(x_dis, y_dis, θ, g)
@@ -271,8 +351,19 @@ def calc_shot_profile(
     """
         Function to get the baseline shot profile for a given distance.
 
+        :param x_dis: Horizontal shooter-to-target distance in meters.
+        :type x_dis: float
+        :param y_dis: Vertical distance from shooter exit to target entry in meters.
+        :type y_dis: float
+        :param θ: Launch angle in degrees above horizontal.
+        :type θ: float
+        :param g: Gravitational acceleration in meters per second squared.
+        :type g: float
+        :param r: Flywheel radius in meters.
+        :type r: float
         :returns: Tuple of target flywheel speed in rotations per second and
         time of flight in seconds.
+        :rtype: tuple[float, float]
     """
 
     ideal_velocity_mps = _calc_profile_velocity_mps(x_dis, y_dis, θ, g)

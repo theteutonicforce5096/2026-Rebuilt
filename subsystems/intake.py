@@ -71,6 +71,9 @@ class Intake(Subsystem):
         self.shooting_position = shooting_position #0.75
 
     def periodic(self):
+        """
+        Publish the current intake wheel voltage for driver-station debugging.
+        """
         intake_wheel_voltage = self.intake_wheel.get_motor_voltage().value_as_double
         SmartDashboard.putNumber("Intake Status", intake_wheel_voltage)
 
@@ -98,16 +101,36 @@ class Intake(Subsystem):
 
 #Intake Wheel Functions 
     def set_intake_speed(self, intake_wheel_volts):
+        """
+        Apply the requested intake-wheel voltage.
+
+        :param intake_wheel_volts: Voltage to apply to the intake wheel motor.
+        :type intake_wheel_volts: float
+        """
         self.intake_wheel.set_control(
             self.voltage_request.with_output(intake_wheel_volts)
         )
 
     def run_intake_wheel(self, intake_wheel_volts):
+        """
+        Build a one-shot command that applies intake wheel voltage.
+
+        :param intake_wheel_volts: Voltage to apply to the intake wheel motor.
+        :type intake_wheel_volts: float
+        :returns: Command that applies intake wheel voltage once.
+        :rtype: commands2.Command
+        """
         return self.runOnce(
             lambda: self.set_intake_speed(intake_wheel_volts)
         )
 
     def set_setpoint(self, position):
+        """
+        Command the intake arm to the requested closed-loop position.
+
+        :param position: Desired intake arm position in mechanism rotations.
+        :type position: float
+        """
         self.intake_arm.set_control(
             self.position_voltage_request.with_position(position)
         )
@@ -115,17 +138,32 @@ class Intake(Subsystem):
         # print(position)
 
     def set_arm_voltage(self, arm_voltage):
+        """
+        Apply an open-loop voltage directly to the intake arm motor.
+
+        :param arm_voltage: Voltage to apply to the intake arm motor.
+        :type arm_voltage: float
+        """
         self.intake_arm.set_control(
             self.arm_voltage_request.with_output(arm_voltage)
         )
 
     def arm_down(self):
+        """
+        Move the intake arm to the intake position.
+        """
         self.set_setpoint(self.intake_position) 
         
     def arm_up(self):
+        """
+        Move the intake arm to the stowed position.
+        """
         self.set_setpoint(self.stowed_position)
 
     def arm_down_intermediate(self):
+        """
+        Move the intake arm to the intermediate shooting position.
+        """
         self.set_setpoint(self.shooting_position)
 
     # Manual arm commands using VoltageOut (not needed)

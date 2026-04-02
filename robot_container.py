@@ -1,14 +1,8 @@
 import commands2
-from pathlib import Path
 
-from commands2.sysid import SysIdRoutine
-from phoenix6 import SignalLogger
+from pathplannerlib.auto import AutoBuilder, NamedCommands
 
-from pathplannerlib.auto import AutoBuilder, NamedCommands, PathPlannerAuto
-
-from wpimath.geometry import Pose2d, Rotation2d
-from wpimath.units import inchesToMeters, feetToMeters
-from wpilib import DriverStation, SmartDashboard, getDeployDirectory
+from wpilib import SmartDashboard
 
 from constants.shot_calculator_constants import get_hub_center
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
@@ -18,7 +12,14 @@ from constants.intake_constants import IntakeConstants
 from constants.vision_constants import VisionConstants
 
 class RobotContainer:
+    """
+    Construct the robot subsystems, controller bindings, and autonomous chooser.
+    """
+
     def __init__(self):
+        """
+        Create the shared robot subsystems and operator interface wiring.
+        """
         # Define max speed variables
         self.max_linear_speed = SwerveDrivetrainConstants._max_linear_speed
         self.max_angular_rate = SwerveDrivetrainConstants._max_angular_speed
@@ -79,9 +80,15 @@ class RobotContainer:
         self.create_button_bindings()
 
     def get_selected_auto_command(self):
+        """
+        Return the autonomous command selected on the dashboard chooser.
+        """
         return self.auto_chooser.getSelected()
 
     def register_named_commands(self):
+        """
+        Register PathPlanner named commands used by autonomous routines.
+        """
         NamedCommands.registerCommand(
             "Run Intake",
             self.intake.runOnce(lambda: self.intake.set_intake_speed(12.0))
@@ -107,22 +114,31 @@ class RobotContainer:
         )
 
     def create_commands_auto(self):
+        """
+        Put subsystems into a known safe state before autonomous begins.
+        """
         self.intake.arm_down()
         self.intake.set_intake_speed(0)
-        self.hopper.run_hopper(0, 0),
+        self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
 
     def create_commands_teleop(self):
+        """
+        Reset operator-facing state and safe subsystem outputs for teleop.
+        """
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain.set_forward_perspective()
         self.drivetrain.reset_operator_heading_tracking()
 
         self.intake.arm_down()
         self.intake.set_intake_speed(0)
-        self.hopper.run_hopper(0, 0),
+        self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
 
     def create_button_bindings(self):
+        """
+        Bind controller buttons to robot actions and default commands.
+        """
         # Set button binding for reseting field centric heading
         (self.controller.leftBumper() & self.controller.rightBumper()).onTrue(
             self.drivetrain.runOnce(
@@ -139,9 +155,13 @@ class RobotContainer:
             self.drivetrain.get_operator_drive_command(
                 lambda: self.controller.getLeftTriggerAxis() > 0.10,
                 lambda: self.controller.getRightTriggerAxis() > 0.10,
-                lambda: self.controller.getLeftY(),
-                lambda: self.controller.getLeftX(),
-                lambda: self.controller.getRightX()
+                lambda: -self.controller.getLeftY(),
+                lambda: -self.controller.getLeftX(),
+                lambda: -self.controller.getRightX()
+            ).beforeStarting(
+                self.drivetrain.runOnce(
+                    lambda: self.drivetrain.reset_operator_heading_tracking()
+                )
             )
         )
 
@@ -166,7 +186,9 @@ class RobotContainer:
                     lambda: self.intake.set_intake_speed(-12)
                 ),
                 self.hopper.run_hopper(-20, -3),
-                self.shooter.set_flywheel_velocities(-30, -30)
+                self.shooter.runOnce(
+                    lambda: self.shooter.set_flywheel_velocities(-30, -30)
+                )
             )
         )
 
@@ -175,15 +197,6 @@ class RobotContainer:
                 lambda: self.drivetrain.reset_pose_hub()
             )
         )
-
-#         self.controller.povLeft().onTrue(
-
-#             self.intake.arm_down_please()
-#         )
-
-#         self.controller.povRight().onTrue(
-#             self.intake.arm_up_please()
-#         )
 
         self.controller.povDown().onTrue(
             self.intake.runOnce(
@@ -194,7 +207,6 @@ class RobotContainer:
         self.controller.povUp().onTrue(
             self.intake.runOnce(
                 lambda: self.intake.arm_up()
-                # lambda: self.intake.set_setpoint(self.intake.current_setpoint + 0.025)
             )
         )
     
@@ -286,8 +298,11 @@ class RobotContainer:
         )
 
     def create_commands_test(self):
+        """
+        Reset subsystem outputs and bind test-only characterization commands.
+        """
         self.intake.set_intake_speed(0)
-        self.hopper.run_hopper(0, 0),
+        self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
 
         self.controller.x().onTrue(

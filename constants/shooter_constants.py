@@ -1,4 +1,4 @@
-from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration, CANcoderConfiguration
+from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration
 from phoenix6 import CANBus, signals
 
 from subsystems.shooter import Shooter
@@ -14,13 +14,9 @@ class ShooterConstants:
     # CAN IDs
     _flywheel_motor_id = 30
     _flywheel_intake_motor_id = 31
-    _flywheel_encoder_id = 32
 
     # Number of times to attempt to configure each device
     _num_config_attempts = 5
-
-    # Update frequency in hertz for the flywheel encoder's velocity measurement
-    flywheel_encoder_vel_update_frequency = 1000.0
 
     # Flywheel Motor Configs (NEO VORTEX - TalonFXS)
     _flywheel_motor_configs = TalonFXSConfiguration()
@@ -30,10 +26,6 @@ class ShooterConstants:
     _flywheel_motor_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)
     _flywheel_motor_configs.current_limits.with_stator_current_limit(80)
     _flywheel_motor_configs.current_limits.with_stator_current_limit_enable(True)
-    # _flywheel_motor_configs.external_feedback.with_feedback_remote_sensor_id(_flywheel_encoder_id)
-    # _flywheel_motor_configs.external_feedback.with_external_feedback_sensor_source(signals.FeedbackSensorSourceValue.REMOTE_CANCODER) #Commutation seemed to be yielding better data
-    # _flywheel_motor_configs.external_feedback.with_sensor_to_mechanism_ratio(1.0)
-    # _flywheel_motor_configs.external_feedback.with_rotor_to_sensor_ratio(1.0)
     _flywheel_motor_configs.slot0.with_k_s(0.11618)
     _flywheel_motor_configs.slot0.with_k_v(0.10922)
     _flywheel_motor_configs.slot0.with_k_p(0.125)
@@ -52,10 +44,6 @@ class ShooterConstants:
     _flywheel_intake_motor_configs.slot0.with_k_i(0)
     _flywheel_intake_motor_configs.slot0.with_k_d(0)
 
-    # Flywheel Encoder Configs (WCP ThroughBore Encoder - CANcoder)
-    _flywheel_encoder_configs = CANcoderConfiguration()
-    _flywheel_encoder_configs.magnet_sensor.sensor_direction = signals.SensorDirectionValue.CLOCKWISE_POSITIVE
-
     @classmethod
     def create_shooter(
         cls,
@@ -66,19 +54,31 @@ class ShooterConstants:
         launcher_offset_y: float,
     ) -> Shooter:
         """
-        Creates a Shooter subsystem instance.
+        Creates a Shooter subsystem instance using the configured constant values.
+
+        :param cls: ShooterConstants class used as the source of the subsystem constants.
+        :type cls: type[ShooterConstants]
+        :param get_current_swerve_state: Function that returns the drivetrain state used by the shot solver.
+        :type get_current_swerve_state: Callable[[], Any]
+        :param get_robot_tilt: Function that returns the current robot pitch and roll in degrees.
+        :type get_robot_tilt: Callable[[], tuple[float, float]]
+        :param get_hub_center: Function that returns the current hub center translation for the active alliance.
+        :type get_hub_center: Callable[[], wpimath.geometry.Translation2d]
+        :param launcher_offset_x: Forward launcher offset from the robot reference point in meters.
+        :type launcher_offset_x: float
+        :param launcher_offset_y: Lateral launcher offset from the robot reference point in meters.
+        :type launcher_offset_y: float
+        :returns: Configured shooter subsystem.
+        :rtype: subsystems.shooter.Shooter
         """
 
         return Shooter(
             cls._canbus,
             cls._flywheel_motor_id,
             cls._flywheel_intake_motor_id,
-            cls._flywheel_encoder_id,
             cls._flywheel_motor_configs,
             cls._flywheel_intake_motor_configs,
-            cls._flywheel_encoder_configs,
             cls._num_config_attempts,
-            cls.flywheel_encoder_vel_update_frequency,
             get_current_swerve_state,
             get_robot_tilt,
             get_hub_center,

@@ -17,11 +17,11 @@ class VisionConstants:
 
     # Per-camera multipliers applied to the vision standard deviations
     # (back_camera, front_left_camera, front_right_camera)
-    _camera_std_dev_factors = (7.5, 5, 5)
+    _camera_std_dev_factors = (1.0, 0.25, 0.25)
 
     # Reference speeds used to scale vision standard deviations during fast motion
     _max_linear_speed = SwerveDrivetrainConstants._max_linear_speed * 0.25
-    _max_angular_speed = SwerveDrivetrainConstants._max_angular_speed * 0.25
+    _max_angular_speed = SwerveDrivetrainConstants._max_angular_speed * 0.20
 
     # Reject vision measurements when robot tilt exceeds this threshold in degrees
     _max_tilt_deg = 5.0
@@ -34,7 +34,18 @@ class VisionConstants:
         get_robot_tilt: Callable[[], tuple[float, float]],
     ) -> Vision:
         """
-        Creates a Vision subsystem instance.
+        Creates a Vision subsystem instance using the configured constant values.
+
+        :param cls: VisionConstants class used as the source of the subsystem constants.
+        :type cls: type[VisionConstants]
+        :param add_vision_measurement: Callback used to inject accepted vision measurements into drivetrain odometry.
+        :type add_vision_measurement: Callable[[wpimath.geometry.Pose2d, float, tuple[float, float, float]], None]
+        :param get_current_swerve_state: Function that returns the current drivetrain state.
+        :type get_current_swerve_state: Callable[[], phoenix6.swerve.SwerveDrivetrain.SwerveDriveState]
+        :param get_robot_tilt: Function that returns the current robot pitch and roll in degrees.
+        :type get_robot_tilt: Callable[[], tuple[float, float]]
+        :returns: Configured vision subsystem.
+        :rtype: subsystems.vision.Vision
         """
 
         return Vision(

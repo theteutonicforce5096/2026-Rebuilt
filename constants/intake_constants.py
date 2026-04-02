@@ -55,7 +55,12 @@ class IntakeConstants:
     @classmethod
     def create_intake(cls) -> Intake:
         """
-        Creates an Intake subsystem instance.
+        Creates an Intake subsystem instance using the configured constant values.
+
+        :param cls: IntakeConstants class used as the source of the subsystem constants.
+        :type cls: type[IntakeConstants]
+        :returns: Configured intake subsystem.
+        :rtype: subsystems.intake.Intake
         """
 
         return Intake(

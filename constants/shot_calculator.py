@@ -222,6 +222,12 @@ class ShotCalculator:
     DERIVATIVE_STEP_METERS: Final[float] = 0.01
 
     def __init__(self, config: Config | None = None) -> None:
+        """
+        Create a shot calculator and load the default calibration residuals.
+
+        :param config: Optional solver configuration override.
+        :type config: constants.shot_calculator_constants.Config | None
+        """
         self.config = config if config is not None else Config()
 
         # Residual tables store empirical correction on top of the physics
@@ -241,29 +247,82 @@ class ShotCalculator:
 
     @staticmethod
     def clamp(value: float, low: float, high: float) -> float:
+        """
+        Clamp a scalar value into the provided inclusive range.
+
+        :param value: Value to clamp.
+        :type value: float
+        :param low: Minimum allowed value.
+        :type low: float
+        :param high: Maximum allowed value.
+        :type high: float
+        :returns: Clamped value.
+        :rtype: float
+        """
         return max(low, min(high, value))
 
     def _launcher_transform(self) -> Transform2d:
+        """
+        Build the launcher transform relative to the robot reference frame.
+        """
         return Transform2d(
             Translation2d(self.config.launcher_offset_x, self.config.launcher_offset_y),
             Rotation2d(),
         )
 
     def _lookup_required(self, table: InterpolatingLookupTable, distance: float, label: str) -> float:
+        """
+        Read a residual lookup value or raise if the table is unexpectedly empty.
+
+        :param table: Residual lookup table to read from.
+        :type table: constants.interpolating_lookup_table.InterpolatingLookupTable
+        :param distance: Shooting distance in meters used as the lookup key.
+        :type distance: float
+        :param label: Human-readable name of the lookup table for error reporting.
+        :type label: str
+        :returns: Residual value stored in the lookup table.
+        :rtype: float
+        """
         value = table.get(distance)
         if value is None:
             raise ValueError(f"{label} lookup table is empty")
         return value
 
     def _physics_rps(self, distance: float) -> float:
+        """
+        Get the baseline flywheel speed from the closed-form shot model.
+
+        :param distance: Shooting distance in meters.
+        :type distance: float
+        :returns: Baseline flywheel target in rotations per second.
+        :rtype: float
+        """
         flywheel_rps, _ = calc_shot_profile(distance)
         return flywheel_rps
 
     def _physics_tof(self, distance: float) -> float:
+        """
+        Get the baseline time of flight from the closed-form shot model.
+
+        :param distance: Shooting distance in meters.
+        :type distance: float
+        :returns: Baseline time of flight in seconds.
+        :rtype: float
+        """
         _, time_of_flight_sec = calc_shot_profile(distance)
         return time_of_flight_sec
 
     def load_lut_entry(self, distance_m: float, flywheel_rps: float, time_of_flight_sec: float) -> None:
+        """
+        Store one empirical LUT point as residuals on top of the physics model.
+
+        :param distance_m: Shooting distance in meters represented by the LUT entry.
+        :type distance_m: float
+        :param flywheel_rps: Empirical flywheel target in rotations per second.
+        :type flywheel_rps: float
+        :param time_of_flight_sec: Empirical time of flight in seconds.
+        :type time_of_flight_sec: float
+        """
         # The lookup table is defined as absolute empirical shot targets:
         # distance_m -> (flywheel_rps, time_of_flight_sec).
         # Internally we store those values as residuals so the calculator uses
@@ -275,6 +334,14 @@ class ShotCalculator:
         self._tof_residual_map.put(distance_m, time_of_flight_sec - physics_tof)
 
     def _effective_rps(self, distance: float) -> float:
+        """
+        Return the calibrated flywheel target for the requested distance.
+
+        :param distance: Shooting distance in meters.
+        :type distance: float
+        :returns: Calibrated flywheel target in rotations per second.
+        :rtype: float
+        """
         return self._physics_rps(distance) + self._lookup_required(
             self._rps_residual_map,
             distance,
@@ -282,6 +349,14 @@ class ShotCalculator:
         )
 
     def _effective_tof(self, distance: float) -> float:
+        """
+        Return the calibrated time of flight for the requested distance.
+
+        :param distance: Shooting distance in meters.
+        :type distance: float
+        :returns: Calibrated time of flight in seconds.
+        :rtype: float
+        """
         return self._physics_tof(distance) + self._lookup_required(
             self._tof_residual_map,
             distance,
@@ -289,20 +364,52 @@ class ShotCalculator:
         )
 
     def get_profile_for_distance(self, distance: float) -> tuple[float, float]:
+        """
+        Get the calibrated flywheel speed and flight time for a static shot.
+
+        :param distance: Shooting distance in meters.
+        :type distance: float
+        :returns: Tuple of calibrated flywheel target RPS and time of flight seconds.
+        :rtype: tuple[float, float]
+        """
         return self._effective_rps(distance), self._effective_tof(distance)
 
     def _drag_compensated_tof(self, tof: float) -> float:
+        """
+        Convert raw time of flight into the drag-adjusted drift time used for lead.
+
+        :param tof: Raw time of flight in seconds.
+        :type tof: float
+        :returns: Drag-adjusted drift time in seconds.
+        :rtype: float
+        """
         if self.config.sotm_drag_coeff < 1e-6:
             return tof
 
         return (1.0 - math.exp(-self.config.sotm_drag_coeff * tof)) / self.config.sotm_drag_coeff
 
     def _tof_map_derivative(self, distance: float) -> float:
+        """
+        Estimate the local derivative of the calibrated TOF curve by finite difference.
+
+        :param distance: Shooting distance in meters.
+        :type distance: float
+        :returns: Estimated derivative of the calibrated TOF curve.
+        :rtype: float
+        """
         high = self._effective_tof(distance + self.DERIVATIVE_STEP_METERS)
         low = self._effective_tof(distance - self.DERIVATIVE_STEP_METERS)
         return (high - low) / (2.0 * self.DERIVATIVE_STEP_METERS)
 
     def calculate(self, inputs: ShotInputs | None) -> LaunchParameters | None:
+        """
+        Solve a shoot-on-the-move shot using the hybrid physics-plus-LUT model.
+
+        :param inputs: Snapshot of current drivetrain, field, and vision state.
+        :type inputs: constants.shot_calculator_constants.ShotInputs | None
+        :returns: Launch parameters for the calculated shot, or None when no valid solution exists.
+        :rtype: constants.shot_calculator_constants.LaunchParameters | None
+        """
         if (
             inputs is None
             or inputs.robot_pose is None
@@ -447,7 +554,9 @@ class ShotCalculator:
         else:
             compensated_target = inputs.hub_center - launcher_velocity * self._drag_compensated_tof(solved_tof)
 
-        aim_vector = compensated_target - robot_translation
+        # Aim from the launcher position so drivetrain alignment matches the
+        # same geometry used for shot distance and projectile compensation.
+        aim_vector = compensated_target - launcher_translation
         drive_angle = Rotation2d(aim_vector.x, aim_vector.y)
         heading_error_rad = angleModulus(drive_angle.radians() - heading.radians())
 
@@ -498,6 +607,22 @@ class ShotCalculator:
         distance: float,
         vision_confidence: float,
     ) -> float:
+        """
+        Collapse solver quality signals into a 0-100 shot confidence score.
+
+        :param solver_quality: Solver convergence quality scalar from 0 to 1.
+        :type solver_quality: float
+        :param current_speed: Current launcher translational speed in meters per second.
+        :type current_speed: float
+        :param heading_error_rad: Absolute heading error to the shot angle in radians.
+        :type heading_error_rad: float
+        :param distance: Shooter-to-hub distance in meters.
+        :type distance: float
+        :param vision_confidence: External vision confidence scalar from 0 to 1.
+        :type vision_confidence: float
+        :returns: Confidence score from 0 to 100.
+        :rtype: float
+        """
         speed_delta = abs(current_speed - self._previous_speed)
         velocity_stability = self.clamp(1.0 - speed_delta / 0.5, 0.0, 1.0)
         vision_quality = self.clamp(vision_confidence, 0.0, 1.0)
@@ -558,6 +683,9 @@ class ShotCalculator:
         return self.clamp(math.exp(weighted_log_sum / weight_sum) * 100.0, 0.0, 100.0)
 
     def reset_warm_start(self) -> None:
+        """
+        Clear solver history so the next shot starts without warm-start state.
+        """
         self._previous_tof = -1.0
         self._previous_speed = 0.0
         self._prev_robot_vx = 0.0

@@ -38,7 +38,12 @@ class HopperConstants:
     @classmethod
     def create_hopper(cls) -> Hopper:
         """
-        Creates a Hopper subsystem instance.
+        Creates a Hopper subsystem instance using the configured constant values.
+
+        :param cls: HopperConstants class used as the source of the subsystem constants.
+        :type cls: type[HopperConstants]
+        :returns: Configured hopper subsystem.
+        :rtype: subsystems.hopper.Hopper
         """
 
         return Hopper(

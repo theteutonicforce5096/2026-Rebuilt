@@ -134,11 +134,29 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
 
 #Hopper functions
     def run_hopper(self, mecanum_velocity, agitator_volts):
+        """
+        Build a one-shot command that applies the requested hopper outputs.
+
+        :param mecanum_velocity: Desired closed-loop velocity for the mecanum wheel in rotations per second.
+        :type mecanum_velocity: float
+        :param agitator_volts: Desired open-loop voltage for the agitator wheel.
+        :type agitator_volts: float
+        :returns: Command that applies the requested hopper outputs once.
+        :rtype: commands2.Command
+        """
         return self.runOnce(
             lambda: self.set_hopper_speeds(mecanum_velocity, agitator_volts)
         )
 
     def set_hopper_speeds(self, mecanum_velocity, agitator_volts):
+        """
+        Apply the requested mecanum-wheel velocity and agitator voltage.
+
+        :param mecanum_velocity: Desired closed-loop velocity for the mecanum wheel in rotations per second.
+        :type mecanum_velocity: float
+        :param agitator_volts: Desired open-loop voltage for the agitator wheel.
+        :type agitator_volts: float
+        """
         self.mecanum_wheel.set_control(
             self.velocity_pid_request.with_velocity(mecanum_velocity)
         )
@@ -147,6 +165,9 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
         )
 
     def create_feed_cycle_command(self):
+        """
+        Alternate the agitator direction briefly while feeding balls forward.
+        """
         return SequentialCommandGroup(
             self.run_hopper(25, 3),
             WaitCommand(0.5),
@@ -155,9 +176,11 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
         )
 
     def create_stop_command(self):
+        """
+        Build a command that stops both hopper motors.
+        """
         return self.run_hopper(0, 0)
 
     # The hopper speeds will likely be constant
     # Mecanum at 35rps
     # Agitator at 1.5v (will flip between pos and neg to help agitate balls)
-
