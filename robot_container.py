@@ -26,6 +26,7 @@ class RobotContainer:
 
         # Create controller
         self.controller = commands2.button.CommandXboxController(0)
+        self.extra_controller = commands2.button.CommandXboxController(1)
 
         # Create drivetrain subsystem
         self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
@@ -150,14 +151,31 @@ class RobotContainer:
             )
         )
 
-        # Set default command for drivetrain
+        # Set command for controller takeover when the right trigger is pressed
+        self.controller.rightTrigger().whileTrue(
+            commands2.cmd.run(
+                self.drivetrain.get_operator_drive_command(
+                    lambda: self.controller.getLeftTriggerAxis() > 0.10,
+                    lambda: self.controller.getRightTriggerAxis() > 0.10,
+                    lambda: -self.controller.getLeftY(),
+                    lambda: -self.controller.getLeftX(),
+                    lambda: -self.controller.getRightX()
+                ).beforeStarting(
+                    self.drivetrain.runOnce(
+                        lambda: self.drivetrain.reset_operator_heading_tracking()
+                    )
+                )
+            )
+        )
+
+        # Set default command for drivetrain as the second controller with slowed inputs
         self.drivetrain.setDefaultCommand(
             self.drivetrain.get_operator_drive_command(
-                lambda: self.controller.getLeftTriggerAxis() > 0.10,
-                lambda: self.controller.getRightTriggerAxis() > 0.10,
-                lambda: -self.controller.getLeftY(),
-                lambda: -self.controller.getLeftX(),
-                lambda: -self.controller.getRightX()
+                lambda: self.extra_controller.getLeftTriggerAxis() > 0.10,
+                lambda: self.extra_controller.getRightTriggerAxis() > 0.10,
+                lambda: (-self.extra_controller.getLeftY()/4),
+                lambda: (-self.extra_controller.getLeftX()/4),
+                lambda: (-self.extra_controller.getRightX()/4)
             ).beforeStarting(
                 self.drivetrain.runOnce(
                     lambda: self.drivetrain.reset_operator_heading_tracking()
