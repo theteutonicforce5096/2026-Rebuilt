@@ -103,10 +103,10 @@ class RobotContainer:
         NamedCommands.registerCommand(
             "Auto Run Shooter",
             commands2.ParallelCommandGroup(
-                commands2.SequentialCommandGroup(
-                    commands2.WaitCommand(5),
-                    self.intake.runOnce(lambda: self.intake.arm_down_intermediate())
-                ),
+                # commands2.SequentialCommandGroup(
+                #     commands2.WaitCommand(5),
+                #     self.intake.runOnce(lambda: self.intake.arm_down_intermediate())
+                # ),
                 self.shooter.create_auto_run_shooter_command(
                     self.hopper,
                     self.drivetrain,
@@ -118,7 +118,7 @@ class RobotContainer:
         """
         Put subsystems into a known safe state before autonomous begins.
         """
-        self.intake.arm_down()
+        # self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
@@ -131,7 +131,7 @@ class RobotContainer:
         self.drivetrain.set_forward_perspective()
         self.drivetrain.reset_operator_heading_tracking()
 
-        self.intake.arm_down()
+        # self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
@@ -153,18 +153,12 @@ class RobotContainer:
 
         # Set command for controller takeover when the right trigger is pressed
         self.controller.rightTrigger().whileTrue(
-            commands2.cmd.run(
-                self.drivetrain.get_operator_drive_command(
-                    lambda: self.controller.getLeftTriggerAxis() > 0.10,
-                    lambda: self.controller.getRightTriggerAxis() > 0.10,
-                    lambda: -self.controller.getLeftY(),
-                    lambda: -self.controller.getLeftX(),
-                    lambda: -self.controller.getRightX()
-                ).beforeStarting(
-                    self.drivetrain.runOnce(
-                        lambda: self.drivetrain.reset_operator_heading_tracking()
-                    )
-                )
+            self.drivetrain.get_operator_drive_command(
+                lambda: self.controller.getLeftTriggerAxis() > 0.10,
+                lambda: self.controller.getRightTriggerAxis() > 0.10,
+                lambda: -self.controller.getLeftY(),
+                lambda: -self.controller.getLeftX(),
+                lambda: -self.controller.getRightX()
             )
         )
 
@@ -216,17 +210,17 @@ class RobotContainer:
             )
         )
 
-        self.controller.povDown().onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_down()
-            )
-        )
+        # self.controller.povDown().onTrue(
+        #     self.intake.runOnce(
+        #         lambda: self.intake.arm_down()
+        #     )
+        # )
 
-        self.controller.povUp().onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_up()
-            )
-        )
+        # self.controller.povUp().onTrue(
+        #     self.intake.runOnce(
+        #         lambda: self.intake.arm_up()
+        #     )
+        # )
     
         self.controller.x().onTrue(
             commands2.SequentialCommandGroup(
