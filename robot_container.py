@@ -167,9 +167,9 @@ class RobotContainer:
             self.drivetrain.get_operator_drive_command(
                 lambda: self.extra_controller.getLeftTriggerAxis() > 0.10,
                 lambda: self.extra_controller.getRightTriggerAxis() > 0.10,
-                lambda: (-self.extra_controller.getLeftY()/4),
-                lambda: (-self.extra_controller.getLeftX()/4),
-                lambda: (-self.extra_controller.getRightX()/4)
+                lambda: (-self.extra_controller.getLeftY()/2),
+                lambda: (-self.extra_controller.getLeftX()/2),
+                lambda: (-self.extra_controller.getRightX()/2)
             ).beforeStarting(
                 self.drivetrain.runOnce(
                     lambda: self.drivetrain.reset_operator_heading_tracking()
