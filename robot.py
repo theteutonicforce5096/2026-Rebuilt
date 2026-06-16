@@ -2,7 +2,7 @@ import time
 import commands2
 
 from commands2 import Command
-from wpilib import DriverStation
+from wpilib import DriverStation, PowerDistribution
 from phoenix6 import utils, SignalLogger
 
 from robot_container import RobotContainer
@@ -13,6 +13,9 @@ class RebuiltRobot(commands2.TimedCommandRobot):
     """
     
     def robotInit(self):
+        # Doesn't work: Enable switchable channel on the REV PDH
+        # PowerDistribution().setSwitchableChannel(True)
+    
         # Disable Phoenix 6 Auto Signal Logging
         SignalLogger.enable_auto_logging(False)
 
@@ -29,7 +32,10 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         
     def autonomousInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
-        pass
+        self.robot_container.create_commands_auto()
+        self.autonomous_command = self.robot_container.get_selected_auto_command()
+        if self.autonomous_command is not None:
+            self.autonomous_command.schedule()
 
     def teleopInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()

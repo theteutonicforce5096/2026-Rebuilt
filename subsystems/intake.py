@@ -1,10 +1,10 @@
-from commands2 import PrintCommand, Subsystem
+from commands2 import PrintCommand, Subsystem, SequentialCommandGroup, WaitCommand, RepeatCommand, ParallelCommandGroup
 from phoenix6 import CANBus
 from phoenix6.configs import CANcoderConfiguration, TalonFXSConfiguration, TalonFXConfiguration
 from phoenix6.controls import PositionVoltage, VoltageOut
 from phoenix6.hardware import CANcoder, TalonFXS, TalonFX
 from phoenix6.status_code import StatusCode
-from wpilib import RobotBase
+from wpilib import RobotBase, SmartDashboard
 
 class Intake(Subsystem):
     """
@@ -14,7 +14,7 @@ class Intake(Subsystem):
     def __init__(self, canbus: CANBus, intake_wheel_id: int, intake_arm_id: int, 
                  intake_arm_encoder_id: int, intake_wheel_configs: TalonFXSConfiguration, 
                  intake_arm_configs: TalonFXConfiguration, intake_arm_encoder_configs: CANcoderConfiguration,
-                 num_config_attempts: int, intake_position: float, stowed_position: float):
+                 num_config_attempts: int, intake_position: float, stowed_position: float, shooting_position: float):
         """
         Constructor for initializing shooter using the specified constants.
 
@@ -38,6 +38,8 @@ class Intake(Subsystem):
         :type intake_position: float
         :param stowed_position: Encoder position where arm is up
         :type stowed_position: float
+        :param shooting_position: Encoder position where the arm is at an intermediate position
+        :type shooting_position: float
         """
 
         Subsystem.__init__(self) 
@@ -59,12 +61,18 @@ class Intake(Subsystem):
 
         # Create PID control requests
         self.voltage_request = VoltageOut(output = 0)
+        self.arm_voltage_request = VoltageOut(output = 0)
         self.position_voltage_request = PositionVoltage(position = 0)
         # Placeholder values, will need to be tuned
 
         # Arm Positions because apparently we need those
-        self.intake_position = intake_position
-        self.stowed_position = stowed_position
+        self.intake_position = intake_position #0.495
+        self.stowed_position = stowed_position #0.89
+        self.shooting_position = shooting_position #0.75
+
+    def periodic(self):
+        intake_wheel_voltage = self.intake_wheel.get_motor_voltage().value_as_double
+        SmartDashboard.putNumber("Intake Status", intake_wheel_voltage)
 
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
@@ -105,14 +113,40 @@ class Intake(Subsystem):
         )
         # print(position)
 
+    def set_arm_voltage(self, arm_voltage):
+        self.intake_arm.set_control(
+            self.arm_voltage_request.with_output(arm_voltage)
+        )
+
     def arm_down(self):
         self.set_setpoint(self.intake_position) 
         
     def arm_up(self):
-        self.set_setpoint(self.stowed_position)  
-      
+        self.set_setpoint(self.stowed_position)
 
-        
+    def arm_down_intermediate(self):
+        self.set_setpoint(self.shooting_position)
 
+    # Manual arm commands using VoltageOut (not needed)
+    # def arm_down_please(self):
+    #     return SequentialCommandGroup(
+    #         self.runOnce(
+    #             lambda: self.set_arm_voltage(-9.0)
+    #         ),
+    #         WaitCommand(.5),
+    #         self.runOnce(
+    #             lambda: self.set_arm_voltage(0.0)
+    #         )
+    #     )
     
+    # def arm_up_please(self):
+    #     return SequentialCommandGroup(
+    #         self.runOnce(
+    #             lambda: self.set_arm_voltage(9.0)
+    #         ),
+    #         WaitCommand(.5),
+    #         self.runOnce(
+    #             lambda: self.set_arm_voltage(0.0)
+    #         )
+    #     )
             

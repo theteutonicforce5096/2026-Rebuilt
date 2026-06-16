@@ -7,19 +7,43 @@
         {
           "type": "path",
           "data": {
+            "pathName": "Right Trench to Hub"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "Auto Run Shooter"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "Run Intake"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
             "pathName": "Right Trench to Neutral Zone and Back"
           }
         },
         {
           "type": "named",
           "data": {
-            "name": "Run Shooter 3m"
+            "name": "Turn Off Intake"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "Auto Run Shooter"
           }
         }
       ]
     }
   },
-  "resetOdom": false,
+  "resetOdom": true,
   "folder": null,
   "choreoAuto": false
 }

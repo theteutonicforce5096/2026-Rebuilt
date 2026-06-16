@@ -1,15 +1,15 @@
 from typing import Callable, Any
 from math import pi
 
-from commands2 import Subsystem
+from commands2 import FunctionalCommand, Subsystem
 from commands2.sysid import SysIdRoutine
 
 from phoenix6 import swerve, utils, SignalLogger
 
-from wpilib import DriverStation, Field2d, Notifier, RobotController, SendableChooser, SmartDashboard
+from wpilib import DriverStation, Field2d, Notifier, RobotController, SendableChooser, SmartDashboard, Timer
 from wpilib.shuffleboard import Shuffleboard
 from wpilib.sysid import SysIdRoutineLog
-from wpimath.geometry import Rotation2d, Translation2d
+from wpimath.geometry import Rotation2d, Translation2d, Pose2d
 from wpimath.kinematics import ChassisSpeeds
 
 from pathplannerlib.auto import AutoBuilder, RobotConfig
@@ -30,7 +30,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                  drivetrain_constants: swerve.SwerveDrivetrainConstants,
                  modules: list[swerve.SwerveModuleConstants],
                  odometry_update_frequency: float, max_linear_speed: float, max_angular_speed: float,
-                 max_linear_accel: float, max_angular_accel: float, field_type: str):
+                 max_linear_rate_of_change: float, max_angular_rate_of_change: float,
+                 field_type: str, wheel_radius: float):
         """
         Constructor for initializing swerve drivetrain using the specified constants.
 
@@ -50,10 +51,10 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         :type max_linear_speed: float
         :param max_angular_speed: Max angular velocity of drivetrain in radians per second. 
         :type max_angular_speed: float
-        :param max_linear_accel: Max linear acceleration of drivetrain in meters per second squared.
-        :type max_linear_accel: float
-        :param max_angular_accel: Max angular acceleration of drivetrain in radians per second squared.
-        :type max_angular_accel: float
+        :param max_linear_rate_of_change: Max linear rate of change of drivetrain in meters per second.
+        :type max_linear_rate_of_change: float
+        :param max_angular_rate_of_change: Max angular rate of change of drivetrain in radians per second.
+        :type max_angular_rate_of_change: float
         :param field_type: Current field variant used for field geometry.
         :type field_type: str
         """
@@ -77,19 +78,25 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # Create max speed and max accel variables
         self.max_linear_speed = max_linear_speed
         self.max_angular_speed = max_angular_speed
-        self.max_linear_accel = max_linear_accel
-        self.max_angular_accel = max_angular_accel
+        self.max_linear_rate_of_change = max_linear_rate_of_change
+        self.max_angular_rate_of_change = max_angular_rate_of_change
 
         self.field_type = field_type
+        self.wheel_radius = wheel_radius
+        self._drive_base_radius = sum(
+            module_location.norm() for module_location in self.module_locations
+        ) / len(self.module_locations)
 
         # Create shooter position variable
         self.shooter_offset = default_shooter_offset
 
         # Create current alliance variable
-        self.current_alliance = None 
-        self.set_forward_perspective()
+        self.current_alliance = None
+        self.operator_heading_target = Rotation2d()
+        self.operator_was_rotating = False
+        self.operator_heading_reset_threshold = Rotation2d.fromDegrees(45)
 
-        # Create request for controlling swerve drive
+        # Create requests for controlling swerve drive
         # https://www.chiefdelphi.com/t/motion-magic-velocity-control-for-drive-motors-in-phoenix6-swerve-drive-api/483669/6
         self.field_centric_request = (
             swerve.requests.FieldCentric()
@@ -97,6 +104,15 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
             .with_desaturate_wheel_speeds(True)
+        )
+
+        self.field_centric_facing_angle_request = (
+            swerve.requests.FieldCentricFacingAngle()
+            .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.OPERATOR_PERSPECTIVE)
+            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
+            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
+            .with_desaturate_wheel_speeds(True)
+            .with_heading_pid(8, 0, 0)
         )
 
         # Create Apply Robot Speeds Request for PathPlanner
@@ -109,14 +125,18 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
         self.rotate_robot_request = (
             swerve.requests.FieldCentricFacingAngle()
+            .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.BLUE_ALLIANCE)
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
-            .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.BLUE_ALLIANCE)
-            .with_heading_pid(10, 0, 0)
+            .with_desaturate_wheel_speeds(True)
+            .with_heading_pid(7.5, 0, 0)
         )
 
         self.rotate_robot_pid_controller = self.rotate_robot_request.heading_controller
         self.rotate_robot_pid_controller.setTolerance(Rotation2d.fromDegrees(1.0).radians())
+
+        self.set_forward_perspective()
+        self.reset_operator_heading_tracking()
 
         self._configure_auto_builder()
 
@@ -253,6 +273,27 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             self.set_operator_perspective_forward(Rotation2d.fromDegrees(0))
             self.current_alliance = DriverStation.Alliance.kBlue
 
+    def reset_operator_heading_tracking(self):
+        """
+        Sync the teleop heading lock target to the current operator-perspective heading.
+        """
+
+        self.operator_heading_target = (
+            self.get_state().pose.rotation() - self.get_operator_forward_direction()
+        )
+        self.operator_was_rotating = False
+        self.field_centric_facing_angle_request.heading_controller.reset()
+
+    def reset_pose_hub(self):
+        if self.current_alliance == DriverStation.Alliance.kBlue:
+            self.reset_pose(
+                Pose2d(3.581, 4.036, Rotation2d.fromDegrees(180))
+            )
+        else:
+            self.reset_pose(
+                12.959, 4.036, Rotation2d.fromDegrees(0)
+            )
+
     def get_robot_tilt(self) -> tuple[float, float]:
         """
         Get the current pitch and roll in degrees of the robot from the Pigeon 2.
@@ -282,30 +323,83 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         current_vx = current_state.speeds.vx
         current_vy = current_state.speeds.vy
         current_omega = current_state.speeds.omega
-        
-        # Square or cube inputs
-        requested_vx = abs(forward_speed) * forward_speed * self.max_linear_speed
-        requested_vy = abs(strafe_speed) * strafe_speed * self.max_linear_speed
-        requested_omega = rotation_speed * rotation_speed * rotation_speed * self.max_angular_speed
-        
-        # Clamp requested velocity to a window around actual velocity
-        limited_vx = max(current_vx - self.max_linear_accel, min(requested_vx, current_vx + self.max_linear_accel))
-        limited_vy = max(current_vy - self.max_linear_accel, min(requested_vy, current_vy + self.max_linear_accel))
-        limited_omega = max(current_omega - self.max_angular_accel, min(requested_omega, current_omega + self.max_angular_accel))
+        current_rotation_operator_perspective = (
+            current_state.pose.rotation() - self.get_operator_forward_direction()
+        )
 
         if left_trigger_pressed and right_trigger_pressed:
-            scale_factor = 1.0
+            max_linear_speed = self.max_linear_speed
+            max_angular_speed = self.max_angular_speed
         else:
-            scale_factor = 0.75
-        
-        operator_drive_request = (
-            self.field_centric_request
-            .with_velocity_x(requested_vx * scale_factor)
-            .with_velocity_y(requested_vy * scale_factor)
-            .with_rotational_rate(requested_omega * scale_factor)
-            .with_deadband((self.max_linear_speed * scale_factor) * 0.075)
-            .with_rotational_deadband((self.max_angular_speed * scale_factor) * 0.075)
-        )
+            max_linear_speed = self.max_linear_speed * 0.75
+            max_angular_speed = self.max_angular_speed * 0.5
+
+        # Square or cube inputs
+        if abs(forward_speed) > 0.075:
+            requested_vx = abs(forward_speed) * forward_speed * max_linear_speed
+            requested_vx_rate_of_change = requested_vx - current_vx
+            if requested_vx_rate_of_change > self.max_linear_rate_of_change:
+                limited_vx = current_vx + self.max_linear_rate_of_change
+            elif requested_vx_rate_of_change < -self.max_linear_rate_of_change:
+                limited_vx = current_vx - self.max_linear_rate_of_change
+            else:
+                limited_vx = requested_vx
+        else:
+            requested_vx = 0
+            limited_vx = 0
+
+        if abs(strafe_speed) > 0.075:
+            requested_vy = abs(strafe_speed) * strafe_speed * max_linear_speed
+            requested_vy_rate_of_change = requested_vy - current_vy
+            if requested_vy_rate_of_change > self.max_linear_rate_of_change:
+                limited_vy = current_vy + self.max_linear_rate_of_change
+            elif requested_vy_rate_of_change < -self.max_linear_rate_of_change:
+                limited_vy = current_vy - self.max_linear_rate_of_change
+            else:
+                limited_vy = requested_vy
+        else:
+            requested_vy = 0
+            limited_vy = 0
+
+        if abs(rotation_speed) > 0.075:
+            requested_omega = rotation_speed * rotation_speed * rotation_speed * max_angular_speed
+            requested_omega_rate_of_change = requested_omega - current_omega
+            if requested_omega_rate_of_change > self.max_angular_rate_of_change:
+                limited_omega = current_omega + self.max_angular_rate_of_change
+            elif requested_omega_rate_of_change < -self.max_angular_rate_of_change:
+                limited_omega = current_omega - self.max_angular_rate_of_change
+            else:
+                limited_omega = requested_omega
+        else:
+            requested_omega = 0
+            limited_omega = 0
+
+        if limited_omega == 0:
+            current_heading_error = abs(
+                (self.operator_heading_target - current_rotation_operator_perspective).degrees()
+            )
+            if (
+                self.operator_was_rotating
+                or current_heading_error >= self.operator_heading_reset_threshold.degrees()
+            ):
+                self.operator_heading_target = current_rotation_operator_perspective
+                self.field_centric_facing_angle_request.heading_controller.reset()
+
+            self.operator_was_rotating = False
+            operator_drive_request = (
+                self.field_centric_facing_angle_request
+                .with_velocity_x(requested_vx)
+                .with_velocity_y(requested_vy)
+                .with_target_direction(self.operator_heading_target)
+            )
+        else:
+            self.operator_was_rotating = True
+            operator_drive_request = (
+                self.field_centric_request
+                .with_velocity_x(requested_vx)
+                .with_velocity_y(requested_vy)
+                .with_rotational_rate(requested_omega)
+            )
 
         return operator_drive_request
     
@@ -381,17 +475,38 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
         self.set_control(request)
 
-    def auto_align_to_hub(self):
-        """
-        Rotate the robot to face the hub from the shooter position.
-        """
+    def get_hub_alignment_error(self) -> Rotation2d:
+        return self._get_hub_alignment_angle() - self.get_state().pose.rotation()
 
+    def is_hub_alignment_within_tolerance(self, tolerance_deg: float = 2.5) -> bool:
+        return abs(self.get_hub_alignment_error().degrees()) <= tolerance_deg
+
+    def create_hold_hub_alignment_command(self):
         return self.runOnce(
             lambda: self.rotate_robot_pid_controller.reset()
         ).andThen(
             self.run(
                 lambda: self._apply_alignment_target(self._get_hub_alignment_angle())
-            ).until(self.rotate_robot_pid_controller.atSetpoint)
+            )
+        )
+
+    def create_stop_command(self):
+        return self.runOnce(
+            lambda: self.set_control(
+                self.field_centric_request
+                .with_velocity_x(0.0)
+                .with_velocity_y(0.0)
+                .with_rotational_rate(0.0)
+            )
+        )
+
+    def auto_align_to_hub(self):
+        """
+        Rotate the robot to face the hub from the shooter position.
+        """
+
+        return self.create_hold_hub_alignment_command().until(
+            self.rotate_robot_pid_controller.atSetpoint
         )
 
     def auto_align_to_shot_angle(
@@ -446,3 +561,80 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         :type direction: SysIdRoutine.Direction
         """
         return self.sys_id_routine_to_apply.dynamic(direction)
+
+    def create_effective_wheel_radius_characterization_command(self):
+        ramp_duration_sec = 2
+        hold_duration_sec = 1
+        characterization_duration_sec = (2.0 * ramp_duration_sec) + hold_duration_sec
+        initial_yaw_deg = 0.0
+        initial_distances_m = [0.0] * len(self.modules)
+        timer = Timer()
+
+        def initialize():
+            nonlocal initial_yaw_deg, initial_distances_m
+            initial_yaw_deg = self.pigeon2.get_yaw().value_as_double
+            initial_distances_m = [
+                self.get_module(module_index).get_position(True).distance
+                for module_index in range(len(self.modules))
+            ]
+            timer.restart()
+
+        def execute():
+            elapsed_sec = timer.get()
+            if elapsed_sec < ramp_duration_sec:
+                requested_omega_rad_per_sec = (self.max_angular_speed * 0.5) * (elapsed_sec / ramp_duration_sec)
+            elif elapsed_sec < (ramp_duration_sec + hold_duration_sec):
+                requested_omega_rad_per_sec = self.max_angular_speed * 0.5
+            else:
+                requested_omega_rad_per_sec = (self.max_angular_speed * 0.5) * max(
+                    0.0,
+                    (characterization_duration_sec - elapsed_sec) / ramp_duration_sec,
+                )
+
+            self.set_control(
+                self.field_centric_request
+                .with_velocity_x(0.0)
+                .with_velocity_y(0.0)
+                .with_rotational_rate(-requested_omega_rad_per_sec)
+            )
+
+        def end(interrupted: bool):
+            timer.stop()
+            self.set_control(
+                self.field_centric_request
+                .with_velocity_x(0.0)
+                .with_velocity_y(0.0)
+                .with_rotational_rate(0.0)
+            )
+
+            final_yaw_deg = self.pigeon2.get_yaw().value_as_double
+            yaw_delta_rad = abs(final_yaw_deg - initial_yaw_deg) * pi / 180.0
+            wheel_distance_delta_m = [
+                abs(self.get_module(module_index).get_position(True).distance - initial_distances_m[module_index])
+                for module_index in range(len(self.modules))
+            ]
+            average_wheel_delta_m = sum(wheel_distance_delta_m) / len(wheel_distance_delta_m)
+
+            if average_wheel_delta_m <= 1e-9 or yaw_delta_rad <= 1e-9:
+                print("Effective wheel radius characterization did not collect enough movement data.")
+                return
+
+            effective_wheel_radius_m = (
+                self.wheel_radius
+                * self._drive_base_radius
+                * yaw_delta_rad
+                / average_wheel_delta_m
+            )
+            print(
+                "Effective wheel radius:"
+                f" {effective_wheel_radius_m:.6f} m"
+                f" ({effective_wheel_radius_m / 0.0254:.3f} in)"
+            )
+
+        return FunctionalCommand(
+            initialize,
+            execute,
+            end,
+            lambda: timer.get() >= characterization_duration_sec,
+            self,
+        )

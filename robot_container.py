@@ -1,13 +1,14 @@
 import commands2
+from pathlib import Path
 
 from commands2.sysid import SysIdRoutine
 from phoenix6 import SignalLogger
 
-from pathplannerlib.auto import AutoBuilder, NamedCommands
+from pathplannerlib.auto import AutoBuilder, NamedCommands, PathPlannerAuto
 
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import inchesToMeters, feetToMeters
-from wpilib import DriverStation, SmartDashboard
+from wpilib import DriverStation, SmartDashboard, getDeployDirectory
 
 from constants.shot_calculator_constants import get_hub_center
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
@@ -60,16 +61,16 @@ class RobotContainer:
             self.drivetrain.get_robot_tilt,
         )
 
-        # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
-        alliance_color = DriverStation.getAlliance()
-        if alliance_color == DriverStation.Alliance.kRed:
-            self.drivetrain.reset_pose(
-                Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(0))
-            )
-        else:
-            self.drivetrain.reset_pose(
-                Pose2d(inchesToMeters(168.56 - 23.51) - feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
-            )
+        # # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
+        # alliance_color = DriverStation.getAlliance()
+        # if alliance_color == DriverStation.Alliance.kRed:
+        #     self.drivetrain.reset_pose(
+        #         Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(0))
+        #     )
+        # else:
+        #     self.drivetrain.reset_pose(
+        #         Pose2d(inchesToMeters(168.56 - 23.51) - feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
+        #     )
         
         self._last_observed_auto_signature: tuple[str | None, bool] | None = None
         self._last_seeded_auto_signature: tuple[str | None, bool] | None = None
@@ -81,6 +82,9 @@ class RobotContainer:
         SmartDashboard.putData("Auto Chooser", self.auto_chooser)
 
         self.create_button_bindings()
+
+    def get_selected_auto_command(self):
+        return self.auto_chooser.getSelected()
 
     def register_named_commands(self):
         NamedCommands.registerCommand(
@@ -94,43 +98,42 @@ class RobotContainer:
         )
 
         NamedCommands.registerCommand(
-            "Run Shooter 2m",
-            commands2.SequentialCommandGroup(
-                self.shooter.create_fixed_distance_shoot_command(2.0),
-                self.hopper.create_feed_cycle_command(),
-                commands2.ParallelCommandGroup(
-                    self.hopper.create_stop_command(),
-                    self.shooter.create_stop_command(),
+            "Auto Run Shooter",
+            commands2.ParallelCommandGroup(
+                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                self.shooter.create_auto_run_shooter_command(
+                    self.hopper,
+                    self.drivetrain,
                 )
             )
         )
 
-        NamedCommands.registerCommand(
-            "Run Shooter 3m",
-            commands2.SequentialCommandGroup(
-                self.shooter.create_fixed_distance_shoot_command(3.0),
-                self.hopper.create_feed_cycle_command(),
-                commands2.ParallelCommandGroup(
-                    self.hopper.create_stop_command(),
-                    self.shooter.create_stop_command(),
-                )
-            )        
-        )
-
     def create_commands_auto(self):
-        self.drivetrain.set_forward_perspective()
-        self.intake.runOnce(
-            lambda: self.intake.arm_down()
-        ).schedule()
+        self.intake.arm_down()
+        self.intake.set_intake_speed(0)
+        self.hopper.run_hopper(0, 0),
+        self.shooter.set_flywheel_velocities(0, 0)
 
     def create_commands_teleop(self):
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain.set_forward_perspective()
+        self.drivetrain.reset_operator_heading_tracking()
+
+        self.intake.arm_down()
+        self.intake.set_intake_speed(0)
+        self.hopper.run_hopper(0, 0),
+        self.shooter.set_flywheel_velocities(0, 0)
 
     def create_button_bindings(self):
         # Set button binding for reseting field centric heading
         (self.controller.leftBumper() & self.controller.rightBumper()).onTrue(
-            self.drivetrain.runOnce(lambda: self.drivetrain.seed_field_centric())
+            self.drivetrain.runOnce(
+                lambda: (
+                    self.drivetrain.seed_field_centric(),
+                    self.drivetrain.set_forward_perspective(),
+                    self.drivetrain.reset_operator_heading_tracking()
+                )
+            )
         )
 
         # Set LEDs jst on because this robot is so cooked
@@ -164,20 +167,47 @@ class RobotContainer:
             )
         )
 
-        self.controller.povUp().onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_up()
+        self.controller.povRight().onTrue(
+            commands2.ParallelCommandGroup(
+                self.intake.runOnce(
+                    lambda: self.intake.set_intake_speed(-12)
+                ),
+                self.hopper.run_hopper(-20, -3),
+                self.shooter.set_flywheel_velocities(-30, -30)
             )
         )
+
+        self.controller.povLeft().onTrue(
+            self.drivetrain.runOnce(
+                lambda: self.drivetrain.reset_pose_hub()
+            )
+        )
+
+#         self.controller.povLeft().onTrue(
+
+#             self.intake.arm_down_please()
+#         )
+
+#         self.controller.povRight().onTrue(
+#             self.intake.arm_up_please()
+#         )
 
         self.controller.povDown().onTrue(
             self.intake.runOnce(
                 lambda: self.intake.arm_down()
             )
         )
+
+        self.controller.povUp().onTrue(
+            self.intake.runOnce(
+                lambda: self.intake.arm_up()
+            )
+        )
     
         self.controller.x().onTrue(
             commands2.SequentialCommandGroup(
+                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
                 commands2.ParallelDeadlineGroup(
                     commands2.WaitUntilCommand(
                         lambda: self.controller.getHID().getYButton()
@@ -186,13 +216,16 @@ class RobotContainer:
                         self.shooter.create_manual_shoot_command()
                     ),
                     commands2.RepeatCommand(
-                        self.hopper.create_feed_cycle_command()
+                        self.shooter.create_manual_feed_command(self.hopper)
                     )
                     # RepeatCommand(
                     #     self.drivetrain.auto_align_to_hub()
                     # )
                 ),
                 commands2.ParallelCommandGroup(
+                    self.intake.runOnce(
+                        lambda: self.intake.set_intake_speed(0)
+                    ),
                     self.hopper.create_stop_command(),
                     self.shooter.create_stop_command()
                 )
@@ -201,65 +234,70 @@ class RobotContainer:
 
         self.controller.b().onTrue(
             commands2.SequentialCommandGroup(
-                commands2.ParallelDeadlineGroup(
-                    commands2.SequentialCommandGroup(
-                        commands2.InstantCommand(
-                            lambda: self.shooter.reset_calculated_shot_state()
-                        ),
-                        commands2.InstantCommand(
-                            lambda: self.shooter.reset_empty_time()
-                        ),
-                        commands2.ParallelCommandGroup(
-                            commands2.WaitUntilCommand(
-                                lambda: self.shooter.detect_empty()
-                            ),
-                            commands2.WaitUntilCommand(
-                                lambda: self.controller.getHID().getYButton()
-                            )
-                        )
-                    ),
-                    commands2.ParallelCommandGroup(
-                        commands2.RepeatCommand(
-                            self.shooter.create_calculated_shoot_command()
-                        ),
-                        commands2.RepeatCommand(
-                            self.shooter.create_calculated_feed_command(self.hopper)
-                        ),
-                        commands2.RepeatCommand(
-                            self.drivetrain.auto_align_to_shot_angle(
-                                self.shooter.get_latest_calculated_shot
-                            )
-                        )
+                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
+                commands2.SequentialCommandGroup(
+                    commands2.InstantCommand(
+                        lambda: self.shooter.reset_calculated_shot_state()
                     )
+                    # commands2.InstantCommand(
+                    #     lambda: self.shooter.reset_empty_time()
+                    # )
                 ),
                 commands2.ParallelCommandGroup(
+                    # commands2.WaitUntilCommand(
+                    #     lambda: self.shooter.detect_empty()
+                    # ),
+                    commands2.RepeatCommand(
+                        self.shooter.create_calculated_shoot_command()
+                    ),
+                    commands2.RepeatCommand(
+                        self.shooter.create_calculated_feed_command(self.hopper)
+                    )
+                    # commands2.RepeatCommand(
+                    #     self.drivetrain.auto_align_to_shot_angle(
+                    #         self.shooter.get_latest_calculated_shot
+                    #     )
+                    # ),
+                ).until(
+                    lambda: self.controller.getHID().getYButton()
+                ),
+                commands2.ParallelCommandGroup(
+                    self.intake.runOnce(
+                        lambda: self.intake.set_intake_speed(0)
+                    ),
                     self.hopper.create_stop_command(),
                     self.shooter.create_stop_command()
                 )
             )
         )
 
+        self.controller.rightTrigger().onTrue(
+            commands2.SequentialCommandGroup(
+                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
+                self.shooter.create_auto_run_shooter_command(
+                    self.hopper,
+                    self.drivetrain
+                )
+            )
+        )
+
         self.controller.y().onTrue(
             commands2.ParallelCommandGroup(
+                self.intake.runOnce(
+                    lambda: self.intake.set_intake_speed(0)
+                ),
                 self.hopper.create_stop_command(),
                 self.shooter.create_stop_command()
             )
         )
 
-    def create_commands_teleop(self):   
-        # Set the forward perspective of the robot for field oriented driving
-        self.drivetrain.set_forward_perspective()
-
     def create_commands_test(self):
-        # Set the SysId routine to run
-        self.shooter.set_sys_id_routine()
+        self.intake.set_intake_speed(0)
+        self.hopper.run_hopper(0, 0),
+        self.shooter.set_flywheel_velocities(0, 0)
 
-        # Set button bindings for starting and stopping SignalLogger
-        self.controller.leftBumper().onTrue(commands2.cmd.runOnce(SignalLogger.start))
-        self.controller.rightBumper().onTrue(commands2.cmd.runOnce(SignalLogger.stop))
-
-        # Set button bindings for performing various parts of SysID routine
-        self.controller.y().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kForward))
-        self.controller.a().whileTrue(self.shooter.sys_id_dynamic(SysIdRoutine.Direction.kReverse))
-        self.controller.b().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kForward))
-        self.controller.x().whileTrue(self.shooter.sys_id_quasistatic(SysIdRoutine.Direction.kReverse))
+        self.controller.x().onTrue(
+            self.drivetrain.create_effective_wheel_radius_characterization_command()
+        )
