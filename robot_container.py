@@ -15,6 +15,8 @@ from constants.shooter_constants import ShooterConstants
 from constants.hopper_constants import HopperConstants
 from constants.intake_constants import IntakeConstants
 from constants.vision_constants import VisionConstants
+from constants.led_constants import LEDConstants
+
 
 class RobotContainer:
     def __init__(self):
@@ -47,6 +49,9 @@ class RobotContainer:
 
         # Create intake subsystem
         self.intake = IntakeConstants.create_intake()
+
+        # Create LED subsystem
+        self.led = LEDConstants.create_led()
 
         # Create vision subsystem
         self.camera = VisionConstants.create_vision(
@@ -126,6 +131,11 @@ class RobotContainer:
         # Set button binding for reseting field centric heading
         (self.controller.leftBumper() & self.controller.rightBumper()).onTrue(
             self.drivetrain.runOnce(lambda: self.drivetrain.seed_field_centric())
+        )
+
+        # Set LEDs jst on because this robot is so cooked
+        self.controller.a().onTrue(
+            self.led.runOnce(lambda: self.led.auto_in_progress())
         )
 
         # Set default command for drivetrain
