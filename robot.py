@@ -42,8 +42,9 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         self.robot_container.create_commands_teleop()
     
     def teleopExit(self):
-        if DriverStation.isFMSAttached():
-            SignalLogger.stop()
+        pass
+        # if DriverStation.isFMSAttached():
+        #     SignalLogger.stop()
 
     def testInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()

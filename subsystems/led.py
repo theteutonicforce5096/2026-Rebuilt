@@ -32,10 +32,10 @@ class LED(Subsystem):
         self.candle = CANdle(led_id, canbus)
         
         # METHODS
-         
+        
     def auto_in_progress(self):
-
-        self.extinguish()
+        # self.extinguish()
+        print("I genuiely cannot do ts anymore")
         self.solid_color_control = controls.SolidColor(
             led_start_index= 0,
             color = rgbw_color.RGBWColor(red = 53, green = 157, blue = 87)) # Natural Blue

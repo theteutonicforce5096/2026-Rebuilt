@@ -11,10 +11,10 @@ class LEDConstants(Subsystem):
     """
 
     # CANBus instance
-    _canbus = CANBus("Drivetrain")
+    _canbus = CANBus("rio")
 
     # CAN IDs
-    _led_id = 50
+    _led_id = 3
 
     # Number of times to attempt to configure each device
     _num_config_attempts = 3
@@ -22,6 +22,7 @@ class LEDConstants(Subsystem):
     # LED Configs (CANdle - TalonFXS)
     _led_configs = TalonFXSConfiguration()
 
+    @classmethod
     def create_led(cls) -> LED:
         """
         Creates an LED subsystem instance.
