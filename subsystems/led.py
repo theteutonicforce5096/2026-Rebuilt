@@ -7,12 +7,13 @@ from phoenix6.signals import rgbw_color
 import phoenix6.controls as controls
 from commands2 import Subsystem
 
+
 class LED(Subsystem):
     """
     Class for controlling LEDs.
     """
 
-    def __init__(self, canbus: phoenix6.CANBus, led_id: int, led_configs: phoenix6.configs.TalonFXSConfiguration, num_config_attempts: int):
+    def __init__(self, canbus: phoenix6.CANBus, led_id: int, led_configs: phoenix6.configs.CANdleConfiguration, strip_type: phoenix6.configs.candle_configs.LEDConfigs.with_strip_type, num_config_attempts: int):
         """
         Constructor for initializing LEDs using the specified constants.
 
@@ -21,7 +22,9 @@ class LED(Subsystem):
         :param led_id: CAN ID of the LED controller
         :type led_id: int
         :param led_configs: Configs for the LED controller
-        :type led_configs: phoenix6.configs.TalonFXSConfiguration
+        :type led_configs: phoenix6.configs.CANdleConfiguration
+        :param strip_type: Type of LED strip
+        :type strip_type: phoenix6.configs.candle_configs.LEDConfigs.with_strip_type
         :param num_config_attempts: Number of times to attempt to configure the device
         :type num_config_attempts: int
         """

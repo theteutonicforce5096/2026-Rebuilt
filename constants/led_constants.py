@@ -3,7 +3,12 @@ from subsystems.led import LED
 from phoenix6 import hardware
 from phoenix6 import CANBus
 from phoenix6.configs import TalonFXSConfiguration
+from phoenix6.configs import CANdleConfiguration
+from phoenix6.configs.candle_configs import LEDConfigs
 from commands2 import Subsystem
+import phoenix6
+from phoenix6.signals import StripTypeValue
+
 
 class LEDConstants(Subsystem):
     """
@@ -20,7 +25,9 @@ class LEDConstants(Subsystem):
     _num_config_attempts = 3
 
     # LED Configs (CANdle - TalonFXS)
-    _led_configs = TalonFXSConfiguration()
+    _led_configs = CANdleConfiguration()
+    _led_configs.led.with_strip_type(phoenix6.signals.StripTypeValue.RGB)
+
 
     @classmethod
     def create_led(cls) -> LED:
