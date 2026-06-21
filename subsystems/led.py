@@ -39,9 +39,7 @@ class LED(Subsystem):
     def auto_in_progress(self):
         # self.extinguish()
         print("I genuiely cannot do ts anymore")
-        self.solid_color_control = controls.SolidColor(
-            led_start_index= 0,
-            color = rgbw_color.RGBWColor(red = 53, green = 157, blue = 87)) # Natural Blue
+        self.solid_color_control = controls.SolidColor(0, 10, rgbw_color.RGBWColor(53, 147, 87, 0)) # Natural Blue
         self.candle.set_control(self.solid_color_control)
 
     def hopper_full(self):

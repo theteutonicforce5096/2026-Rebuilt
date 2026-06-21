@@ -81,7 +81,7 @@ class RobotContainer:
 #         self.auto_chooser = AutoBuilder.buildAutoChooser()
 #         SmartDashboard.putData("Auto Chooser", self.auto_chooser)
 
-#         self.create_button_bindings()
+        self.create_button_bindings()
 
     def get_selected_auto_command(self):
         pass
@@ -146,7 +146,7 @@ class RobotContainer:
 
 #         # Set LEDs jst on because this robot is so cooked
         self.controller.a().onTrue(
-            self.led.runOnce(lambda: self.led.auto_in_progress)
+            self.led.runOnce(lambda: self.led.auto_in_progress())
         )
 
 #         # Set default command for drivetrain
