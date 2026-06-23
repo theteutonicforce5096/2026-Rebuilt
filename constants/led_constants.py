@@ -22,6 +22,7 @@ class LEDConstants(Subsystem):
     # LED Configs (CANdle - TalonFXS)
     _led_configs = TalonFXSConfiguration()
 
+    @classmethod
     def create_led(cls) -> LED:
         """
         Creates an LED subsystem instance.
