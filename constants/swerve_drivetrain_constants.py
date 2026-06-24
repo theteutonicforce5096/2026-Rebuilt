@@ -21,8 +21,8 @@ class SwerveDrivetrainConstants:
     _max_angular_speed = 16 # Max angular velocity in radians per second 
 
     # Max rate of change of robot (assuming loop cycle time of 0.02 seconds)
-    _max_linear_rate_of_change = (1 / 0.25) * 0.02 * _max_linear_speed # Max speed in 0.25 seconds
-    _max_angular_rate_of_change = (1 / 0.5) * 0.02 * _max_angular_speed # Max speed in 0.5 seconds
+    _max_linear_rate_of_change = (1 / 0.1) * 0.02 * _max_linear_speed # Max speed in 0.25 seconds
+    _max_angular_rate_of_change = (1 / 0.1) * 0.02 * _max_angular_speed # Max speed in 0.5 seconds
 
     # Frequency to run the odometry loop at in hertz
     _odometry_update_frequency = 250.0
@@ -33,9 +33,9 @@ class SwerveDrivetrainConstants:
     # output type specified by SwerveModuleConstants.SteerMotorClosedLoopOutput
     _steer_gains = (
         configs.Slot0Configs()
-        .with_k_p(100) #25
+        .with_k_p(25) #25
         .with_k_i(0)
-        .with_k_d(0.5) # 1.225
+        .with_k_d(0) # 1.225
         .with_k_s(0.1)
         .with_k_v(1.5) # 1.499125
         .with_static_feedforward_sign(
