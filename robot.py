@@ -14,7 +14,7 @@ class RebuiltRobot(commands2.TimedCommandRobot):
     
     def robotInit(self):
         # Doesn't work: Enable switchable channel on the REV PDH
-        # PowerDistribution().setSwitchableChannel(True)
+        PowerDistribution().setSwitchableChannel(True)
     
         # Disable Phoenix 6 Auto Signal Logging
         SignalLogger.enable_auto_logging(False)
@@ -42,9 +42,8 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         self.robot_container.create_commands_teleop()
     
     def teleopExit(self):
-        pass
-        # if DriverStation.isFMSAttached():
-        #     SignalLogger.stop()
+        if DriverStation.isFMSAttached():
+            SignalLogger.stop()
 
     def testInit(self):
         commands2.CommandScheduler.getInstance().cancelAll()
