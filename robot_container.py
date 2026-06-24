@@ -117,7 +117,7 @@ class RobotContainer:
         """
         Put subsystems into a known safe state before autonomous begins.
         """
-        self.intake.arm_down()
+        # self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
@@ -130,7 +130,7 @@ class RobotContainer:
         self.drivetrain.set_forward_perspective()
         self.drivetrain.reset_operator_heading_tracking()
 
-        self.intake.arm_down()
+        # self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)

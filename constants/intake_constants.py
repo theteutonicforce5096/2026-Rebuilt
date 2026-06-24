@@ -37,7 +37,7 @@ class IntakeConstants:
     _intake_arm_configs = TalonFXConfiguration()
     _intake_arm_configs.motor_output.with_inverted(signals.InvertedValue.COUNTER_CLOCKWISE_POSITIVE)
     _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
-    _intake_arm_configs.current_limits.with_stator_current_limit(25) #TODO 
+    _intake_arm_configs.current_limits.with_stator_current_limit(10) #TODO #was 25
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_arm_configs.feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
     _intake_arm_configs.feedback.with_feedback_sensor_source(signals.FeedbackSensorSourceValue.FUSED_CANCODER)
