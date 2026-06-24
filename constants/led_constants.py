@@ -16,7 +16,7 @@ class LEDConstants(Subsystem):
     """
 
     # CANBus instance
-    _canbus = CANBus("rio")
+    _canbus = CANBus("Drivetrain")
 
     # CAN IDs
     _led_id = 3
