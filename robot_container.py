@@ -15,6 +15,7 @@ from constants.shooter_constants import ShooterConstants
 from constants.hopper_constants import HopperConstants
 from constants.intake_constants import IntakeConstants
 from constants.vision_constants import VisionConstants
+from constants.led_constants import LEDConstants
 
 class RobotContainer:
     def __init__(self):
@@ -47,6 +48,9 @@ class RobotContainer:
 
         # Create intake subsystem
         self.intake = IntakeConstants.create_intake()
+
+        # Create LED subsystem
+        self.led = LEDConstants.create_led()
 
         # Create vision subsystem
         self.camera = VisionConstants.create_vision(
@@ -118,6 +122,10 @@ class RobotContainer:
             lambda: self.intake.arm_down()
         ).schedule()
 
+        self.led.runOnce(
+            lambda: self.led.auto_in_progress()
+        ).schedule()
+
     def create_commands_teleop(self):
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain.set_forward_perspective()
@@ -167,64 +175,73 @@ class RobotContainer:
         )
     
         self.controller.x().onTrue(
-            commands2.SequentialCommandGroup(
-                commands2.ParallelDeadlineGroup(
-                    commands2.WaitUntilCommand(
-                        lambda: self.controller.getHID().getYButton()
-                    ),
-                    commands2.RepeatCommand(
-                        self.shooter.create_manual_shoot_command()
-                    ),
-                    commands2.RepeatCommand(
-                        self.hopper.create_feed_cycle_command()
-                    ),
-                    commands2.RepeatCommand(
-                        self.drivetrain.auto_align_to_hub()
-                    )
+            commands2.ParallelCommandGroup(
+                self.led.runOnce(
+                    lambda: self.led.auto_in_progress()
                 ),
-                commands2.ParallelCommandGroup(
-                    self.hopper.create_stop_command(),
-                    self.shooter.create_stop_command()
+                commands2.SequentialCommandGroup(
+                    commands2.ParallelDeadlineGroup(
+                        commands2.WaitUntilCommand(
+                            lambda: self.controller.getHID().getYButton()
+                        ),
+                        commands2.RepeatCommand(
+                            self.shooter.create_manual_shoot_command()
+                        ),
+                        commands2.RepeatCommand(
+                            self.hopper.create_feed_cycle_command()
+                        ),
+                        commands2.RepeatCommand(
+                            self.drivetrain.auto_align_to_hub()
+                        )
+                    ),
+                    commands2.ParallelCommandGroup(
+                        self.hopper.create_stop_command(),
+                        self.shooter.create_stop_command()
+                    )
                 )
             )
         )
-
         self.controller.b().onTrue(
-            commands2.SequentialCommandGroup(
-                commands2.ParallelDeadlineGroup(
-                    commands2.SequentialCommandGroup(
-                        commands2.InstantCommand(
-                            lambda: self.shooter.reset_calculated_shot_state()
-                        ),
-                        commands2.InstantCommand(
-                            lambda: self.shooter.reset_empty_time()
+            commands2.ParallelCommandGroup(
+                self.led.runOnce(
+                    lambda: self.led.shooting()
+                ),
+                commands2.SequentialCommandGroup(
+                    commands2.ParallelDeadlineGroup(
+                        commands2.SequentialCommandGroup(
+                            commands2.InstantCommand(
+                                lambda: self.shooter.reset_calculated_shot_state()
+                            ),
+                            commands2.InstantCommand(
+                                lambda: self.shooter.reset_empty_time()
+                            ),
+                            commands2.ParallelCommandGroup(
+                                commands2.WaitUntilCommand(
+                                    lambda: self.shooter.detect_empty()
+                                ),
+                                commands2.WaitUntilCommand(
+                                    lambda: self.controller.getHID().getYButton()
+                                )
+                            )
                         ),
                         commands2.ParallelCommandGroup(
-                            commands2.WaitUntilCommand(
-                                lambda: self.shooter.detect_empty()
+                            commands2.RepeatCommand(
+                                self.shooter.create_calculated_shoot_command()
                             ),
-                            commands2.WaitUntilCommand(
-                                lambda: self.controller.getHID().getYButton()
+                            commands2.RepeatCommand(
+                                self.shooter.create_calculated_feed_command(self.hopper)
+                            ),
+                            commands2.RepeatCommand(
+                                self.drivetrain.auto_align_to_shot_angle(
+                                    self.shooter.get_latest_calculated_shot
+                                )
                             )
                         )
                     ),
                     commands2.ParallelCommandGroup(
-                        commands2.RepeatCommand(
-                            self.shooter.create_calculated_shoot_command()
-                        ),
-                        commands2.RepeatCommand(
-                            self.shooter.create_calculated_feed_command(self.hopper)
-                        ),
-                        commands2.RepeatCommand(
-                            self.drivetrain.auto_align_to_shot_angle(
-                                self.shooter.get_latest_calculated_shot
-                            )
-                        )
+                        self.hopper.create_stop_command(),
+                        self.shooter.create_stop_command()
                     )
-                ),
-                commands2.ParallelCommandGroup(
-                    self.hopper.create_stop_command(),
-                    self.shooter.create_stop_command()
                 )
             )
         )
