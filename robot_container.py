@@ -117,7 +117,7 @@ class RobotContainer:
         """
         Put subsystems into a known safe state before autonomous begins.
         """
-        # self.intake.arm_down()
+        self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
@@ -130,7 +130,7 @@ class RobotContainer:
         self.drivetrain.set_forward_perspective()
         self.drivetrain.reset_operator_heading_tracking()
 
-        # self.intake.arm_down()
+        self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
@@ -240,14 +240,19 @@ class RobotContainer:
         self.controller.b().onTrue(
             commands2.SequentialCommandGroup(
                 self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
-                commands2.SequentialCommandGroup(
-                    commands2.InstantCommand(
-                        lambda: self.shooter.reset_calculated_shot_state()
-                    )
-                    # commands2.InstantCommand(
-                    #     lambda: self.shooter.reset_empty_time()
-                    # )
-                ),
+                # commands2.RepeatCommand(
+                #     self.drivetrain.auto_align_to_shot_angle(
+                #         self.shooter.get_latest_calculated_shot
+                #     )
+                # ).withTimeout(1),
+                # commands2.SequentialCommandGroup(
+                #     commands2.InstantCommand(
+                #         lambda: self.shooter.reset_calculated_shot_state()
+                #     )
+                #     # commands2.InstantCommand(
+                #     #     lambda: self.shooter.reset_empty_time()
+                #     # )
+                # ),
                 commands2.ParallelCommandGroup(
                     # commands2.WaitUntilCommand(
                     #     lambda: self.shooter.detect_empty()
@@ -258,11 +263,6 @@ class RobotContainer:
                     commands2.RepeatCommand(
                         self.shooter.create_calculated_feed_command(self.hopper)
                     )
-                    # commands2.RepeatCommand(
-                    #     self.drivetrain.auto_align_to_shot_angle(
-                    #         self.shooter.get_latest_calculated_shot
-                    #     )
-                    # ),
                 ).until(
                     lambda: self.controller.getHID().getYButton()
                 ),

@@ -246,21 +246,24 @@ class Shooter(Subsystem):
         """
         Apply the latest calculated shot and gate intake/feed on confidence and speed.
         """
-        self._latest_calculated_shot = self._calculate_launch_parameters()
-        should_run_calculated_shot = self.should_feed_calculated_shot(self._latest_calculated_shot)
 
-        flywheel_target_velocity = (
-            self._latest_calculated_shot.flywheel_rps
-            if should_run_calculated_shot
-            else 0.0
-        )
+        _, flywheel_target_velocity, _ = self.get_current_auto_shot_targets()
+
+        # self._latest_calculated_shot = self._calculate_launch_parameters()
+        # should_run_calculated_shot = self.should_feed_calculated_shot(self._latest_calculated_shot)
+
+        # flywheel_target_velocity = (
+        #     self._latest_calculated_shot.flywheel_rps
+        #     # if should_run_calculated_shot
+        #     # else 0.0
+        # )
         intake_motor_velocity = (
             self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
-            if should_run_calculated_shot and self.is_flywheel_at_setpoint()
+            if self.is_flywheel_at_setpoint() #should_run_calculated_shot and
             else 0.0
         )
 
-        self.set_flywheel_velocities(flywheel_target_velocity, intake_motor_velocity)
+        self.set_flywheel_velocities(flywheel_target_velocity + 1.0, intake_motor_velocity)
 
 
     @staticmethod
@@ -437,7 +440,7 @@ class Shooter(Subsystem):
                 WaitUntilCommand(ready_to_feed),
                 self.run(
                     lambda: self.set_flywheel_velocities(
-                        flywheel_target_velocity,
+                        flywheel_target_velocity + 1.0,
                         0.0,
                     )
                 ),
@@ -447,7 +450,7 @@ class Shooter(Subsystem):
                 WaitUntilCommand(lambda: self.detect_empty()),
                 self.run(
                     lambda: self.set_flywheel_velocities(
-                        flywheel_target_velocity,
+                        flywheel_target_velocity + 1.0,
                         (
                             intake_target_velocity
                             if self.is_flywheel_at_setpoint()
@@ -486,8 +489,8 @@ class Shooter(Subsystem):
             lambda: (
                 hopper.create_feed_cycle_command()
                 if (
-                    self.should_feed_calculated_shot(self._latest_calculated_shot)
-                    and self.is_flywheel_at_setpoint()
+                    # self.should_feed_calculated_shot(self._latest_calculated_shot) and
+                    self.is_flywheel_at_setpoint()
                 )
                 else hopper.create_stop_command()
             ),
@@ -600,7 +603,7 @@ class Shooter(Subsystem):
             # We detect that the hopper is empty when its been over 1.5 seconds since the last surge
     
         return (
-            (Timer.getFPGATimestamp() - self.empty_time) >= 3
+            (Timer.getFPGATimestamp() - self.empty_time) >= 10
         )
     
     def reset_empty_time(self):

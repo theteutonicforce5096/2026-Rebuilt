@@ -12,12 +12,12 @@ class VisionConstants:
     """
 
     # Vision measurement baseline standard deviations
-    _linear_std_dev_baseline = 1.0
+    _linear_std_dev_baseline = 1.5
     _angular_std_dev_baseline = 1000000.0 * pi
 
     # Per-camera multipliers applied to the vision standard deviations
     # (back_camera, front_left_camera, front_right_camera)
-    _camera_std_dev_factors = (1.0, 0.25, 0.25)
+    _camera_std_dev_factors = (1.0, 1.0, 1.0)
 
     # Reference speeds used to scale vision standard deviations during fast motion
     _max_linear_speed = SwerveDrivetrainConstants._max_linear_speed * 0.25
