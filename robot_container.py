@@ -10,6 +10,7 @@ from constants.shooter_constants import ShooterConstants
 from constants.hopper_constants import HopperConstants
 from constants.intake_constants import IntakeConstants
 from constants.vision_constants import VisionConstants
+from constants.led_constants import LEDConstants
 
 class RobotContainer:
     """
@@ -49,6 +50,9 @@ class RobotContainer:
 
         # Create intake subsystem
         self.intake = IntakeConstants.create_intake()
+
+        # Create LED subsystem
+        self.led = LEDConstants.create_led()
 
         # Create vision subsystem
         self.camera = VisionConstants.create_vision(
@@ -121,6 +125,7 @@ class RobotContainer:
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
+        self.led.auto_in_progress()
 
     def create_commands_teleop(self):
         """
@@ -211,71 +216,82 @@ class RobotContainer:
         )
     
         self.controller.x().onTrue(
-            commands2.SequentialCommandGroup(
-                self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
-                commands2.ParallelDeadlineGroup(
-                    commands2.WaitUntilCommand(
-                        lambda: self.controller.getHID().getYButton()
-                    ),
-                    commands2.RepeatCommand(
-                        self.shooter.create_manual_shoot_command()
-                    ),
-                    commands2.RepeatCommand(
-                        self.shooter.create_manual_feed_command(self.hopper)
-                    )
-                    # RepeatCommand(
-                    #     self.drivetrain.auto_align_to_hub()
-                    # )
+            commands2.ParallelCommandGroup(
+                self.led.runOnce(
+                    lambda: self.led.shooting()
                 ),
-                commands2.ParallelCommandGroup(
-                    self.intake.runOnce(
-                        lambda: self.intake.set_intake_speed(0)
+                commands2.SequentialCommandGroup(
+                    self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
+                    commands2.ParallelDeadlineGroup(
+                        commands2.WaitUntilCommand(
+                            lambda: self.controller.getHID().getYButton()
+                        ),
+                        commands2.RepeatCommand(
+                            self.shooter.create_manual_shoot_command()
+                        ),
+                        commands2.RepeatCommand(
+                            self.shooter.create_manual_feed_command(self.hopper)
+                        )
+                        # RepeatCommand(
+                        #     self.drivetrain.auto_align_to_hub()
+                        # )
                     ),
-                    self.hopper.create_stop_command(),
-                    self.shooter.create_stop_command()
+                    commands2.ParallelCommandGroup(
+                        self.intake.runOnce(
+                            lambda: self.intake.set_intake_speed(0)
+                        ),
+                        self.hopper.create_stop_command(),
+                        self.shooter.create_stop_command()
+                    )
                 )
             )
         )
 
         self.controller.b().onTrue(
-            commands2.SequentialCommandGroup(
-                self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
-                # commands2.RepeatCommand(
-                #     self.drivetrain.auto_align_to_shot_angle(
-                #         self.shooter.get_latest_calculated_shot
-                #     )
-                # ).withTimeout(1),
-                # commands2.SequentialCommandGroup(
-                #     commands2.InstantCommand(
-                #         lambda: self.shooter.reset_calculated_shot_state()
-                #     )
-                #     # commands2.InstantCommand(
-                #     #     lambda: self.shooter.reset_empty_time()
-                #     # )
-                # ),
-                commands2.ParallelCommandGroup(
-                    # commands2.WaitUntilCommand(
-                    #     lambda: self.shooter.detect_empty()
-                    # ),
-                    commands2.RepeatCommand(
-                        self.shooter.create_calculated_shoot_command()
-                    ),
-                    commands2.RepeatCommand(
-                        self.shooter.create_calculated_feed_command(self.hopper)
-                    )
-                ).until(
-                    lambda: self.controller.getHID().getYButton()
+            commands2.ParallelCommandGroup(
+                self.led.runOnce(
+                    lambda: self.led.pride()
                 ),
-                commands2.ParallelCommandGroup(
-                    self.intake.runOnce(
-                        lambda: self.intake.set_intake_speed(0)
+                commands2.SequentialCommandGroup(
+                    self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
+                    # commands2.RepeatCommand(
+                    #     self.drivetrain.auto_align_to_shot_angle(
+                    #         self.shooter.get_latest_calculated_shot
+                    #     )
+                    # ).withTimeout(1),
+                    # commands2.SequentialCommandGroup(
+                    #     commands2.InstantCommand(
+                    #         lambda: self.shooter.reset_calculated_shot_state()
+                    #     )
+                    #     # commands2.InstantCommand(
+                    #     #     lambda: self.shooter.reset_empty_time()
+                    #     # )
+                    # ),
+                    commands2.ParallelCommandGroup(
+                        # commands2.WaitUntilCommand(
+                        #     lambda: self.shooter.detect_empty()
+                        # ),
+                        commands2.RepeatCommand(
+                            self.shooter.create_calculated_shoot_command()
+                        ),
+                        commands2.RepeatCommand(
+                            self.shooter.create_calculated_feed_command(self.hopper)
+                        )
+                    ).until(
+                        lambda: self.controller.getHID().getYButton()
                     ),
-                    self.hopper.create_stop_command(),
-                    self.shooter.create_stop_command()
+                    commands2.ParallelCommandGroup(
+                        self.intake.runOnce(
+                            lambda: self.intake.set_intake_speed(0)
+                        ),
+                        self.hopper.create_stop_command(),
+                        self.shooter.create_stop_command()
+                    )
                 )
             )
         )
-
+        
+        
         # self.controller.rightTrigger().onTrue(
         #     commands2.SequentialCommandGroup(
         #         self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),

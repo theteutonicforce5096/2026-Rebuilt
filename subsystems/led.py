@@ -48,9 +48,14 @@ class LED(Subsystem):
         self.animation_control = controls.LarsonAnimation(0, self.led_end_index, 0, rgbw_color.RGBWColor(225, 242, 0, 0))
         self.candle.set_control(self.animation_control)
 
-    def shooting (self):
+    def shooting(self):
         self.extinguish()
         self.animation_control = controls.FireAnimation(0, self.led_end_index, 1, 1, phoenix6.signals.spn_enums.AnimationDirectionValue.FORWARD, 0.6, 0.3, 60)
+        self.candle.set_control(self.animation_control)
+
+    def pride(self):
+        self.extinguish()
+        self.animation_control = controls.RainbowAnimation(0, self.led_end_index, 3, 1, phoenix6.signals.spn_enums.AnimationDirectionValue.FORWARD, 100)
         self.candle.set_control(self.animation_control)
 
     def five_seconds_left(self):

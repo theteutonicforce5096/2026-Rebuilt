@@ -15,8 +15,8 @@ class LEDConstants(Subsystem):
     Constants for LED Subsystem
     """
 
-    # CANBus instance
-    _canbus = CANBus("Drivetrain")
+    # CANBus instance - Kellen wired it so that it would start from the roborio
+    _canbus = CANBus("rio")
 
     # CAN IDs
     _led_id = 3
@@ -26,7 +26,7 @@ class LEDConstants(Subsystem):
 
     # LED Configs (CANdle - TalonFXS)
     _led_configs = CANdleConfiguration()
-    _led_configs.led.with_strip_type(phoenix6.signals.StripTypeValue.RGB)
+    _led_configs.led.with_strip_type(phoenix6.signals.StripTypeValue.GRB)
 
 
     @classmethod
