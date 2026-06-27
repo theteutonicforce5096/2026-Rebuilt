@@ -53,6 +53,11 @@ class LED(Subsystem):
         self.animation_control = controls.FireAnimation(0, self.led_end_index, 1, 1, phoenix6.signals.spn_enums.AnimationDirectionValue.FORWARD, 0.6, 0.3, 60)
         self.candle.set_control(self.animation_control)
 
+    def default(self): 
+        self.extinguish()
+        self.animation_control = controls.StrobeAnimation(0, self.led_end_index, 4, rgbw_color.RGBWColor(102, 225, 0, 0), 4)
+        self.candle.set_control(self.animation_control)
+
     def pride(self):
         self.extinguish()
         self.animation_control = controls.RainbowAnimation(0, self.led_end_index, 3, 1, phoenix6.signals.spn_enums.AnimationDirectionValue.FORWARD, 100)
@@ -70,5 +75,9 @@ class LED(Subsystem):
         self.animation_control = controls.EmptyAnimation(1)
         self.candle.set_control(self.animation_control)
         self.animation_control = controls.EmptyAnimation(2)
+        self.candle.set_control(self.animation_control)
+        self.animation_control = controls.EmptyAnimation(3)
+        self.candle.set_control(self.animation_control)
+        self.animation_control = controls.EmptyAnimation(4)
         self.candle.set_control(self.animation_control)
         

@@ -139,6 +139,7 @@ class RobotContainer:
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
+        self.led.default()
 
     def create_button_bindings(self):
         """
@@ -250,7 +251,7 @@ class RobotContainer:
         self.controller.b().onTrue(
             commands2.ParallelCommandGroup(
                 self.led.runOnce(
-                    lambda: self.led.pride()
+                    lambda: self.led.default()
                 ),
                 commands2.SequentialCommandGroup(
                     self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
@@ -305,11 +306,17 @@ class RobotContainer:
 
         self.controller.y().onTrue(
             commands2.ParallelCommandGroup(
-                self.intake.runOnce(
-                    lambda: self.intake.set_intake_speed(0)
+                self.led.runOnce(
+                    lambda: self.led.default()
                 ),
-                self.hopper.create_stop_command(),
-                self.shooter.create_stop_command()
+            
+                commands2.ParallelCommandGroup(
+                    self.intake.runOnce(
+                        lambda: self.intake.set_intake_speed(0)
+                    ),
+                    self.hopper.create_stop_command(),
+                    self.shooter.create_stop_command()
+                )
             )
         )
 
@@ -320,6 +327,7 @@ class RobotContainer:
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
+        self.led.default()
 
         self.controller.x().onTrue(
             self.drivetrain.create_effective_wheel_radius_characterization_command()
