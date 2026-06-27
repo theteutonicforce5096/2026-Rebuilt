@@ -33,7 +33,7 @@ class LED(Subsystem):
         self.candle = CANdle(led_id, canbus)
         
         # LED end index because I don't want to keep changing it cause ts is annoying
-        self.led_end_index = 12
+        self.led_end_index = 64
 
         # METHODS
         
