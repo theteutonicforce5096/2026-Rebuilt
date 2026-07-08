@@ -139,7 +139,7 @@ class RobotContainer:
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
-        self.led.default()
+        self.led.pride()
 
     def create_button_bindings(self):
         """
@@ -186,17 +186,17 @@ class RobotContainer:
             )
         )
 
-        self.controller.povRight().onTrue(
-            commands2.ParallelCommandGroup(
-                self.intake.runOnce(
-                    lambda: self.intake.set_intake_speed(-12)
-                ),
-                self.hopper.run_hopper(-20, -3),
-                self.shooter.runOnce(
-                    lambda: self.shooter.set_flywheel_velocities(-30, -30)
-                )
-            )
-        )
+        # self.controller.povRight().onTrue(
+        #     commands2.ParallelCommandGroup(
+        #         self.intake.runOnce(
+        #             lambda: self.intake.set_intake_speed(-12)
+        #         ),
+        #         self.hopper.run_hopper(-20, -3),
+        #         self.shooter.runOnce(
+        #             lambda: self.shooter.set_flywheel_velocities(-20, -20)
+        #         )
+        #     )
+        # )
 
         self.controller.povLeft().onTrue(
             self.drivetrain.runOnce(
@@ -213,6 +213,17 @@ class RobotContainer:
         self.controller.povUp().onTrue(
             self.intake.runOnce(
                 lambda: self.intake.arm_up()
+            )
+        )
+
+        self.controller.povRight().onTrue(
+            commands2.ParallelDeadlineGroup(
+                commands2.WaitUntilCommand(
+                    lambda: self.controller.getHID().getYButton()
+                ),
+                commands2.RepeatCommand(
+                    self.drivetrain.auto_align_to_hub()
+                )
             )
         )
     
@@ -251,7 +262,7 @@ class RobotContainer:
         self.controller.b().onTrue(
             commands2.ParallelCommandGroup(
                 self.led.runOnce(
-                    lambda: self.led.default()
+                    lambda: self.led.pride()
                 ),
                 commands2.SequentialCommandGroup(
                     self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
@@ -293,21 +304,21 @@ class RobotContainer:
         )
         
         
-        # self.controller.rightTrigger().onTrue(
-        #     commands2.SequentialCommandGroup(
-        #         self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
-        #         self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
-        #         self.shooter.create_auto_run_shooter_command(
-        #             self.hopper,
-        #             self.drivetrain
-        #         )
-        #     )
-        # )
+        self.controller.rightTrigger().onTrue(
+            commands2.SequentialCommandGroup(
+                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
+                self.shooter.create_auto_run_shooter_command(
+                    self.hopper,
+                    self.drivetrain
+                )
+            )
+        )
 
         self.controller.y().onTrue(
             commands2.ParallelCommandGroup(
                 self.led.runOnce(
-                    lambda: self.led.default()
+                    lambda: self.led.pride()
                 ),
             
                 commands2.ParallelCommandGroup(
@@ -327,7 +338,7 @@ class RobotContainer:
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
-        self.led.default()
+        self.led.pride()
 
         self.controller.x().onTrue(
             self.drivetrain.create_effective_wheel_radius_characterization_command()

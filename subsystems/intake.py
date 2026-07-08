@@ -131,11 +131,12 @@ class Intake(Subsystem):
         :param position: Desired intake arm position in mechanism rotations.
         :type position: float
         """
+
         self.intake_arm.set_control(
             self.position_voltage_request.with_position(position)
         )
 
-        # print(position)
+        print(position)
 
     def set_arm_voltage(self, arm_voltage):
         """
@@ -152,6 +153,7 @@ class Intake(Subsystem):
         """
         Move the intake arm to the intake position.
         """
+        pass
         self.set_setpoint(self.intake_position) 
         
     def arm_up(self):
