@@ -186,17 +186,17 @@ class RobotContainer:
             )
         )
 
-        # self.controller.povRight().onTrue(
-        #     commands2.ParallelCommandGroup(
-        #         self.intake.runOnce(
-        #             lambda: self.intake.set_intake_speed(-12)
-        #         ),
-        #         self.hopper.run_hopper(-20, -3),
-        #         self.shooter.runOnce(
-        #             lambda: self.shooter.set_flywheel_velocities(-20, -20)
-        #         )
-        #     )
-        # )
+        self.controller.povRight().onTrue(
+            commands2.ParallelCommandGroup(
+                self.intake.runOnce(
+                    lambda: self.intake.set_intake_speed(-12)
+                ),
+                self.hopper.run_hopper(-20, -3),
+                self.shooter.runOnce(
+                    lambda: self.shooter.set_flywheel_velocities(-20, -20)
+                )
+            )
+        )
 
         self.controller.povLeft().onTrue(
             self.drivetrain.runOnce(
@@ -216,16 +216,24 @@ class RobotContainer:
             )
         )
 
-        self.controller.povRight().onTrue(
-            commands2.ParallelDeadlineGroup(
-                commands2.WaitUntilCommand(
-                    lambda: self.controller.getHID().getYButton()
-                ),
-                commands2.RepeatCommand(
-                    self.drivetrain.auto_align_to_hub()
-                )
-            )
-        )
+        # self.controller.povRight().onTrue(
+        #     commands2.SequentialCommandGroup(
+        #         commands2.ParallelDeadlineGroup(
+        #             commands2.WaitUntilCommand(
+        #                 lambda: self.controller.getHID().getYButton()
+        #             ),
+        #             commands2.RepeatCommand(
+        #                 self.drivetrain.auto_align_to_hub()
+        #             ),
+        #             self.led.runOnce(
+        #                 lambda: self.led.auto_in_progress()
+        #             )
+        #         ),
+        #         self.led.runOnce(
+        #             lambda: self.led.pride()
+        #         )
+        #     )
+        # )
     
         self.controller.x().onTrue(
             commands2.ParallelCommandGroup(
@@ -265,6 +273,9 @@ class RobotContainer:
                     lambda: self.led.pride()
                 ),
                 commands2.SequentialCommandGroup(
+                    commands2.RepeatCommand(
+                        self.drivetrain.auto_align_to_hub()
+                    ).withTimeout(1),
                     self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
                     # commands2.RepeatCommand(
                     #     self.drivetrain.auto_align_to_shot_angle(
