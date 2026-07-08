@@ -24,6 +24,11 @@ class IntakeConstants:
     _stowed_position = 0.559 
     _shooting_position = 0.36
 
+    # Stall Detection Constants
+    _stall_current_threshold = 30.0
+    _stall_velocity_threshold = .25
+    _stall_time_threshold = 0.25
+
     # Intake Wheel Configs (Random ahh brushed motor - TalonFXS)
     _intake_wheel_configs = TalonFXSConfiguration()
     _intake_wheel_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.BRUSHED_DC)
@@ -74,5 +79,8 @@ class IntakeConstants:
             cls._num_config_attempts,
             cls._intake_position,
             cls._stowed_position,
-            cls._shooting_position
+            cls._shooting_position,
+            cls._stall_current_threshold,
+            cls._stall_velocity_threshold,
+            cls._stall_time_threshold
         )

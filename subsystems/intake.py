@@ -14,7 +14,9 @@ class Intake(Subsystem):
     def __init__(self, canbus: CANBus, intake_wheel_id: int, intake_arm_id: int, 
                  intake_arm_encoder_id: int, intake_wheel_configs: TalonFXSConfiguration, 
                  intake_arm_configs: TalonFXConfiguration, intake_arm_encoder_configs: CANcoderConfiguration,
-                 num_config_attempts: int, intake_position: float, stowed_position: float, shooting_position: float):
+                 num_config_attempts: int, intake_position: float, stowed_position: float, shooting_position: float,
+                 stall_current_threshold: float, stall_velocity_threshold: float,
+                 stall_time_threshold: float):
         """
         Constructor for initializing shooter using the specified constants.
 
