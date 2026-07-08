@@ -72,6 +72,14 @@ class Intake(Subsystem):
         self.stowed_position = stowed_position
         self.shooting_position = shooting_position #0.75
 
+        # Stall Detection 
+        self.stall_current_threshold = stall_current_threshold
+        self.stall_velocity_threshold = stall_velocity_threshold
+        self.stall_time_threshold = stall_time_threshold
+        self.stall_timer = 0.0
+        self.is_stalled = False
+        self.last_command_output = 0.0
+
     def periodic(self):
         """
         Publish the current intake wheel voltage for driver-station debugging.
@@ -79,6 +87,30 @@ class Intake(Subsystem):
         intake_wheel_voltage = self.intake_wheel.get_motor_voltage().value_as_double
         SmartDashboard.putNumber("Intake Status", intake_wheel_voltage)
 
+        """
+        Current and velocity for stall detection
+        """
+        current = self.intake_arm.get_stator_current()
+        velocity = self.intake_arm.get_velocity()
+
+    
+    def _update_stall_detection(self, current, velocity, dt):
+        commanding_motion = abs(self.last_commanded_output) > 0.05
+
+        stall_condition_met = (
+            commanding_motion
+            and current > self.stall_current_threshold
+            and abs(velocity < self.stall_velocity_threshold)
+
+        )
+
+        if stall_condition_met:
+            self.stall_timer += dt
+        else:
+            self.stall_timer = 0.0
+
+        self.is_stalled = self.stall_timer >= self.stall_time_threshold
+        
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
                           num_attempts: int) -> None:
