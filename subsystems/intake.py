@@ -105,7 +105,7 @@ class Intake(Subsystem):
         )
 
         if stall_condition_met:
-            self.stall_timer += dt
+            self.stall_timer += dt # delta time
         else:
             self.stall_timer = 0.0
 
