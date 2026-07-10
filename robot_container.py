@@ -205,11 +205,20 @@ class RobotContainer:
         )
 
         self.controller.povDown().onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_down()
+            commands2.ParallelCommandGroup(
+                commands2.RepeatCommand(
+                    self.intake.runOnce(
+                        lambda: self.intake.get_stall_detection()
+            ),
+            self.controller.povDown().onTrue(
+                self.intake.runOnce(
+                    lambda: self.intake.arm_down()
+                )
+            )
             )
         )
-
+        )
+        
         self.controller.povUp().onTrue(
             self.intake.runOnce(
                 lambda: self.intake.arm_up()

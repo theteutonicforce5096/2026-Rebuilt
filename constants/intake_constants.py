@@ -25,8 +25,8 @@ class IntakeConstants:
     _shooting_position = 0.36
 
     # Stall Detection Constants
-    _stall_current_threshold = 30.0
-    _stall_velocity_threshold = .25
+    _stall_current_threshold = 30.0 # stator current
+    _stall_velocity_threshold = .25 # rps???
     _stall_time_threshold = 0.25
 
     # Intake Wheel Configs (Random ahh brushed motor - TalonFXS)

@@ -5,7 +5,7 @@ from phoenix6.controls import PositionVoltage, VoltageOut
 from phoenix6.hardware import CANcoder, TalonFXS, TalonFX
 from phoenix6.status_code import StatusCode
 from wpilib import RobotBase, SmartDashboard
-
+import wpilib
 class Intake(Subsystem):
     """
     Class for controlling intake.
@@ -90,26 +90,14 @@ class Intake(Subsystem):
         """
         Current and velocity for stall detection
         """
-        current = self.intake_arm.get_stator_current()
-        velocity = self.intake_arm.get_velocity()
+        self.now = wpilib.getTime()
+        self.dt = self.now - self.last_time
+        self.last_time = self.now
+        self.current = self.intake_arm.get_stator_current()
+        self.velocity = self.intake_arm.get_velocity()
+        self.intake_arm_now = self.intake_arm_encoder.get_absolute_position()
 
-    
-    def _update_stall_detection(self, current, velocity, dt):
-        commanding_motion = abs(self.last_commanded_output) > 0.05
-
-        stall_condition_met = (
-            commanding_motion
-            and current > self.stall_current_threshold
-            and abs(velocity < self.stall_velocity_threshold)
-
-        )
-
-        if stall_condition_met:
-            self.stall_timer += dt # delta time
-        else:
-            self.stall_timer = 0.0
-
-        self.is_stalled = self.stall_timer >= self.stall_time_threshold
+        
         
     def _configure_device(self, device: TalonFX | TalonFXS | CANcoder, 
                           configs: TalonFXConfiguration | TalonFXSConfiguration | CANcoderConfiguration, 
@@ -132,6 +120,8 @@ class Intake(Subsystem):
                 break
         if not status_code.is_ok():
             PrintCommand(f"Device with CAN ID {device.device_id} failed to config with error: {status_code.name}").schedule()
+
+
 
 #Intake Wheel Functions 
     def set_intake_speed(self, intake_wheel_volts):
@@ -158,6 +148,32 @@ class Intake(Subsystem):
             lambda: self.set_intake_speed(intake_wheel_volts)
         )
 
+    def get_stall_detection(self, dt):
+        is_commanding_motion = abs(self.set_position - self.intake_arm_now) > .05 # Should be False
+
+
+        stall_condition_met = (
+            is_commanding_motion
+            and self.current > self.stall_current_threshold
+            and abs(self.velocity) < self.stall_velocity_threshold
+        )
+
+        if stall_condition_met:
+            self.stall_timer += dt # delta time
+
+        else:
+            self.stall_timer = 0.0
+
+        self.is_stalled = self.stall_timer >= self.stall_time_threshold and stall_condition_met
+
+        if self.is_stalled:
+            print("help me")
+
+            self.set_setpoint(self.set_position) # set the setpoint to the current position to the position that it's at RIGHT NOW
+
+        return self.is_stalled
+
+
     def set_setpoint(self, position):
         """
         Command the intake arm to the requested closed-loop position.
@@ -165,6 +181,8 @@ class Intake(Subsystem):
         :param position: Desired intake arm position in mechanism rotations.
         :type position: float
         """
+        self.set_position = position
+
         self.intake_arm.set_control(
             self.position_voltage_request.with_position(position)
         )
