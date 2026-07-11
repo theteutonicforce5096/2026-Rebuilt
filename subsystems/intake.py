@@ -79,6 +79,7 @@ class Intake(Subsystem):
         self.stall_timer = 0.0
         self.is_stalled = False
         self.last_command_output = 0.0
+        self.last_time = 0.0
 
     def periodic(self):
         """
