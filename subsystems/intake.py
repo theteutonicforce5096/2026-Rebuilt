@@ -6,6 +6,7 @@ from phoenix6.hardware import CANcoder, TalonFXS, TalonFX
 from phoenix6.status_code import StatusCode
 from wpilib import RobotBase, SmartDashboard
 import wpilib
+from wpilib import Timer
 class Intake(Subsystem):
     """
     Class for controlling intake.
@@ -76,7 +77,7 @@ class Intake(Subsystem):
         self.stall_current_threshold = stall_current_threshold
         self.stall_velocity_threshold = stall_velocity_threshold
         self.stall_time_threshold = stall_time_threshold
-        self.stall_timer = 0.0
+        self.stall_timer = Timer()
         self.is_stalled = False
         self.last_command_output = 0.0
         self.last_time = 0.0
@@ -94,9 +95,9 @@ class Intake(Subsystem):
         self.now = wpilib.getTime()
         self.dt = self.now - self.last_time
         self.last_time = self.now
-        self.current = self.intake_arm.get_stator_current()
-        self.velocity = self.intake_arm.get_velocity()
-        self.intake_arm_now = self.intake_arm_encoder.get_absolute_position()
+        self.current = self.intake_arm.get_stator_current().value
+        self.velocity = self.intake_arm.get_velocity().value
+        self.intake_arm_now = self.intake_arm_encoder.get_absolute_position().value
 
         
         
@@ -159,18 +160,22 @@ class Intake(Subsystem):
             and abs(self.velocity) < self.stall_velocity_threshold
         )
 
+        if self.set_position is None:
+                return
+
         if stall_condition_met:
-            self.stall_timer += dt # delta time
+            self.stall_timer.start()
 
         else:
-            self.stall_timer = 0.0
+            self.stall_timer.stop()
+            self.stall_timer.reset()
 
-        self.is_stalled = self.stall_timer >= self.stall_time_threshold and stall_condition_met
+        self.is_stalled = self.stall_timer.hasElapsed(self.stall_time_threshold) and stall_condition_met
 
         if self.is_stalled:
-            print("help me")
+            self.set_setpoint(self.intake_arm_now)
 
-            self.set_setpoint(self.set_position) # set the setpoint to the current position to the position that it's at RIGHT NOW
+             # set the setpoint to the current position to the position that it's at RIGHT NOW
 
         return self.is_stalled
 
