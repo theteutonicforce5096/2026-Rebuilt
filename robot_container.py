@@ -1,6 +1,8 @@
 import commands2
 
 from subsystems.intake import Intake
+from constants.intake_constants import IntakeConstants
+
 
 class RobotContainer:
     """
@@ -16,8 +18,8 @@ class RobotContainer:
         self.controller = commands2.button.CommandXboxController(0)
 
         # Create intake subsystem
-        self.intake = Intake(50)
-        
+        self.intake = IntakeConstants.create_intake()
+
         self.create_button_bindings()
 
 
@@ -35,7 +37,7 @@ class RobotContainer:
         self.controller.povDown().onTrue(
             commands2.SequentialCommandGroup(
                 self.intake.runOnce(
-                    lambda: self.intake.set_setpoint(0)
+                    lambda: self.intake.arm_down()
                 ),
                 commands2.RepeatCommand(
                     self.intake.runOnce(
@@ -53,7 +55,7 @@ class RobotContainer:
         # )
             commands2.SequentialCommandGroup(
                 self.intake.runOnce(
-                    lambda: self.intake.set_setpoint(10)
+                    lambda: self.intake.arm_up()
                 ),
                 commands2.RepeatCommand(
                     self.intake.runOnce(
