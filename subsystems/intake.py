@@ -72,11 +72,9 @@ class Intake(Subsystem):
         self.now = wpilib.getTime()
         self.dt = self.now - self.last_time
         self.last_time = self.now
-        self.current = self.intake_arm.get_motor_stall_current()
-        self.velocity = self.intake_arm.get_velocity()
-        self.intake_arm_now = self.intake_arm.get_position()
-
-        print(self.intake_arm_now)
+        self.current = self.intake_arm.get_stator_current().value_as_double
+        self.velocity = self.intake_arm.get_velocity().value_as_double
+        self.intake_arm_now = self.intake_arm.get_position().value_as_double
 
     def _configure_device(self, device: TalonFXS , 
                           configs: TalonFXSConfiguration , 
@@ -113,8 +111,10 @@ class Intake(Subsystem):
             self.position_voltage_request.with_position(position)
         )
 
-        # print(position)
-
+        print(f"set position: {position}")
+        print(f"current position: {self.intake_arm_now}")
+        print(f"voltage: {self.intake_arm.get_motor_voltage()}")
+        print(f"stator current: {self.intake_arm.get_stator_current()}")
     
     def arm_down(self):
         """
@@ -127,23 +127,27 @@ class Intake(Subsystem):
         Move the intake arm to the stowed position.
         """
         self.set_setpoint(self.stowed_position)
+
+    def arm_stop(self):
+        self.set_setpoint(self.intake_arm_now)
         
 
     def get_stall_detection(self):
         is_commanding_motion = abs(self.set_position - self.intake_arm_now) > .05 # Should be False
-
+        print("stall detection running")
 
         stall_condition_met = (
             is_commanding_motion
-            and self.current > self.stall_current_threshold
+            # and self.current > self.stall_current_threshold #TODO
             and abs(self.velocity) < self.stall_velocity_threshold
         )
 
         if self.set_position is None:
                 return
 
-        if stall_condition_met:
+        if stall_condition_met == True:
             self.stall_timer.start()
+            print("stall condition met")
 
         else:
             self.stall_timer.stop()
@@ -151,8 +155,9 @@ class Intake(Subsystem):
 
         self.is_stalled = self.stall_timer.hasElapsed(self.stall_time_threshold) and stall_condition_met
 
-        if self.is_stalled:
+        if self.is_stalled == True:
             self.set_setpoint(self.intake_arm_now)
+            print("arm stopped")
 
              # set the setpoint to the current position to the position that it's at RIGHT NOW
 

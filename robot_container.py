@@ -44,6 +44,7 @@ class RobotContainer:
                         lambda: self.intake.get_stall_detection()
                     )
                 ).withTimeout(1),
+                commands2.PrintCommand("Stall detection timed out")
                 # self.controller.povDown().onTrue(
             )
         )
@@ -62,12 +63,13 @@ class RobotContainer:
                         lambda: self.intake.get_stall_detection()
                     )
                 ).withTimeout(1),
+                commands2.PrintCommand("Stall detection timed out")
                 # self.controller.povDown().onTrue(
             )
         )
-    
-        self.controller.y().onTrue(
+
+        self.controller.povLeft().onTrue(
             self.intake.runOnce(
-                lambda: self.intake.spin_motor(0)
+                lambda: self.intake.arm_stop()
             )
         )
