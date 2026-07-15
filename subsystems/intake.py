@@ -3,7 +3,7 @@ from wpilib import SmartDashboard
 import wpilib
 from wpimath.controller import ProfiledPIDController, PIDController
 from wpimath.trajectory import TrapezoidProfile
-
+from wpilib import Timer
 import rev
 
 class Intake(Subsystem):
@@ -48,19 +48,10 @@ class Intake(Subsystem):
         self.stall_current_threshold = 30
         self.stall_velocity_threshold = .25
         self.stall_time_threshold = .25
-        self.stall_timer = 0.0
+        self.stall_timer = Timer()
         self.is_stalled = False
         self.last_command_output = 0.0
         self.last_time = 0.0
-
-        # Create PID control requests
-    def spin_motor(self, percent):
-        self.intake_arm.set(percent)
-
-    def run_pid(self):
-        current_position = self.intake_arm_encoder.getPosition()
-        output = self.pid_controller.calculate(current_position, self.set_position)
-        self.spin_motor(output)
 
     def periodic(self):
         """
@@ -81,23 +72,35 @@ class Intake(Subsystem):
             and self.current > self.stall_current_threshold
             and abs(self.velocity) < self.stall_velocity_threshold
         )
+        
+        if self.set_position is None:
+            return
 
         if stall_condition_met:
-            self.stall_timer += dt # delta time
+            self.stall_timer.start()
 
         else:
-            self.stall_timer = 0.0
+            self.stall_timer.stop()
+            self.stall_timer.reset()
 
-        self.is_stalled = self.stall_timer >= self.stall_time_threshold and stall_condition_met
+        self.is_stalled = self.stall_timer.hasElapsed(self.stall_current_threshold) and stall_condition_met
 
         if self.is_stalled:
             print("help me")
             
-            self.set_setpoint(self.set_position) # set the setpoint to the current position to the position that it's at RIGHT NOW
-            self.run_pid()
+            self.set_setpoint(self.intake_arm_now) # set the setpoint to the current position to the position that it's at RIGHT NOW
+            self.run_pid() #TODO test
 
         return self.is_stalled
 
+    # Create PID control requests
+    def spin_motor(self, percent):
+        self.intake_arm.set(percent)
+
+    def run_pid(self):
+        current_position = self.intake_arm_encoder.getPosition()
+        output = self.pid_controller.calculate(current_position, self.set_position)
+        self.spin_motor(output)
 
     def set_setpoint(self, position):
         """
@@ -122,7 +125,7 @@ class Intake(Subsystem):
         """
         Move the intake arm to the stowed position.
         """
-        return SequentialCommandGroup(
+        SequentialCommandGroup(
             self.runOnce(
                 lambda: self.set_setpoint(self.stowed_position)
             ),
