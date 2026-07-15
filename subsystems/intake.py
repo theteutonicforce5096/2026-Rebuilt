@@ -107,6 +107,8 @@ class Intake(Subsystem):
         :param position: Desired intake arm position in mechanism rotations.
         :type position: float
         """
+        self.set_position = position
+
         self.intake_arm.set_control(
             self.position_voltage_request.with_position(position)
         )
