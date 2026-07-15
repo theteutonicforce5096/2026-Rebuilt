@@ -1,8 +1,7 @@
 import time
 import commands2
 
-from commands2 import Command
-from wpilib import DriverStation, PowerDistribution, RobotBase
+from wpilib import DriverStation, RobotBase
 from phoenix6 import SignalLogger
 
 from robot_container import RobotContainer
@@ -37,10 +36,6 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         Reset command state and schedule the currently selected autonomous command.
         """
         commands2.CommandScheduler.getInstance().cancelAll()
-        self.robot_container.create_commands_auto()
-        self.autonomous_command = self.robot_container.get_selected_auto_command()
-        if self.autonomous_command is not None:
-            self.autonomous_command.schedule()
 
     def teleopInit(self):
         """
@@ -61,4 +56,3 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         Cancel running commands and configure the robot for test mode.
         """
         commands2.CommandScheduler.getInstance().cancelAll()
-        self.robot_container.create_commands_test()
