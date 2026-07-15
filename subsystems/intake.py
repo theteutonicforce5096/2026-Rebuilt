@@ -34,15 +34,17 @@ class Intake(Subsystem):
             rev.PersistMode.kNoPersistParameters
         )
 
-        self.pid_controller = ProfiledPIDController(0.1, 0, 0, TrapezoidProfile.Constraints(35, 16))
+        self.pid_controller = ProfiledPIDController(1, 0, 0, TrapezoidProfile.Constraints(35, 16))
 
         self.position = 0
         self.intake_arm_encoder.setPosition(0.0)
 
         # Arm Positions because apparently we need those
-        self.intake_position = 10
-        self.stowed_position = 0
+        self.intake_position = 0
+        self.stowed_position = 10
         self.shooting_position = 5 
+
+        self.set_position = 0
 
         # Stall Detection 
         self.stall_current_threshold = 30
@@ -64,7 +66,10 @@ class Intake(Subsystem):
         self.velocity = self.intake_arm_encoder.getVelocity()
         self.intake_arm_now = self.intake_arm_encoder.getPosition()
 
-    def get_stall_detection(self, dt):
+        print(self.set_position)
+        print(self.intake_arm_encoder.getPosition())
+
+    def get_stall_detection(self):
         is_commanding_motion = abs(self.set_position - self.intake_arm_now) > .05 # Should be False
 
         stall_condition_met = (
@@ -112,31 +117,3 @@ class Intake(Subsystem):
         self.set_position = position
 
         # print(position)
-
-
-    def arm_down(self):
-        """
-        Move the intake arm to the intake position.
-        """
-        self.set_setpoint(self.intake_position) 
-        self.run_pid()
-        
-    def arm_up(self):
-        """
-        Move the intake arm to the stowed position.
-        """
-        SequentialCommandGroup(
-            self.runOnce(
-                lambda: self.set_setpoint(self.stowed_position)
-            ),
-            self.runOnce(
-                lambda: self.run_pid()
-            )
-        )
-        
-
-    def arm_down_intermediate(self):
-        """
-        Move the intake arm to the intermediate shooting position.
-        """
-        self.set_setpoint(self.shooting_position)

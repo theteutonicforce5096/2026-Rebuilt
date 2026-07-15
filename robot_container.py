@@ -33,16 +33,16 @@ class RobotContainer:
         """
        
         self.controller.povDown().onTrue(
-            commands2.ParallelCommandGroup(
+            commands2.SequentialCommandGroup(
+                self.intake.runOnce(
+                    lambda: self.intake.set_setpoint(0)
+                ),
                 commands2.RepeatCommand(
                     self.intake.runOnce(
                         lambda: self.intake.get_stall_detection()
                     )
                 ).withTimeout(1),
                 # self.controller.povDown().onTrue(
-                self.intake.runOnce(
-                    lambda: self.intake.arm_down()
-                )
             )
         )
         
@@ -51,16 +51,21 @@ class RobotContainer:
         #         lambda: self.intake.arm_up()
         #     )
         # )
-            commands2.ParallelCommandGroup(
+            commands2.SequentialCommandGroup(
+                self.intake.runOnce(
+                    lambda: self.intake.set_setpoint(10)
+                ),
                 commands2.RepeatCommand(
                     self.intake.runOnce(
                         lambda: self.intake.get_stall_detection()
                     )
                 ).withTimeout(1),
                 # self.controller.povDown().onTrue(
-                self.intake.runOnce(
-                    lambda: self.intake.arm_up()
-                )
             )
         )
     
+        self.controller.y().onTrue(
+            self.intake.runOnce(
+                lambda: self.intake.spin_motor(0)
+            )
+        )
