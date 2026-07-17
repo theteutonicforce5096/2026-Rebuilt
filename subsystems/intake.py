@@ -1,8 +1,8 @@
 from commands2 import PrintCommand, Subsystem, SequentialCommandGroup, WaitCommand, RepeatCommand, ParallelCommandGroup
 from phoenix6 import CANBus
-from phoenix6.configs import TalonFXSConfiguration
+from phoenix6.configs import TalonFXConfiguration
 from phoenix6.controls import PositionVoltage, VoltageOut
-from phoenix6.hardware import TalonFXS
+from phoenix6.hardware import TalonFX
 from phoenix6.status_code import StatusCode
 from wpilib import RobotBase
 from wpilib import Timer
@@ -15,7 +15,7 @@ class Intake(Subsystem):
     """
 
     def __init__(self, canbus: CANBus, intake_arm_id: int, 
-                 intake_arm_configs: TalonFXSConfiguration,
+                 intake_arm_configs: TalonFXConfiguration,
                  num_config_attempts: int, intake_position: float, stowed_position: float,
                  stall_current_threshold: float, stall_velocity_threshold: float,
                  stall_time_threshold: float):
@@ -27,7 +27,7 @@ class Intake(Subsystem):
         :param intake_arm_id: CAN ID of the intake arm
         :type intake_arm_id: int
         :param intake_arm_configs: Configs for the intake arm
-        :type intake_arm_configs: phoenix6.configs.TalonFXSConfiguration
+        :type intake_arm_configs: phoenix6.configs.TalonFXConfiguration
         :param num_config_attempts: Number of times to attempt to configure each device
         :type num_config_attempts: int
         :param intake_position: Encoder position where arm is down
@@ -39,7 +39,7 @@ class Intake(Subsystem):
         Subsystem.__init__(self) 
         
         # Create motors
-        self.intake_arm = TalonFXS(intake_arm_id, canbus)
+        self.intake_arm = TalonFX(intake_arm_id, canbus)
 
         # Apply motor configs
         self._configure_device(self.intake_arm, intake_arm_configs, num_config_attempts)
@@ -48,7 +48,6 @@ class Intake(Subsystem):
 
         # Create PID control requests
         self.voltage_request = VoltageOut(output = 0)
-        self.arm_voltage_request = VoltageOut(output = 0)
         self.position_voltage_request = PositionVoltage(position = 0)
         # Placeholder values, will need to be tuned
 
@@ -76,17 +75,17 @@ class Intake(Subsystem):
         self.velocity = self.intake_arm.get_velocity().value_as_double
         self.intake_arm_now = self.intake_arm.get_position().value_as_double
 
-    def _configure_device(self, device: TalonFXS , 
-                          configs: TalonFXSConfiguration , 
+    def _configure_device(self, device: TalonFX , 
+                          configs: TalonFXConfiguration , 
                           num_attempts: int) -> None:
         """
         Configures a CTRE motor controller or CANcoder with the specified configs, 
         retrying up to num_attempts times if the configuration fails.
         
-        :param device: The CTRE motor controller or CANcoder to configure
-        :type device: phoenix6.hardware.phoenix6.hardware.TalonFXS 
+        :param device: The CTRE motor controller to configure
+        :type device: phoenix6.hardware.phoenix6.hardware.TalonFX
         :param configs: The configuration to apply to the device
-        :type configs: phoenix6.configs.phoenix6.configs.TalonFXSConfiguration 
+        :type configs: phoenix6.configs.phoenix6.configs.TalonFXConfiguration 
         :param num_attempts: Number of times to attempt to configure each device
         :type num_attempts: int
         """
@@ -115,6 +114,16 @@ class Intake(Subsystem):
         print(f"current position: {self.intake_arm_now}")
         print(f"voltage: {self.intake_arm.get_motor_voltage()}")
         print(f"stator current: {self.intake_arm.get_stator_current()}")
+
+    def set_arm_voltage(self, voltage):
+        self.intake_arm.set_control(
+            self.voltage_request.with_output(voltage)
+        )
+
+        print("voltage request sent")
+        print(f"current position: {self.intake_arm_now}")
+        print(f"voltage: {self.intake_arm.get_motor_voltage()}")
+        print(f"stator current: {self.intake_arm.get_stator_current()}")
     
     def arm_down(self):
         """
@@ -138,7 +147,7 @@ class Intake(Subsystem):
 
         stall_condition_met = (
             is_commanding_motion
-            # and self.current > self.stall_current_threshold #TODO
+            and self.current > self.stall_current_threshold 
             and abs(self.velocity) < self.stall_velocity_threshold
         )
 
@@ -156,7 +165,8 @@ class Intake(Subsystem):
         self.is_stalled = self.stall_timer.hasElapsed(self.stall_time_threshold) and stall_condition_met
 
         if self.is_stalled == True:
-            self.set_setpoint(self.intake_arm_now)
+            self.set_arm_voltage(0)
+            # self.set_setpoint(self.intake_arm_now)
             print("arm stopped")
 
              # set the setpoint to the current position to the position that it's at RIGHT NOW

@@ -1,4 +1,4 @@
-from phoenix6.configs import TalonFXSConfiguration
+from phoenix6.configs import TalonFXConfiguration
 from phoenix6 import CANBus, signals
 
 from subsystems.intake import Intake
@@ -18,22 +18,20 @@ class IntakeConstants:
     _num_config_attempts = 3
 
     # Arm Position Constants 
-    _intake_position = 0
-    _stowed_position = 10
+    _intake_position = -.4
+    _stowed_position = -.2
 
     # Stall Detection Constants
-    _stall_current_threshold = 30.0 # stator current
+    _stall_current_threshold = 2.0 # stator current #changed for test
     _stall_velocity_threshold = .25 # rps???
-    _stall_time_threshold = .25
+    _stall_time_threshold = .5 #changed for test
 
-    # Intake Wheel Configs (Random ahh brushed motor - TalonFXS)
-    _intake_arm_configs = TalonFXSConfiguration()
-    _intake_arm_configs.commutation.with_motor_arrangement(signals.MotorArrangementValue.NEO550_JST)
-    _intake_arm_configs.commutation.with_advanced_hall_support(signals.AdvancedHallSupportValue.ENABLED)
+    # Intake Arm Configs (Falcon500 - TalonFX)
+    _intake_arm_configs = TalonFXConfiguration()
     _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
-    _intake_arm_configs.current_limits.with_stator_current_limit(25)
+    _intake_arm_configs.current_limits.with_stator_current_limit(10) 
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
-    _intake_arm_configs.slot0.with_k_p(1)
+    _intake_arm_configs.slot0.with_k_p(3)
     _intake_arm_configs.slot0.with_k_i(0)
     _intake_arm_configs.slot0.with_k_d(0)
 
