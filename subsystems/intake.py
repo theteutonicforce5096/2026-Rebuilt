@@ -1,8 +1,8 @@
 from commands2 import PrintCommand, Subsystem, SequentialCommandGroup, WaitCommand, RepeatCommand, ParallelCommandGroup
 from phoenix6 import CANBus
-from phoenix6.configs import TalonFXConfiguration
+from phoenix6.configs import TalonFXConfiguration, CANcoderConfiguration
 from phoenix6.controls import PositionVoltage, VoltageOut
-from phoenix6.hardware import TalonFX
+from phoenix6.hardware import TalonFX, CANcoder
 from phoenix6.status_code import StatusCode
 from wpilib import RobotBase
 from wpilib import Timer
@@ -14,11 +14,15 @@ class Intake(Subsystem):
     Class for controlling intake.
     """
 
-    def __init__(self, canbus: CANBus, intake_arm_id: int, 
+    def __init__(self, canbus: CANBus, intake_arm_id: int,
+                 intake_arm_encoder_id: int,
                  intake_arm_configs: TalonFXConfiguration,
+                 intake_arm_encoder_configs: CANcoderConfiguration,
                  num_config_attempts: int, intake_position: float, stowed_position: float,
                  stall_current_threshold: float, stall_velocity_threshold: float,
-                 stall_time_threshold: float):
+                 stall_time_threshold: float,
+                 arm_movement_pathway_low: float, arm_movement_pathway_high: float,
+                 obstruction_current_threshold: float):
         """
         Constructor for initializing shooter using the specified constants.
 
@@ -26,25 +30,45 @@ class Intake(Subsystem):
         :type canbus: phoenix6.CANBus
         :param intake_arm_id: CAN ID of the intake arm
         :type intake_arm_id: int
+        :param intake_arm_encoder__id: CAN ID of the intake arm encoder
+        :type intake_arm_encoder_id: int
         :param intake_arm_configs: Configs for the intake arm
         :type intake_arm_configs: phoenix6.configs.TalonFXConfiguration
+        :param intake_arm_encoder_configs: Configs for the intake arm encoder
+        :type intake_arm_encoder_configs: phoenix6.configs.CANcoderConfiguration
         :param num_config_attempts: Number of times to attempt to configure each device
         :type num_config_attempts: int
         :param intake_position: Encoder position where arm is down
         :type intake_position: float
         :param stowed_position: Encoder position where arm is up
         :type stowed_position: float
+        :param stall_current_threshold: Minimum stator current required to detect a stall
+        :type stall_current_threshold: float
+        :param stall_velocity_threshold: Maximum arm velocity required to detect a stall
+        :type stall_velocity_threshold: float
+        :param stall_time_threshold: Time required for stall conditions to be met to determine a stall has occured
+        :type stall_time_threshold: float
+        :param arm_movement_pathway_low: Low position in the arm movement pathway
+        :type arm_movement_pathway_low: float
+        :param arm_movement_pathway_high: High position in the arm movement pathway
+        :type arm_movement_pathway_high: float
+        :param obstruction_current_threshold: Minimum stator current required to detect an obstruction
+        :type obstruction_current_threshold: float
         """
 
         Subsystem.__init__(self) 
         
         # Create motors
         self.intake_arm = TalonFX(intake_arm_id, canbus)
+        self.intake_arm_encoder = CANcoder(intake_arm_encoder_id, canbus)
 
         # Apply motor configs
         self._configure_device(self.intake_arm, intake_arm_configs, num_config_attempts)
+        self._configure_device(self.intake_arm_encoder, intake_arm_encoder_configs, num_config_attempts)
         if RobotBase.isSimulation() == False:
+            self.intake_arm_encoder.get_position().set_update_frequency(1000.0)
             self.intake_arm.optimize_bus_utilization()
+            self.intake_arm_encoder.optimize_bus_utilization()
 
         # Create PID control requests
         self.voltage_request = VoltageOut(output = 0)
@@ -55,12 +79,18 @@ class Intake(Subsystem):
         self.intake_position = intake_position
         self.stowed_position = stowed_position
 
+        self.arm_movement_pathway_low = arm_movement_pathway_low
+        self.arm_movement_pathway_high = arm_movement_pathway_high
+        self.obstruction_current_threshold = obstruction_current_threshold
+
+        self.set_position = None
+        self.is_stalled = None
 
         self.stall_current_threshold = stall_current_threshold
         self.stall_velocity_threshold = stall_velocity_threshold
         self.stall_time_threshold = stall_time_threshold
         self.stall_timer = Timer()
-        self.is_stalled = False
+        # self.is_stalled = False
         self.last_command_output = 0.0
         self.last_time = 0.0
 
@@ -72,20 +102,20 @@ class Intake(Subsystem):
         self.dt = self.now - self.last_time
         self.last_time = self.now
         self.current = self.intake_arm.get_stator_current().value_as_double
-        self.velocity = self.intake_arm.get_velocity().value_as_double
+        self.velocity = abs(self.intake_arm.get_velocity().value_as_double)
         self.intake_arm_now = self.intake_arm.get_position().value_as_double
 
-    def _configure_device(self, device: TalonFX , 
-                          configs: TalonFXConfiguration , 
+    def _configure_device(self, device: TalonFX | CANcoder, 
+                          configs: TalonFXConfiguration | CANcoderConfiguration , 
                           num_attempts: int) -> None:
         """
         Configures a CTRE motor controller or CANcoder with the specified configs, 
         retrying up to num_attempts times if the configuration fails.
         
         :param device: The CTRE motor controller to configure
-        :type device: phoenix6.hardware.phoenix6.hardware.TalonFX
+        :type device: phoenix6.hardware.phoenix6.hardware.TalonFX | phoenix6.hardware.CANcoder
         :param configs: The configuration to apply to the device
-        :type configs: phoenix6.configs.phoenix6.configs.TalonFXConfiguration 
+        :type configs: phoenix6.configs.phoenix6.configs.TalonFXConfiguration | phoenix6.configs.CANcoderConfiguration
         :param num_attempts: Number of times to attempt to configure each device
         :type num_attempts: int
         """
@@ -115,6 +145,9 @@ class Intake(Subsystem):
         print(f"voltage: {self.intake_arm.get_motor_voltage()}")
         print(f"stator current: {self.intake_arm.get_stator_current()}")
 
+    def detect_arm_movement_completion(self):
+        return self.intake_arm.get_position().is_near(self.set_position, .009) or self.is_stalled
+
     def set_arm_voltage(self, voltage):
         self.intake_arm.set_control(
             self.voltage_request.with_output(voltage)
@@ -142,8 +175,24 @@ class Intake(Subsystem):
         
 
     def get_stall_detection(self):
-        is_commanding_motion = abs(self.set_position - self.intake_arm_now) > .05 # Should be False
+        is_commanding_motion = abs(self.set_position - self.intake_arm_now) > .009 # Should be False
         print("stall detection running")
+
+        if self.current > self.stall_current_threshold:
+            print("current condition met")
+        
+        if self.velocity < self.stall_velocity_threshold:
+            print("velocity condition met")
+
+        if is_commanding_motion:
+            print("is commanding velocity")
+
+        if self.arm_movement_pathway_low < self.intake_arm_now < self.arm_movement_pathway_high:
+            if self.current > self.obstruction_current_threshold:
+                self.set_arm_voltage(0)
+                self.is_stalled = True
+                print("OBSTRUCTION !!!@1!!!1111")
+                return self.is_stalled
 
         stall_condition_met = (
             is_commanding_motion
