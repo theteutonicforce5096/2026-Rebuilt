@@ -108,6 +108,8 @@ class Vision(Subsystem):
             "Welded": AprilTagField.k2026RebuiltWelded,
         }
         april_tag_field = field_layouts.get(field_type)
+        if april_tag_field is None:
+            raise ValueError(f"Unsupported field type: {field_type}")
 
         return AprilTagFieldLayout.loadField(april_tag_field)
 
@@ -125,7 +127,7 @@ class Vision(Subsystem):
                 current_state
             )
 
-            if measurement == None:
+            if measurement is None:
                 continue
 
             pose, timestamp, std_devs = measurement
@@ -217,8 +219,7 @@ class Vision(Subsystem):
         :rtype: tuple[float, float, float] | None
         """
         avg_tag_distance = self.get_average_tag_distance(estimated_pose)
-        current_linear_speed = abs(hypot(current_state.speeds.vx, current_state.speeds.vy))
-        current_angular_speed = abs(current_state.speeds.omega)
+        current_linear_speed = hypot(current_state.speeds.vx, current_state.speeds.vy)
 
         tag_count = len(estimated_pose.targetsUsed)
         if avg_tag_distance is None or tag_count == 0:
@@ -227,7 +228,6 @@ class Vision(Subsystem):
         distance_factor = (avg_tag_distance ** 2.0) / tag_count
 
         linear_speed_factor = self.speed_factor(current_linear_speed, self.max_linear_speed)
-        angular_speed_factor = self.speed_factor(current_angular_speed, self.max_angular_speed)
 
         camera_factor = (
             self.camera_std_dev_factors[camera_index]
@@ -242,12 +242,8 @@ class Vision(Subsystem):
             * linear_speed_factor
         )
 
-        angular_std_dev = (
-            self.angular_std_dev_baseline
-            # * distance_factor
-            # * camera_factor
-            # * angular_speed_factor
-        )
+        # Vision heading is deliberately distrusted (huge baseline), so it is left unscaled
+        angular_std_dev = self.angular_std_dev_baseline
 
         return (linear_std_dev, linear_std_dev, angular_std_dev)
 

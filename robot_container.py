@@ -1,8 +1,10 @@
 import commands2
 
+from commands2.sysid import SysIdRoutine
+
 from pathplannerlib.auto import AutoBuilder, NamedCommands
 
-from wpilib import SmartDashboard
+from wpilib import DriverStation, SendableChooser, SmartDashboard
 
 from constants.shot_calculator_constants import get_hub_center
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
@@ -16,6 +18,9 @@ class RobotContainer:
     """
     Construct the robot subsystems, controller bindings, and autonomous chooser.
     """
+
+    # Trigger travel past which a controller trigger counts as pressed
+    _TRIGGER_DEADBAND = 0.10
 
     def __init__(self):
         """
@@ -61,25 +66,18 @@ class RobotContainer:
             self.drivetrain.get_robot_tilt,
         )
 
-        # # Set starting pose for testing auto shooting (3 meters away from hub on red alliance)
-        # alliance_color = DriverStation.getAlliance()
-        # if alliance_color == DriverStation.Alliance.kRed:
-        #     self.drivetrain.reset_pose(
-        #         Pose2d(inchesToMeters(468.56 + 23.51) + feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(0))
-        #     )
-        # else:
-        #     self.drivetrain.reset_pose(
-        #         Pose2d(inchesToMeters(168.56 - 23.51) - feetToMeters(5), inchesToMeters(158.32), Rotation2d.fromDegrees(180))
-        #     )
-        
-        self._last_observed_auto_signature: tuple[str | None, bool] | None = None
-        self._last_seeded_auto_signature: tuple[str | None, bool] | None = None
-        self._selected_auto_pose_seeded = False
-
         self.register_named_commands()
 
         self.auto_chooser = AutoBuilder.buildAutoChooser()
         SmartDashboard.putData("Auto Chooser", self.auto_chooser)
+
+        # Chooser for which subsystem the test-mode SysId buttons characterize.
+        # Each subsystem selects its own routine through its per-subsystem "Routines" chooser.
+        self.sys_id_subsystem_chooser = SendableChooser()
+        self.sys_id_subsystem_chooser.setDefaultOption("Drivetrain", self.drivetrain)
+        self.sys_id_subsystem_chooser.addOption("Shooter", self.shooter)
+        self.sys_id_subsystem_chooser.addOption("Hopper", self.hopper)
+        SmartDashboard.putData("SysId Subsystem", self.sys_id_subsystem_chooser)
 
         self.create_button_bindings()
 
@@ -95,7 +93,7 @@ class RobotContainer:
         """
         NamedCommands.registerCommand(
             "Run Intake",
-            self.intake.runOnce(lambda: self.intake.set_intake_speed(12.0))
+            self.intake.runOnce(lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts))
         )
 
         NamedCommands.registerCommand(
@@ -107,7 +105,7 @@ class RobotContainer:
             "Auto Run Shooter",
             commands2.ParallelCommandGroup(
                 commands2.SequentialCommandGroup(
-                    commands2.WaitCommand(5),
+                    commands2.WaitCommand(ShooterConstants._auto_arm_down_delay_sec),
                     self.intake.runOnce(lambda: self.intake.arm_down_intermediate())
                 ),
                 self.shooter.create_auto_run_shooter_command(
@@ -133,7 +131,7 @@ class RobotContainer:
         """
         # Set the forward perspective of the robot for field oriented driving
         self.drivetrain.set_forward_perspective()
-        self.drivetrain.reset_operator_heading_tracking()
+        self.drivetrain.reset_teleop_drive_state()
 
         self.intake.arm_down()
         self.intake.set_intake_speed(0)
@@ -144,39 +142,50 @@ class RobotContainer:
     def create_button_bindings(self):
         """
         Bind controller buttons to robot actions and default commands.
+
+        All bindings are created once here. Mode-specific bindings are gated by a
+        mode-scoped trigger (teleop vs. test) so they only fire in their own mode and
+        do not stack when a mode is re-entered. The color buttons drive shooting in
+        teleop and SysId characterization in test.
         """
-        # Set button binding for reseting field centric heading
-        (self.controller.leftBumper() & self.controller.rightBumper()).onTrue(
-            self.drivetrain.runOnce(
-                lambda: (
-                    self.drivetrain.seed_field_centric(),
-                    self.drivetrain.set_forward_perspective(),
-                    self.drivetrain.reset_operator_heading_tracking()
-                )
-            )
-        )
+        # Mode-scope triggers: a mode-specific binding is only live while its mode is enabled.
+        teleop = commands2.button.Trigger(lambda: DriverStation.isTeleopEnabled())
+        test = commands2.button.Trigger(lambda: DriverStation.isTestEnabled())
 
         # Set default command for drivetrain
         self.drivetrain.setDefaultCommand(
             self.drivetrain.get_operator_drive_command(
-                lambda: self.controller.getLeftTriggerAxis() > 0.10,
-                lambda: self.controller.getRightTriggerAxis() > 0.10,
+                lambda: self.controller.getLeftTriggerAxis() > self._TRIGGER_DEADBAND,
+                lambda: self.controller.getRightTriggerAxis() > self._TRIGGER_DEADBAND,
                 lambda: -self.controller.getLeftY(),
                 lambda: -self.controller.getLeftX(),
                 lambda: -self.controller.getRightX()
             ).beforeStarting(
                 self.drivetrain.runOnce(
-                    lambda: self.drivetrain.reset_operator_heading_tracking()
+                    lambda: self.drivetrain.reset_teleop_drive_state()
                 )
             )
         )
 
-        self.controller.a().onTrue(
+        # --- Teleop bindings ---
+
+        # Set button binding for reseting field centric heading
+        (self.controller.leftBumper() & self.controller.rightBumper() & teleop).onTrue(
+            self.drivetrain.runOnce(
+                lambda: (
+                    self.drivetrain.seed_field_centric(),
+                    self.drivetrain.set_forward_perspective(),
+                    self.drivetrain.reset_teleop_drive_state()
+                )
+            )
+        )
+
+        (self.controller.a() & teleop).onTrue(
             commands2.SequentialCommandGroup(
                 self.intake.runOnce(
-                    lambda: self.intake.set_intake_speed(12)
+                    lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)
                 ),
-                commands2.WaitCommand(2),
+                commands2.WaitCommand(IntakeConstants._intake_min_run_sec),
                 commands2.WaitUntilCommand(
                     lambda: self.controller.getHID().getAButton()
                 ),
@@ -186,149 +195,195 @@ class RobotContainer:
             )
         )
 
-        self.controller.povRight().onTrue(
+        (self.controller.povRight() & teleop).onTrue(
             commands2.ParallelCommandGroup(
                 self.intake.runOnce(
-                    lambda: self.intake.set_intake_speed(-12)
+                    lambda: self.intake.set_intake_speed(IntakeConstants._eject_volts)
                 ),
-                self.hopper.run_hopper(-20, -3),
+                self.hopper.run_hopper(
+                    HopperConstants._eject_mecanum_velocity,
+                    HopperConstants._eject_agitator_volts,
+                ),
                 self.shooter.runOnce(
-                    lambda: self.shooter.set_flywheel_velocities(-30, -30)
+                    lambda: self.shooter.set_flywheel_velocities(
+                        ShooterConstants._eject_flywheel_velocity,
+                        ShooterConstants._eject_flywheel_velocity,
+                    )
                 )
             )
         )
 
-        self.controller.povLeft().onTrue(
+        (self.controller.povLeft() & teleop).onTrue(
             self.drivetrain.runOnce(
                 lambda: self.drivetrain.reset_pose_hub()
             )
         )
 
-        self.controller.povDown().onTrue(
+        (self.controller.povDown() & teleop).onTrue(
             self.intake.runOnce(
                 lambda: self.intake.arm_down()
             )
         )
 
-        self.controller.povUp().onTrue(
+        (self.controller.povUp() & teleop).onTrue(
             self.intake.runOnce(
                 lambda: self.intake.arm_up()
             )
         )
-    
-        self.controller.x().onTrue(
-            commands2.ParallelCommandGroup(
-                self.led.runOnce(
-                    lambda: self.led.shooting()
-                ),
-                commands2.SequentialCommandGroup(
-                    self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
-                    commands2.ParallelDeadlineGroup(
-                        commands2.WaitUntilCommand(
-                            lambda: self.controller.getHID().getYButton()
-                        ),
-                        commands2.RepeatCommand(
-                            self.shooter.create_manual_shoot_command()
-                        ),
-                        commands2.RepeatCommand(
-                            self.shooter.create_manual_feed_command(self.hopper)
-                        )
-                        # RepeatCommand(
-                        #     self.drivetrain.auto_align_to_hub()
-                        # )
-                    ),
-                    commands2.ParallelCommandGroup(
-                        self.intake.runOnce(
-                            lambda: self.intake.set_intake_speed(0)
-                        ),
-                        self.hopper.create_stop_command(),
-                        self.shooter.create_stop_command()
-                    )
-                )
-            )
-        )
 
-        self.controller.b().onTrue(
-            commands2.ParallelCommandGroup(
+        (self.controller.x() & teleop).onTrue(
+            commands2.SequentialCommandGroup(
                 self.led.runOnce(
-                    lambda: self.led.default()
+                    lambda: self.led.shooting_manual()
                 ),
-                commands2.SequentialCommandGroup(
-                    self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
-                    # commands2.RepeatCommand(
-                    #     self.drivetrain.auto_align_to_shot_angle(
-                    #         self.shooter.get_latest_calculated_shot
-                    #     )
-                    # ).withTimeout(1),
-                    # commands2.SequentialCommandGroup(
-                    #     commands2.InstantCommand(
-                    #         lambda: self.shooter.reset_calculated_shot_state()
-                    #     )
-                    #     # commands2.InstantCommand(
-                    #     #     lambda: self.shooter.reset_empty_time()
-                    #     # )
-                    # ),
-                    commands2.ParallelCommandGroup(
-                        # commands2.WaitUntilCommand(
-                        #     lambda: self.shooter.detect_empty()
-                        # ),
-                        commands2.RepeatCommand(
-                            self.shooter.create_calculated_shoot_command()
-                        ),
-                        commands2.RepeatCommand(
-                            self.shooter.create_calculated_feed_command(self.hopper)
-                        )
-                    ).until(
+                self.intake.runOnce(lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)),
+                commands2.ParallelDeadlineGroup(
+                    commands2.WaitUntilCommand(
                         lambda: self.controller.getHID().getYButton()
                     ),
-                    commands2.ParallelCommandGroup(
-                        self.intake.runOnce(
-                            lambda: self.intake.set_intake_speed(0)
-                        ),
-                        self.hopper.create_stop_command(),
-                        self.shooter.create_stop_command()
+                    commands2.RepeatCommand(
+                        self.shooter.create_manual_shoot_command()
+                    ),
+                    commands2.RepeatCommand(
+                        self.shooter.create_manual_feed_command(self.hopper)
                     )
-                )
-            )
-        )
-        
-        
-        # self.controller.rightTrigger().onTrue(
-        #     commands2.SequentialCommandGroup(
-        #         self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
-        #         self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
-        #         self.shooter.create_auto_run_shooter_command(
-        #             self.hopper,
-        #             self.drivetrain
-        #         )
-        #     )
-        # )
-
-        self.controller.y().onTrue(
-            commands2.ParallelCommandGroup(
-                self.led.runOnce(
-                    lambda: self.led.default()
                 ),
-            
                 commands2.ParallelCommandGroup(
                     self.intake.runOnce(
                         lambda: self.intake.set_intake_speed(0)
                     ),
                     self.hopper.create_stop_command(),
-                    self.shooter.create_stop_command()
+                    self.shooter.create_stop_command(),
+                    self.led.runOnce(
+                        lambda: self.led.default()
+                    )
                 )
             )
         )
 
+        (self.controller.b() & teleop).onTrue(
+            commands2.SequentialCommandGroup(
+                self.led.runOnce(
+                    lambda: self.led.shooting_calculated()
+                ),
+                self.intake.runOnce(lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)),
+                commands2.ParallelCommandGroup(
+                    commands2.RepeatCommand(
+                        self.shooter.create_auto_shoot_command()
+                    ),
+                    commands2.RepeatCommand(
+                        self.shooter.create_auto_feed_command(self.hopper)
+                    )
+                ).until(
+                    lambda: self.controller.getHID().getYButton()
+                ),
+                commands2.ParallelCommandGroup(
+                    self.intake.runOnce(
+                        lambda: self.intake.set_intake_speed(0)
+                    ),
+                    self.hopper.create_stop_command(),
+                    self.shooter.create_stop_command(),
+                    self.led.runOnce(
+                        lambda: self.led.default()
+                    )
+                )
+            )
+        )
+
+        (self.controller.y() & teleop).onTrue(
+            commands2.ParallelCommandGroup(
+                self.led.runOnce(
+                    lambda: self.led.default()
+                ),
+                self.intake.runOnce(
+                    lambda: self.intake.set_intake_speed(0)
+                ),
+                self.hopper.create_stop_command(),
+                self.shooter.create_stop_command()
+            )
+        )
+
+        # Flash the "five seconds left" LED state near the end of a real teleop period,
+        # then return to the default state. Gated to a real timing source: getMatchTime()
+        # returns -1 without one, so require 0 < time <= 5 plus FMS or a practice match.
+        five_seconds_left = commands2.button.Trigger(
+            lambda: DriverStation.isTeleopEnabled()
+            and 0 < DriverStation.getMatchTime() <= 5
+            and (
+                DriverStation.isFMSAttached()
+                or DriverStation.getMatchType() == DriverStation.MatchType.kPractice
+            )
+        )
+        five_seconds_left.onTrue(
+            self.led.runOnce(lambda: self.led.five_seconds_left())
+        ).onFalse(
+            self.led.runOnce(lambda: self.led.default())
+        )
+
+        # --- Test bindings (SysId characterization + drivetrain diagnostics) ---
+
+        # Color buttons run SysId on the dashboard-selected subsystem + its selected routine.
+        (self.controller.y() & test).whileTrue(
+            self._create_sys_id_command(
+                lambda subsystem: subsystem.sys_id_quasistatic(SysIdRoutine.Direction.kForward)
+            )
+        )
+        (self.controller.a() & test).whileTrue(
+            self._create_sys_id_command(
+                lambda subsystem: subsystem.sys_id_quasistatic(SysIdRoutine.Direction.kReverse)
+            )
+        )
+        (self.controller.b() & test).whileTrue(
+            self._create_sys_id_command(
+                lambda subsystem: subsystem.sys_id_dynamic(SysIdRoutine.Direction.kForward)
+            )
+        )
+        (self.controller.x() & test).whileTrue(
+            self._create_sys_id_command(
+                lambda subsystem: subsystem.sys_id_dynamic(SysIdRoutine.Direction.kReverse)
+            )
+        )
+
+        (self.controller.povUp() & test).onTrue(
+            self.drivetrain.create_effective_wheel_radius_characterization_command()
+        )
+
+        # Hold the modules forward and publish their azimuth errors for offset calibration
+        (self.controller.povDown() & test).whileTrue(
+            self.drivetrain.create_module_alignment_diagnostic_command()
+        )
+
+    def _create_sys_id_command(self, run_routine):
+        """
+        Build a deferred SysId command targeting the dashboard-selected subsystem.
+
+        The subsystem and its routine are resolved at schedule time so the dashboard
+        choosers can be changed between runs. The command requires all characterizable
+        subsystems so the deferred inner command's requirement is always satisfied.
+
+        :param run_routine: Callable mapping the selected subsystem to the SysId command
+            to run (quasistatic/dynamic in a given direction).
+        :type run_routine: Callable[[commands2.Subsystem], commands2.Command]
+        :returns: Deferred command that runs the selected subsystem's SysId routine.
+        :rtype: commands2.Command
+        """
+        def build():
+            subsystem = self.sys_id_subsystem_chooser.getSelected()
+            subsystem.set_sys_id_routine()
+            return run_routine(subsystem)
+
+        return commands2.DeferredCommand(
+            build, self.drivetrain, self.shooter, self.hopper
+        )
+
     def create_commands_test(self):
         """
-        Reset subsystem outputs and bind test-only characterization commands.
+        Reset subsystem outputs for test mode.
+
+        Test-mode button bindings live in create_button_bindings, scoped to test mode,
+        so they are created once instead of re-bound on every entry into test mode.
         """
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
         self.led.default()
-
-        self.controller.x().onTrue(
-            self.drivetrain.create_effective_wheel_radius_characterization_command()
-        )
