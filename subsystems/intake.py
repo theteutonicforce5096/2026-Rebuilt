@@ -227,7 +227,7 @@ class Intake(Subsystem):
         if is_commanding_motion:
             print("is commanding velocity")
 
-        if self.arm_movement_pathway_low < self.intake_arm_now < self.arm_movement_pathway_high:
+        if .3 < self.intake_arm_now < .355 or .37 < self.intake_arm_now < .52:
             if self.current > self.obstruction_current_threshold:
                 self.set_arm_voltage(0)
                 self.is_stalled = True
