@@ -108,7 +108,19 @@ class RobotContainer:
             commands2.ParallelCommandGroup(
                 commands2.SequentialCommandGroup(
                     commands2.WaitCommand(5),
-                    self.intake.runOnce(lambda: self.intake.arm_down_intermediate())
+                    commands2.RepeatCommand(
+                        commands2.SequentialCommandGroup(
+                            self.intake.runOnce(
+                                lambda: self.intake.arm_down_intermediate()
+                            ),
+                            commands2.RepeatCommand(
+                                self.intake.runOnce(
+                                    lambda: self.intake.get_stall_detection()
+                                )
+                            ).until(lambda: self.intake.detect_arm_movement_completion()),
+                            commands2.PrintCommand("Stall detection timed out")
+                        )
+                    ).until(lambda: self.intake.detect_arm_movement_completion())
                 ),
                 self.shooter.create_auto_run_shooter_command(
                     self.hopper,
@@ -121,7 +133,19 @@ class RobotContainer:
         """
         Put subsystems into a known safe state before autonomous begins.
         """
-        self.intake.arm_down()
+        commands2.RepeatCommand(
+            commands2.SequentialCommandGroup(
+                self.intake.runOnce(
+                    lambda: self.intake.arm_down()
+                ),
+                commands2.RepeatCommand(
+                    self.intake.runOnce(
+                        lambda: self.intake.get_stall_detection()
+                    )
+                ).until(lambda: self.intake.detect_arm_movement_completion()),
+                commands2.PrintCommand("Stall detection timed out")
+            )
+        ).until(lambda: self.intake.detect_arm_movement_completion())
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
@@ -135,7 +159,17 @@ class RobotContainer:
         self.drivetrain.set_forward_perspective()
         self.drivetrain.reset_operator_heading_tracking()
 
-        self.intake.arm_down()
+        commands2.SequentialCommandGroup(
+            self.intake.runOnce(
+                    lambda: self.intake.arm_down()
+            ),
+            commands2.RepeatCommand(
+                self.intake.runOnce(
+                    lambda: self.intake.get_stall_detection()
+                )
+            ).until(lambda: self.intake.detect_arm_movement_completion()),
+            commands2.PrintCommand("Stall detection timed out")
+            )     
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
@@ -205,14 +239,38 @@ class RobotContainer:
         )
 
         self.controller.povDown().onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_down()
+            commands2.SequentialCommandGroup(
+                self.intake.runOnce(
+                    lambda: self.intake.arm_down()
+                ),
+                commands2.RepeatCommand(
+                    self.intake.runOnce(
+                        lambda: self.intake.get_stall_detection()
+                    )
+                # ).withTimeout(2),
+                ).until(lambda: self.intake.detect_arm_movement_completion()),
+                commands2.PrintCommand("Stall detection timed out")
+                # self.controller.povDown().onTrue(
             )
         )
-
+        
         self.controller.povUp().onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_up()
+        #     self.intake.runOnce(
+        #         lambda: self.intake.arm_up()
+        #     )
+        # )
+            commands2.SequentialCommandGroup(
+                self.intake.runOnce(
+                    lambda: self.intake.arm_up()
+                ),
+                commands2.RepeatCommand(
+                    self.intake.runOnce(
+                        lambda: self.intake.get_stall_detection()
+                    )
+                # ).withTimeout(2),
+                ).until(lambda: self.intake.detect_arm_movement_completion()),
+                commands2.PrintCommand("Stall detection timed out")
+                # self.controller.povDown().onTrue(
             )
         )
 
@@ -317,7 +375,15 @@ class RobotContainer:
         
         self.controller.rightTrigger().onTrue(
             commands2.SequentialCommandGroup(
-                self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                self.intake.runOnce(
+                    lambda: self.intake.arm_down_intermediate()
+                ),
+                commands2.RepeatCommand(
+                    self.intake.runOnce(
+                        lambda: self.intake.get_stall_detection()
+                    )
+                ).until(lambda: self.intake.detect_arm_movement_completion()),
+                commands2.PrintCommand("Stall detection timed out"),
                 self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
                 self.shooter.create_auto_run_shooter_command(
                     self.hopper,
