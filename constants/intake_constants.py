@@ -19,9 +19,9 @@ class IntakeConstants:
     # Number of times to attempt to configure each device
     _num_config_attempts = 3
 
-    # Arm Position Constants 
+    # Arm Position Constants
     _intake_position = 0.15
-    _stowed_position = 0.559 
+    _stowed_position = 0.559
     _shooting_position = 0.36
 
      # Stall Detection Constants
@@ -29,10 +29,17 @@ class IntakeConstants:
     _stall_velocity_threshold = .15 # rps
     _stall_time_threshold = .25 
 
-    # [OBSTRUCTION!!2!!2!!@!12@@!@@!1] Constants
+    # Obstruction Constants
     _arm_movement_pathway_low = .3
     _arm_movement_pathway_high = .52
     _obstruction_current_threshold = 6.0 #stator
+    
+    # Operator intake-wheel voltages
+    _intake_volts = 12.0
+    _eject_volts = -12.0
+
+    # Minimum time the intake runs before re-pressing the button can cancel it
+    _intake_min_run_sec = 2.0
 
     # Intake Wheel Configs (Random ahh brushed motor - TalonFXS)
     _intake_wheel_configs = TalonFXSConfiguration()

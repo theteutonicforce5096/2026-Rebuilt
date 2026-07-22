@@ -28,7 +28,7 @@ class ShooterConstants:
     _flywheel_motor_configs.current_limits.with_stator_current_limit_enable(True)
     _flywheel_motor_configs.slot0.with_k_s(0.11618)
     _flywheel_motor_configs.slot0.with_k_v(0.10922)
-    _flywheel_motor_configs.slot0.with_k_p(0.13)
+    _flywheel_motor_configs.slot0.with_k_p(0.1275)
     _flywheel_motor_configs.slot0.with_k_i(0)
     _flywheel_motor_configs.slot0.with_k_d(0)
 
@@ -43,6 +43,17 @@ class ShooterConstants:
     _flywheel_intake_motor_configs.slot0.with_k_p(0.75)
     _flywheel_intake_motor_configs.slot0.with_k_i(0)
     _flywheel_intake_motor_configs.slot0.with_k_d(0)
+
+    # Constant flywheel speed offset (rotations per second) added to every shot target.
+    # Increase if shots consistently land short, decrease if they consistently overshoot.
+    _flywheel_target_offset_rps = 1.0
+
+    # Eject/unjam: reverse the flywheels to spit a stuck ball back out.
+    _eject_flywheel_velocity = -30.0
+
+    # Auto: seconds to let the shooter run before dropping the intake arm to the
+    # intermediate shooting position.
+    _auto_arm_down_delay_sec = 5.0
 
     @classmethod
     def create_shooter(
@@ -84,4 +95,5 @@ class ShooterConstants:
             get_hub_center,
             launcher_offset_x,
             launcher_offset_y,
+            cls._flywheel_target_offset_rps,
         )

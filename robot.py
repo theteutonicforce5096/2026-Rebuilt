@@ -1,8 +1,7 @@
 import time
 import commands2
 
-from commands2 import Command
-from wpilib import DriverStation, PowerDistribution, RobotBase
+from wpilib import DriverStation, RobotBase
 from phoenix6 import SignalLogger
 
 from robot_container import RobotContainer
@@ -16,15 +15,12 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         """
         Initialize the robot container and global logging configuration.
         """
-        # Doesn't work because PDH isn't wired to RoboRIO: Enable switchable channel on the REV PDH
-        # PowerDistribution().setSwitchableChannel(True)
-    
         # Disable Phoenix 6 Auto Signal Logging
         SignalLogger.enable_auto_logging(False)
 
-        # Sleep for 10 seconds only if robot isn't in simulation mode to prevent CANBus motor config errors 
-        if RobotBase.isSimulation() == False:
-            time.sleep(10) 
+        # Sleep for 10 seconds only if robot isn't in simulation mode to prevent CANBus motor config errors
+        if not RobotBase.isSimulation():
+            time.sleep(10)
 
         # Create robot container
         self.robot_container = RobotContainer()

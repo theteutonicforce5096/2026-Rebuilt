@@ -1,35 +1,32 @@
-"""
-TODO: I am making the hopper and the intake two seperate things so it will make everything easier
-"""
-from commands2 import PrintCommand, SequentialCommandGroup, Subsystem, WaitCommand
+from commands2 import Command, Subsystem
 from commands2.sysid import SysIdRoutine
 
 from phoenix6 import CANBus, SignalLogger
 from phoenix6.configs import TalonFXConfiguration
 from phoenix6.controls import VelocityVoltage, VoltageOut
 from phoenix6.hardware import TalonFX
-from phoenix6.status_code import StatusCode
 
 from wpilib.sysid import SysIdRoutineLog
-from wpilib import RobotBase
+from wpilib import RobotBase, SendableChooser
+from wpilib.shuffleboard import Shuffleboard
 
-""" 
-TODO: 
-- It would be beneficial if we had an order to when which motors turn on so nothing gets stuck
-1. Shooter Intake
-2. Mechanim wheels
-- We need two motors, both motors are talon FX, not sure there would need ot be very much tuning
-"""
+from subsystems.device_config import configure_device
 
-class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
+class Hopper(Subsystem):
     """
     Class for controlling hopper.
     """
 
-    def __init__(self, canbus: CANBus, mecanum_wheel_id: int, agitator_wheel_id: int, 
-                 mecanum_wheel_configs: TalonFXConfiguration, 
+    def __init__(self, canbus: CANBus, mecanum_wheel_id: int, agitator_wheel_id: int,
+                 mecanum_wheel_configs: TalonFXConfiguration,
                  agitator_wheel_configs: TalonFXConfiguration,
-                 num_config_attempts: int):
+                 num_config_attempts: int,
+                 feed_mecanum_velocity: float,
+                 feed_agitator_volts: float,
+                 feed_forward_sec: float,
+                 shake_mecanum_velocity: float,
+                 shake_agitator_volts: float,
+                 shake_reverse_sec: float):
         """
         Constructor for initializing hopper using the specified constants.
 
@@ -45,19 +42,39 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
         :type agitator_wheel_configs: phoenix6.configs.TalonFXConfiguration
         :param num_config_attempts: Number of times to attempt to configure each device
         :type num_config_attempts: int
+        :param feed_mecanum_velocity: Mecanum-wheel velocity in rotations per second during the forward feed pulse.
+        :type feed_mecanum_velocity: float
+        :param feed_agitator_volts: Agitator voltage during the forward feed pulse.
+        :type feed_agitator_volts: float
+        :param feed_forward_sec: Duration in seconds of the forward feed pulse.
+        :type feed_forward_sec: float
+        :param shake_mecanum_velocity: Mecanum-wheel velocity in rotations per second during the reverse shake pulse.
+        :type shake_mecanum_velocity: float
+        :param shake_agitator_volts: Agitator voltage during the reverse shake pulse.
+        :type shake_agitator_volts: float
+        :param shake_reverse_sec: Duration in seconds of the reverse shake pulse.
+        :type shake_reverse_sec: float
         """
 
         Subsystem.__init__(self)
 
+        # Store feed/shake oscillation tunables
+        self.feed_mecanum_velocity = feed_mecanum_velocity
+        self.feed_agitator_volts = feed_agitator_volts
+        self.feed_forward_sec = feed_forward_sec
+        self.shake_mecanum_velocity = shake_mecanum_velocity
+        self.shake_agitator_volts = shake_agitator_volts
+        self.shake_reverse_sec = shake_reverse_sec
+
         # Create motors
-        self.mecanum_wheel = TalonFX(mecanum_wheel_id, canbus) #the mecanum wheels
-        self.agitator_wheel = TalonFX(agitator_wheel_id, canbus) #wheels in the hopper
-        
+        self.mecanum_wheel = TalonFX(mecanum_wheel_id, canbus)
+        self.agitator_wheel = TalonFX(agitator_wheel_id, canbus)
+
         # Apply motor configs
-        self._configure_device(self.mecanum_wheel, mecanum_wheel_configs, num_config_attempts)
-        self._configure_device(self.agitator_wheel, agitator_wheel_configs, num_config_attempts)
-        
-        if RobotBase.isSimulation() == False:
+        configure_device(self.mecanum_wheel, mecanum_wheel_configs, num_config_attempts)
+        configure_device(self.agitator_wheel, agitator_wheel_configs, num_config_attempts)
+
+        if not RobotBase.isSimulation():
             self.mecanum_wheel.optimize_bus_utilization()
             self.agitator_wheel.optimize_bus_utilization()
 
@@ -85,34 +102,19 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
             ),
         )
 
+        # Create widget for selecting SysId routine and set default value
         self.sys_id_routine_to_apply = self.mecanum_motor_sys_id_routine
-        
-    def _configure_device(self, device: TalonFX, 
-                          configs: TalonFXConfiguration, 
-                          num_attempts: int) -> None:
-        """
-        Configures a CTRE motor controller with the specified configs, 
-        retrying up to num_attempts times if the configuration fails.
-        
-        :param device: The CTRE motor controller to configure
-        :type device: phoenix6.hardware.TalonFX 
-        :param configs: The configuration to apply to the device
-        :type configs: phoenix6.configs.TalonFXConfiguration 
-        :param num_attempts: Number of times to attempt to configure each device
-        :type num_attempts: int
-        """
-        for _ in range(num_attempts):
-            status_code: StatusCode = device.configurator.apply(configs)
-            if status_code.is_ok():
-                break
-        if not status_code.is_ok():
-            PrintCommand(f"Device with CAN ID {device.device_id} failed to config with error: {status_code.name}").schedule()
+        self.sys_id_routines = SendableChooser()
+        self.sys_id_routines.setDefaultOption("Mecanum Motor Routine", self.mecanum_motor_sys_id_routine)
+
+        # Send widget to Shuffleboard
+        Shuffleboard.getTab("SysId").add("Hopper Routines", self.sys_id_routines).withSize(2, 1)
 
     def set_sys_id_routine(self):
         """
-        Set the SysId routine to run. Hopper currently exposes only the mecanum wheel routine.
+        Set the SysId Routine to run based off of the routine chosen in Shuffleboard.
         """
-        self.sys_id_routine_to_apply = self.mecanum_motor_sys_id_routine
+        self.sys_id_routine_to_apply = self.sys_id_routines.getSelected()
 
     def sys_id_quasistatic(self, direction: SysIdRoutine.Direction):
         """
@@ -164,15 +166,38 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
             self.voltage_request.with_output(agitator_volts)
         )
 
-    def create_feed_cycle_command(self):
+    def _drive_hopper_for(self, mecanum_velocity, agitator_volts, seconds) -> Command:
         """
-        Alternate the agitator direction briefly while feeding balls forward.
+        Build a command that holds the given hopper outputs for a fixed duration.
+
+        :param mecanum_velocity: Mecanum-wheel velocity in rotations per second to hold.
+        :type mecanum_velocity: float
+        :param agitator_volts: Agitator voltage to hold.
+        :type agitator_volts: float
+        :param seconds: Duration in seconds to hold the outputs before the command ends.
+        :type seconds: float
+        :returns: Command that applies the outputs each loop until the timeout elapses.
+        :rtype: commands2.Command
         """
-        return SequentialCommandGroup(
-            self.run_hopper(25, 3),
-            WaitCommand(0.5),
-            self.run_hopper(25, -3),
-            WaitCommand(0.25)
+        return self.run(
+            lambda: self.set_hopper_speeds(mecanum_velocity, agitator_volts)
+        ).withTimeout(seconds)
+
+    def create_feed_cycle_command(self) -> Command:
+        """
+        Feed one net-forward oscillation: push balls toward the shooter, then shake back briefly.
+
+        The forward pulse drives balls into the shooter, and the shorter reverse pulse jostles a
+        packed hopper so bridged balls break loose instead of stalling the wheels. The forward pulse
+        moves more than the shake pulse, so the net motion is toward the shooter. The command ends
+        after one oscillation so the caller can re-check whether the flywheel is still at speed.
+        """
+        return self._drive_hopper_for(
+            self.feed_mecanum_velocity, self.feed_agitator_volts, self.feed_forward_sec
+        ).andThen(
+            self._drive_hopper_for(
+                self.shake_mecanum_velocity, self.shake_agitator_volts, self.shake_reverse_sec
+            )
         )
 
     def create_stop_command(self):
@@ -180,7 +205,3 @@ class Hopper(Subsystem): # <-- Telling subsystem that its part of it too
         Build a command that stops both hopper motors.
         """
         return self.run_hopper(0, 0)
-
-    # The hopper speeds will likely be constant
-    # Mecanum at 35rps
-    # Agitator at 1.5v (will flip between pos and neg to help agitate balls)

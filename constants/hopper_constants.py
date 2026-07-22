@@ -34,7 +34,24 @@ class HopperConstants:
     _agitator_wheel_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
     _agitator_wheel_configs.current_limits.with_stator_current_limit(80)
     _agitator_wheel_configs.current_limits.with_stator_current_limit_enable(True)
-    
+
+    # Feed pulse: net-forward push that drives balls toward the shooter.
+    _feed_mecanum_velocity = 25.0
+    _feed_agitator_volts = 3.0
+    _feed_forward_sec = 0.375
+
+    # Shake pulse: a brief reverse that unbridges a full hopper so the balls keep moving.
+    # Feeding alternates a forward pulse with this shake so a packed hopper is constantly
+    # jostled loose instead of relying on the wheels to overpower a jam head-on. The forward
+    # pulse moves more than the shake pulse, so the net motion is still toward the shooter.
+    _shake_mecanum_velocity = -15.0
+    _shake_agitator_volts = -3.0
+    _shake_reverse_sec = 0.125
+
+    # Eject/unjam pulse: reverse the hopper to clear a stuck ball back out the intake.
+    _eject_mecanum_velocity = -20.0
+    _eject_agitator_volts = -3.0
+
     @classmethod
     def create_hopper(cls) -> Hopper:
         """
@@ -52,5 +69,11 @@ class HopperConstants:
             cls._agitator_wheel_id,
             cls._mecanum_wheel_configs,
             cls._agitator_wheel_configs,
-            cls._num_config_attempts
+            cls._num_config_attempts,
+            cls._feed_mecanum_velocity,
+            cls._feed_agitator_volts,
+            cls._feed_forward_sec,
+            cls._shake_mecanum_velocity,
+            cls._shake_agitator_volts,
+            cls._shake_reverse_sec,
         )
