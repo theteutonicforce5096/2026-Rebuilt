@@ -24,6 +24,16 @@ class IntakeConstants:
     _stowed_position = 0.559
     _shooting_position = 0.36
 
+     # Stall Detection Constants
+    _stall_current_threshold = 3.0 # stator current 
+    _stall_velocity_threshold = .15 # rps
+    _stall_time_threshold = .25 
+
+    # Obstruction Constants
+    _arm_movement_pathway_low = .3
+    _arm_movement_pathway_high = .52
+    _obstruction_current_threshold = 6.0 #stator
+    
     # Operator intake-wheel voltages
     _intake_volts = 12.0
     _eject_volts = -12.0
@@ -44,7 +54,7 @@ class IntakeConstants:
     _intake_arm_configs = TalonFXConfiguration()
     _intake_arm_configs.motor_output.with_inverted(signals.InvertedValue.COUNTER_CLOCKWISE_POSITIVE)
     _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
-    _intake_arm_configs.current_limits.with_stator_current_limit(25) 
+    _intake_arm_configs.current_limits.with_stator_current_limit(12) 
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_arm_configs.feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
     _intake_arm_configs.feedback.with_feedback_sensor_source(signals.FeedbackSensorSourceValue.FUSED_CANCODER)
@@ -81,5 +91,11 @@ class IntakeConstants:
             cls._num_config_attempts,
             cls._intake_position,
             cls._stowed_position,
-            cls._shooting_position
+            cls._shooting_position,
+            cls._stall_current_threshold,
+            cls._stall_velocity_threshold,
+            cls._stall_time_threshold,
+            cls._arm_movement_pathway_low,
+            cls._arm_movement_pathway_high,
+            cls._obstruction_current_threshold
         )
