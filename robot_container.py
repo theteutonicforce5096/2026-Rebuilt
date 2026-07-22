@@ -133,19 +133,20 @@ class RobotContainer:
         """
         Put subsystems into a known safe state before autonomous begins.
         """
-        commands2.RepeatCommand(
-            commands2.SequentialCommandGroup(
-                self.intake.runOnce(
-                    lambda: self.intake.arm_down()
-                ),
-                commands2.RepeatCommand(
-                    self.intake.runOnce(
-                        lambda: self.intake.get_stall_detection()
-                    )
-                ).until(lambda: self.intake.detect_arm_movement_completion()),
-                commands2.PrintCommand("Stall detection timed out")
-            )
-        ).until(lambda: self.intake.detect_arm_movement_completion())
+        # commands2.RepeatCommand(
+        #     commands2.SequentialCommandGroup(
+        #         self.intake.runOnce(
+        #             lambda: self.intake.arm_down()
+        #         ),
+        #         commands2.RepeatCommand(
+        #             self.intake.runOnce(
+        #                 lambda: self.intake.get_stall_detection()
+        #             )
+        #         ).until(lambda: self.intake.detect_arm_movement_completion()),
+        #         commands2.PrintCommand("Stall detection timed out")
+        #     )
+        # ).until(lambda: self.intake.detect_arm_movement_completion()).schedule()
+        self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
@@ -169,7 +170,7 @@ class RobotContainer:
                 )
             ).until(lambda: self.intake.detect_arm_movement_completion()),
             commands2.PrintCommand("Stall detection timed out")
-            )     
+        ).schedule()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)

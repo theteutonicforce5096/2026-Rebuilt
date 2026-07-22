@@ -216,19 +216,9 @@ class Intake(Subsystem):
 
     def get_stall_detection(self):
         is_commanding_motion = abs(self.set_position - self.intake_arm_now) > .009 # Should be False
-        print("stall detection running")
-
-        if self.current > self.stall_current_threshold:
-            print("current condition met")
         
-        if self.velocity < self.stall_velocity_threshold:
-            print("velocity condition met")
-
-        if is_commanding_motion:
-            print("is commanding velocity")
-
-        if .3 < self.intake_arm_now < .355 or .37 < self.intake_arm_now < .52:
-            if self.current > self.obstruction_current_threshold:
+        if .3 < self.intake_arm_now < .35 or .37 < self.intake_arm_now < .5:
+            if self.current > 6.7:
                 self.set_arm_voltage(0)
                 self.is_stalled = True
                 print("OBSTRUCTION !!!@1!!!1111")
@@ -245,7 +235,7 @@ class Intake(Subsystem):
 
         if stall_condition_met == True:
             self.stall_timer.start()
-            print("stall condition met")
+            # print("stall condition met")
 
         else:
             self.stall_timer.stop()
