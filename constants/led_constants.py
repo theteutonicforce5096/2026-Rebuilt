@@ -4,6 +4,7 @@ from phoenix6.signals import StripTypeValue
 
 from subsystems.led import LED
 
+
 class LEDConstants:
     """
     Constants for LED Subsystem
@@ -25,11 +26,10 @@ class LEDConstants:
     # Number of LEDs on the strip
     _led_end_index = 64
 
-
     @classmethod
     def create_led(cls) -> LED:
         """
-        Creates an LED subsystem instance using the configured constant values.
+        Create an LED subsystem instance using the configured constant values.
 
         :param cls: LEDConstants class used as the source of the subsystem constants.
         :type cls: type[LEDConstants]
@@ -38,9 +38,5 @@ class LEDConstants:
         """
 
         return LED(
-            cls._canbus,
-            cls._led_id,
-            cls._led_configs,
-            cls._num_config_attempts,
-            cls._led_end_index
+            cls._canbus, cls._led_id, cls._led_configs, cls._num_config_attempts, cls._led_end_index
         )

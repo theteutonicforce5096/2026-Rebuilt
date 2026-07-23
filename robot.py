@@ -1,16 +1,15 @@
-import time
 import commands2
-
-from wpilib import DriverStation, RobotBase
 from phoenix6 import SignalLogger
+from wpilib import DriverStation
 
 from robot_container import RobotContainer
+
 
 class RebuiltRobot(commands2.TimedCommandRobot):
     """
     2026 Robot for Team 5096.
     """
-    
+
     def robotInit(self):
         """
         Initialize the robot container and global logging configuration.
@@ -18,16 +17,13 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         # Disable Phoenix 6 Auto Signal Logging
         SignalLogger.enable_auto_logging(False)
 
-        # Sleep for 10 seconds only if robot isn't in simulation mode to prevent CANBus motor config errors
-        if not RobotBase.isSimulation():
-            time.sleep(10)
-
-        # Create robot container
+        # Create robot container. Device configuration waits for each device to enumerate
+        # on its bus before applying configs (see configure_device).
         self.robot_container = RobotContainer()
 
         if DriverStation.isFMSAttached():
             SignalLogger.start()
-        
+
     def autonomousInit(self):
         """
         Reset command state and schedule the currently selected autonomous command.
@@ -44,7 +40,7 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         """
         commands2.CommandScheduler.getInstance().cancelAll()
         self.robot_container.create_commands_teleop()
-    
+
     def teleopExit(self):
         """
         Stop match logging after teleop ends when connected to FMS.

@@ -1,18 +1,16 @@
 import commands2
-
 from commands2.sysid import SysIdRoutine
-
 from pathplannerlib.auto import AutoBuilder, NamedCommands
-
 from wpilib import DriverStation, SendableChooser, SmartDashboard
 
-from constants.shot_calculator_constants import get_hub_center
-from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
-from constants.shooter_constants import ShooterConstants
 from constants.hopper_constants import HopperConstants
 from constants.intake_constants import IntakeConstants
-from constants.vision_constants import VisionConstants
 from constants.led_constants import LEDConstants
+from constants.shooter_constants import ShooterConstants
+from constants.shot_calculator_constants import get_hub_center
+from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
+from constants.vision_constants import VisionConstants
+
 
 class RobotContainer:
     """
@@ -93,59 +91,36 @@ class RobotContainer:
         """
         NamedCommands.registerCommand(
             "Run Intake",
-            self.intake.runOnce(lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts))
+            self.intake.runOnce(
+                lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)
+            ),
         )
 
         NamedCommands.registerCommand(
-            "Turn Off Intake",
-            self.intake.runOnce(lambda: self.intake.set_intake_speed(0))
+            "Turn Off Intake", self.intake.runOnce(lambda: self.intake.set_intake_speed(0))
         )
 
         NamedCommands.registerCommand(
             "Auto Run Shooter",
             commands2.ParallelCommandGroup(
                 commands2.SequentialCommandGroup(
-                    commands2.WaitCommand(5),
-                    commands2.RepeatCommand(
-                        commands2.SequentialCommandGroup(
-                            self.intake.runOnce(
-                                lambda: self.intake.arm_down_intermediate()
-                            ),
-                            commands2.RepeatCommand(
-                                self.intake.runOnce(
-                                    lambda: self.intake.get_stall_detection()
-                                )
-                            ).until(lambda: self.intake.detect_arm_movement_completion()),
-                            commands2.PrintCommand("Stall detection timed out")
-                        )
-                    ).until(lambda: self.intake.detect_arm_movement_completion())
                     commands2.WaitCommand(ShooterConstants._auto_arm_down_delay_sec),
-                    self.intake.runOnce(lambda: self.intake.arm_down_intermediate())
+                    self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
                 ),
-                self.shooter.create_auto_run_shooter_command(
+                # Same aligned, distance-based shot as teleop "b", ending when the hopper empties.
+                self.shooter.create_shot_command(
                     self.hopper,
                     self.drivetrain,
-                )
-            )
+                    distance_based=True,
+                    end_when=lambda: self.shooter.detect_empty(),
+                ),
+            ),
         )
 
     def create_commands_auto(self):
         """
         Put subsystems into a known safe state before autonomous begins.
         """
-        # commands2.RepeatCommand(
-        #     commands2.SequentialCommandGroup(
-        #         self.intake.runOnce(
-        #             lambda: self.intake.arm_down()
-        #         ),
-        #         commands2.RepeatCommand(
-        #             self.intake.runOnce(
-        #                 lambda: self.intake.get_stall_detection()
-        #             )
-        #         ).until(lambda: self.intake.detect_arm_movement_completion()),
-        #         commands2.PrintCommand("Stall detection timed out")
-        #     )
-        # ).until(lambda: self.intake.detect_arm_movement_completion()).schedule()
         self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
@@ -160,21 +135,11 @@ class RobotContainer:
         self.drivetrain.set_forward_perspective()
         self.drivetrain.reset_teleop_drive_state()
 
-        commands2.SequentialCommandGroup(
-            self.intake.runOnce(
-                    lambda: self.intake.arm_down()
-            ),
-            commands2.RepeatCommand(
-                self.intake.runOnce(
-                    lambda: self.intake.get_stall_detection()
-                )
-            ).until(lambda: self.intake.detect_arm_movement_completion()),
-            commands2.PrintCommand("Stall detection timed out")
-        ).schedule()
+        self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
-        self.led.pride()
+        self.led.default()
 
     def create_button_bindings(self):
         """
@@ -196,25 +161,22 @@ class RobotContainer:
                 lambda: self.controller.getRightTriggerAxis() > self._TRIGGER_DEADBAND,
                 lambda: -self.controller.getLeftY(),
                 lambda: -self.controller.getLeftX(),
-                lambda: -self.controller.getRightX()
+                lambda: -self.controller.getRightX(),
             ).beforeStarting(
-                self.drivetrain.runOnce(
-                    lambda: self.drivetrain.reset_teleop_drive_state()
-                )
+                self.drivetrain.runOnce(lambda: self.drivetrain.reset_teleop_drive_state())
             )
         )
 
         # --- Teleop bindings ---
 
         # Set button binding for reseting field centric heading
+        def reset_field_centric_heading():
+            self.drivetrain.seed_field_centric()
+            self.drivetrain.set_forward_perspective()
+            self.drivetrain.reset_teleop_drive_state()
+
         (self.controller.leftBumper() & self.controller.rightBumper() & teleop).onTrue(
-            self.drivetrain.runOnce(
-                lambda: (
-                    self.drivetrain.seed_field_centric(),
-                    self.drivetrain.set_forward_perspective(),
-                    self.drivetrain.reset_teleop_drive_state()
-                )
-            )
+            self.drivetrain.runOnce(reset_field_centric_heading)
         )
 
         (self.controller.a() & teleop).onTrue(
@@ -223,12 +185,8 @@ class RobotContainer:
                     lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)
                 ),
                 commands2.WaitCommand(IntakeConstants._intake_min_run_sec),
-                commands2.WaitUntilCommand(
-                    lambda: self.controller.getHID().getAButton()
-                ),
-                self.intake.runOnce(
-                    lambda: self.intake.set_intake_speed(0)
-                )
+                commands2.WaitUntilCommand(lambda: self.controller.getHID().getAButton()),
+                self.intake.runOnce(lambda: self.intake.set_intake_speed(0)),
             )
         )
 
@@ -246,231 +204,75 @@ class RobotContainer:
                         ShooterConstants._eject_flywheel_velocity,
                         ShooterConstants._eject_flywheel_velocity,
                     )
-                )
+                ),
             )
         )
 
         (self.controller.povLeft() & teleop).onTrue(
-            self.drivetrain.runOnce(
-                lambda: self.drivetrain.reset_pose_hub()
-            )
+            self.drivetrain.runOnce(lambda: self.drivetrain.reset_pose_hub())
         )
 
-        self.controller.povDown().onTrue(
-            commands2.SequentialCommandGroup(
-                self.intake.runOnce(
-                    lambda: self.intake.arm_down()
-                ),
-                commands2.RepeatCommand(
-                    self.intake.runOnce(
-                        lambda: self.intake.get_stall_detection()
-                    )
-                # ).withTimeout(2),
-                ).until(lambda: self.intake.detect_arm_movement_completion()),
-                commands2.PrintCommand("Stall detection timed out")
-                # self.controller.povDown().onTrue(
-            )
-        )
-        
-        self.controller.povUp().onTrue(
-        #     self.intake.runOnce(
-        #         lambda: self.intake.arm_up()
-        #     )
-        # )
-            commands2.SequentialCommandGroup(
-                self.intake.runOnce(
-                    lambda: self.intake.arm_up()
-                ),
-                commands2.RepeatCommand(
-                    self.intake.runOnce(
-                        lambda: self.intake.get_stall_detection()
-                    )
-                # ).withTimeout(2),
-                ).until(lambda: self.intake.detect_arm_movement_completion()),
-                commands2.PrintCommand("Stall detection timed out")
-                # self.controller.povDown().onTrue(
-            )
-        )
-
-        # self.controller.povRight().onTrue(
-        #     commands2.SequentialCommandGroup(
-        #         commands2.ParallelDeadlineGroup(
-        #             commands2.WaitUntilCommand(
-        #                 lambda: self.controller.getHID().getYButton()
-        #             ),
-        #             commands2.RepeatCommand(
-        #                 self.drivetrain.auto_align_to_hub()
-        #             ),
-        #             self.led.runOnce(
-        #                 lambda: self.led.auto_in_progress()
-        #             )
-        #         ),
-        #         self.led.runOnce(
-        #             lambda: self.led.pride()
-        #         )
-        #     )
-        # )
-    
-        self.controller.x().onTrue(
-            commands2.ParallelCommandGroup(
+        # Drop and stow the arm with stall detection so a jammed arm stops instead of straining.
         (self.controller.povDown() & teleop).onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_down()
-            )
+            self._create_arm_move_command(lambda: self.intake.arm_down())
         )
 
         (self.controller.povUp() & teleop).onTrue(
-            self.intake.runOnce(
-                lambda: self.intake.arm_up()
-            )
+            self._create_arm_move_command(lambda: self.intake.arm_up())
         )
 
+        # Manual shot: operator-set flywheel speed, no auto-align. Ends when Y is pressed.
         (self.controller.x() & teleop).onTrue(
             commands2.SequentialCommandGroup(
-                self.led.runOnce(
-                    lambda: self.led.shooting_manual()
+                self.led.runOnce(lambda: self.led.shooting_manual()),
+                self.intake.runOnce(
+                    lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)
                 ),
-                self.intake.runOnce(lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)),
-                commands2.ParallelDeadlineGroup(
-                    commands2.WaitUntilCommand(
-                        lambda: self.controller.getHID().getYButton()
-                    ),
-                    commands2.RepeatCommand(
-                        self.shooter.create_manual_shoot_command()
-                    ),
-                    commands2.RepeatCommand(
-                        self.shooter.create_manual_feed_command(self.hopper)
-                    )
+                self.shooter.create_shot_command(
+                    self.hopper,
+                    distance_based=False,
+                    end_when=lambda: self.controller.getHID().getYButton(),
                 ),
-                commands2.ParallelCommandGroup(
-                    self.intake.runOnce(
-                        lambda: self.intake.set_intake_speed(0)
-                    ),
-                    self.hopper.create_stop_command(),
-                    self.shooter.create_stop_command(),
-                    self.led.runOnce(
-                        lambda: self.led.default()
-                    )
-                )
+                self._create_stop_all_command(),
             )
         )
 
+        # Calculated shot: distance-based flywheel speed while auto-aligning to the hub.
+        # Ends when Y is pressed or the hopper runs empty.
         (self.controller.b() & teleop).onTrue(
             commands2.SequentialCommandGroup(
-                self.led.runOnce(
-                    lambda: self.led.pride()
-                ),
-                commands2.SequentialCommandGroup(
-                    commands2.RepeatCommand(
-                        self.drivetrain.auto_align_to_hub()
-                    ).withTimeout(1),
-                    self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
-                    # commands2.RepeatCommand(
-                    #     self.drivetrain.auto_align_to_shot_angle(
-                    #         self.shooter.get_latest_calculated_shot
-                    #     )
-                    # ).withTimeout(1),
-                    # commands2.SequentialCommandGroup(
-                    #     commands2.InstantCommand(
-                    #         lambda: self.shooter.reset_calculated_shot_state()
-                    #     )
-                    #     # commands2.InstantCommand(
-                    #     #     lambda: self.shooter.reset_empty_time()
-                    #     # )
-                    # ),
-                    commands2.ParallelCommandGroup(
-                        # commands2.WaitUntilCommand(
-                        #     lambda: self.shooter.detect_empty()
-                        # ),
-                        commands2.RepeatCommand(
-                            self.shooter.create_calculated_shoot_command()
-                        ),
-                        commands2.RepeatCommand(
-                            self.shooter.create_calculated_feed_command(self.hopper)
-                        )
-                    ).until(
-                        lambda: self.controller.getHID().getYButton()
-                    lambda: self.led.shooting_calculated()
-                ),
-                self.intake.runOnce(lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)),
-                commands2.ParallelCommandGroup(
-                    commands2.RepeatCommand(
-                        self.shooter.create_auto_shoot_command()
-                    ),
-                    commands2.RepeatCommand(
-                        self.shooter.create_auto_feed_command(self.hopper)
-                    )
-                )
-            )
-        )
-        
-        
-        self.controller.rightTrigger().onTrue(
-            commands2.SequentialCommandGroup(
+                self.led.runOnce(lambda: self.led.shooting_calculated()),
                 self.intake.runOnce(
-                    lambda: self.intake.arm_down_intermediate()
+                    lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)
                 ),
-                commands2.RepeatCommand(
-                    self.intake.runOnce(
-                        lambda: self.intake.get_stall_detection()
-                    )
-                ).until(lambda: self.intake.detect_arm_movement_completion()),
-                commands2.PrintCommand("Stall detection timed out"),
-                self.intake.runOnce(lambda: self.intake.set_intake_speed(12)),
-                self.shooter.create_auto_run_shooter_command(
+                self.shooter.create_shot_command(
                     self.hopper,
-                    self.drivetrain
-                )
-            )
-        )
-
-        self.controller.y().onTrue(
-            commands2.ParallelCommandGroup(
-                self.led.runOnce(
-                    lambda: self.led.pride()
-                ).until(
-                    lambda: self.controller.getHID().getYButton()
-                ),
-                commands2.ParallelCommandGroup(
-                    self.intake.runOnce(
-                        lambda: self.intake.set_intake_speed(0)
+                    self.drivetrain,
+                    distance_based=True,
+                    end_when=lambda: (
+                        self.controller.getHID().getYButton() or self.shooter.detect_empty()
                     ),
-                    self.hopper.create_stop_command(),
-                    self.shooter.create_stop_command(),
-                    self.led.runOnce(
-                        lambda: self.led.default()
-                    )
-                )
+                ),
+                self._create_stop_all_command(),
             )
         )
 
-        (self.controller.y() & teleop).onTrue(
-            commands2.ParallelCommandGroup(
-                self.led.runOnce(
-                    lambda: self.led.default()
-                ),
-                self.intake.runOnce(
-                    lambda: self.intake.set_intake_speed(0)
-                ),
-                self.hopper.create_stop_command(),
-                self.shooter.create_stop_command()
-            )
-        )
+        (self.controller.y() & teleop).onTrue(self._create_stop_all_command())
 
         # Flash the "five seconds left" LED state near the end of a real teleop period,
         # then return to the default state. Gated to a real timing source: getMatchTime()
         # returns -1 without one, so require 0 < time <= 5 plus FMS or a practice match.
         five_seconds_left = commands2.button.Trigger(
-            lambda: DriverStation.isTeleopEnabled()
-            and 0 < DriverStation.getMatchTime() <= 5
-            and (
-                DriverStation.isFMSAttached()
-                or DriverStation.getMatchType() == DriverStation.MatchType.kPractice
+            lambda: (
+                DriverStation.isTeleopEnabled()
+                and 0 < DriverStation.getMatchTime() <= 5
+                and (
+                    DriverStation.isFMSAttached()
+                    or DriverStation.getMatchType() == DriverStation.MatchType.kPractice
+                )
             )
         )
-        five_seconds_left.onTrue(
-            self.led.runOnce(lambda: self.led.five_seconds_left())
-        ).onFalse(
+        five_seconds_left.onTrue(self.led.runOnce(lambda: self.led.five_seconds_left())).onFalse(
             self.led.runOnce(lambda: self.led.default())
         )
 
@@ -507,6 +309,46 @@ class RobotContainer:
             self.drivetrain.create_module_alignment_diagnostic_command()
         )
 
+    def _create_arm_move_command(self, arm_action):
+        """
+        Move the intake arm to a position while watching for a stall.
+
+        The stall watch runs until the arm reaches its target or the arm jams, so a blocked arm
+        stops driving instead of straining against the obstruction. Used by both the arm-down and
+        arm-up bindings so the pattern isn't copy-pasted.
+
+        :param arm_action: Callable that commands the arm toward its target position.
+        :type arm_action: Callable[[], None]
+        :returns: Command that runs the arm move with stall detection.
+        :rtype: commands2.Command
+        """
+
+        def watch_for_stall():
+            self.intake.get_stall_detection()
+
+        return commands2.SequentialCommandGroup(
+            self.intake.runOnce(arm_action),
+            self.intake.run(watch_for_stall).until(
+                lambda: self.intake.detect_arm_movement_completion()
+            ),
+        )
+
+    def _create_stop_all_command(self):
+        """
+        Stop the intake, hopper, and shooter and return the LEDs to their default state.
+
+        Shared by the shot bindings and the Y stop button so the same idle state isn't duplicated.
+
+        :returns: Command that puts every shooting-related subsystem back to idle.
+        :rtype: commands2.Command
+        """
+        return commands2.ParallelCommandGroup(
+            self.intake.runOnce(lambda: self.intake.set_intake_speed(0)),
+            self.hopper.create_stop_command(),
+            self.shooter.create_stop_command(),
+            self.led.runOnce(lambda: self.led.default()),
+        )
+
     def _create_sys_id_command(self, run_routine):
         """
         Build a deferred SysId command targeting the dashboard-selected subsystem.
@@ -521,14 +363,13 @@ class RobotContainer:
         :returns: Deferred command that runs the selected subsystem's SysId routine.
         :rtype: commands2.Command
         """
+
         def build():
             subsystem = self.sys_id_subsystem_chooser.getSelected()
             subsystem.set_sys_id_routine()
             return run_routine(subsystem)
 
-        return commands2.DeferredCommand(
-            build, self.drivetrain, self.shooter, self.hopper
-        )
+        return commands2.DeferredCommand(build, self.drivetrain, self.shooter, self.hopper)
 
     def create_commands_test(self):
         """

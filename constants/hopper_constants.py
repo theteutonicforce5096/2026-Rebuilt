@@ -1,7 +1,8 @@
-from phoenix6.configs import TalonFXConfiguration
 from phoenix6 import CANBus, signals
+from phoenix6.configs import TalonFXConfiguration
 
 from subsystems.hopper import Hopper
+
 
 class HopperConstants:
     """
@@ -55,7 +56,7 @@ class HopperConstants:
     @classmethod
     def create_hopper(cls) -> Hopper:
         """
-        Creates a Hopper subsystem instance using the configured constant values.
+        Create a Hopper subsystem instance using the configured constant values.
 
         :param cls: HopperConstants class used as the source of the subsystem constants.
         :type cls: type[HopperConstants]

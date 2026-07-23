@@ -1,29 +1,41 @@
 from commands2 import Subsystem
 from phoenix6 import CANBus
-from phoenix6.configs import CANcoderConfiguration, TalonFXSConfiguration, TalonFXConfiguration
+from phoenix6.configs import CANcoderConfiguration, TalonFXConfiguration, TalonFXSConfiguration
 from phoenix6.controls import PositionVoltage, VoltageOut
-from phoenix6.hardware import CANcoder, TalonFXS, TalonFX
-from wpilib import RobotBase, SmartDashboard
-from wpilib import Timer
-import wpilib
+from phoenix6.hardware import CANcoder, TalonFX, TalonFXS
+from wpilib import RobotBase, Timer
 
 from subsystems.device_config import configure_device
+
 
 class Intake(Subsystem):
     """
     Class for controlling intake.
     """
 
-    def __init__(self, canbus: CANBus, intake_wheel_id: int, intake_arm_id: int, 
-                 intake_arm_encoder_id: int, intake_wheel_configs: TalonFXSConfiguration, 
-                 intake_arm_configs: TalonFXConfiguration, intake_arm_encoder_configs: CANcoderConfiguration,
-                 num_config_attempts: int, intake_position: float, stowed_position: float, shooting_position: float, 
-                 stall_current_threshold: float, stall_velocity_threshold: float,
-                 stall_time_threshold: float,
-                 arm_movement_pathway_low: float, arm_movement_pathway_high: float,
-                 obstruction_current_threshold: float):
+    def __init__(
+        self,
+        canbus: CANBus,
+        intake_wheel_id: int,
+        intake_arm_id: int,
+        intake_arm_encoder_id: int,
+        intake_wheel_configs: TalonFXSConfiguration,
+        intake_arm_configs: TalonFXConfiguration,
+        intake_arm_encoder_configs: CANcoderConfiguration,
+        num_config_attempts: int,
+        intake_position: float,
+        stowed_position: float,
+        shooting_position: float,
+        stall_current_threshold: float,
+        stall_velocity_threshold: float,
+        stall_time_threshold: float,
+        arm_movement_pathway_low: float,
+        arm_movement_pathway_high: float,
+        obstruction_current_threshold: float,
+        obstruction_dead_band: float,
+    ):
         """
-        Constructor for initializing intake using the specified constants.
+        Initialize the intake using the specified constants.
 
         :param canbus: CANBus instance that electronics are on
         :type canbus: phoenix6.CANBus
@@ -51,14 +63,19 @@ class Intake(Subsystem):
         :type stall_current_threshold: float
         :param stall_velocity_threshold: Maximum arm velocity required to detect a stall
         :type stall_velocity_threshold: float
-        :param stall_time_threshold: Time required for stall conditions to be met to determine a stall has occured
+        :param stall_time_threshold: Time required for stall conditions to be met to determine a
+            stall has occured
         :type stall_time_threshold: float
         :param arm_movement_pathway_low: Low position in the arm movement pathway
         :type arm_movement_pathway_low: float
         :param arm_movement_pathway_high: High position in the arm movement pathway
         :type arm_movement_pathway_high: float
-        :param obstruction_current_threshold: Minimum stator current required to detect an obstruction
+        :param obstruction_current_threshold: Minimum stator current required to detect an
+            obstruction
         :type obstruction_current_threshold: float
+        :param obstruction_dead_band: Range around the shooting position where high current is
+            expected, not an obstruction
+        :type obstruction_dead_band: float
         """
 
         Subsystem.__init__(self)
@@ -73,17 +90,21 @@ class Intake(Subsystem):
         configure_device(self.intake_arm, intake_arm_configs, num_config_attempts)
         configure_device(self.intake_arm_encoder, intake_arm_encoder_configs, num_config_attempts)
         if not RobotBase.isSimulation():
-            # Trim every signal to 0 Hz first, then raise only the encoder position we
-            # depend on. Setting the frequency before optimizing would let the optimize
-            # pass drop the encoder position back toward 0 Hz.
+            # Trim every signal, then raise only the arm signals the stall and
+            # move-complete logic polls each loop. 100 Hz is fresh for the 20 ms
+            # scheduler without loading the bus. The encoder is fused into the arm
+            # on-device, so its status frame only needs a modest rate for logging.
             self.intake_wheel.optimize_bus_utilization()
             self.intake_arm.optimize_bus_utilization()
             self.intake_arm_encoder.optimize_bus_utilization()
-            self.intake_arm_encoder.get_position().set_update_frequency(1000.0)
+            self.intake_arm.get_position().set_update_frequency(100.0)
+            self.intake_arm.get_velocity().set_update_frequency(100.0)
+            self.intake_arm.get_stator_current().set_update_frequency(100.0)
+            self.intake_arm_encoder.get_position().set_update_frequency(100.0)
 
         # Create PID control requests
-        self.voltage_request = VoltageOut(output = 0)
-        self.position_voltage_request = PositionVoltage(position = 0)
+        self.voltage_request = VoltageOut(output=0)
+        self.position_voltage_request = PositionVoltage(position=0)
 
         # Arm positions
         self.intake_position = intake_position
@@ -93,35 +114,30 @@ class Intake(Subsystem):
         self.arm_movement_pathway_low = arm_movement_pathway_low
         self.arm_movement_pathway_high = arm_movement_pathway_high
         self.obstruction_current_threshold = obstruction_current_threshold
+        self.obstruction_dead_band = obstruction_dead_band
 
-        self.set_position = None
-        self.is_stalled = None
+        self.commanded_position: float | None = None
+        self.is_stalled = False
 
         self.stall_current_threshold = stall_current_threshold
         self.stall_velocity_threshold = stall_velocity_threshold
         self.stall_time_threshold = stall_time_threshold
         self.stall_timer = Timer()
-        # self.is_stalled = False
-        self.last_command_output = 0.0
-        self.last_time = 0.0
+
+        # Arm signals refreshed each loop for stall/obstruction detection
+        self.arm_stator_current = 0.0
+        self.arm_velocity = 0.0
+        self.arm_position = 0.0
 
     def periodic(self):
         """
-        Current and velocity for stall detection
+        Refresh the arm signals used for stall and obstruction detection.
         """
-        self.now = wpilib.getTime()
-        self.dt = self.now - self.last_time
-        self.last_time = self.now
-        self.current = self.intake_arm.get_stator_current().value_as_double
-        self.velocity = abs(self.intake_arm.get_velocity().value_as_double)
-        self.intake_arm_now = self.intake_arm.get_position().value_as_double
-        # """
-        # Publish the current intake wheel voltage for driver-station debugging.
-        # """
-        # intake_wheel_voltage = self.intake_wheel.get_motor_voltage().value_as_double
-        # SmartDashboard.putNumber("Intake Status", intake_wheel_voltage)
+        self.arm_stator_current = self.intake_arm.get_stator_current().value_as_double
+        self.arm_velocity = abs(self.intake_arm.get_velocity().value_as_double)
+        self.arm_position = self.intake_arm.get_position().value_as_double
 
-#Intake Wheel Functions
+    # Intake Wheel Functions
     def set_intake_speed(self, intake_wheel_volts):
         """
         Apply the requested intake-wheel voltage.
@@ -129,9 +145,7 @@ class Intake(Subsystem):
         :param intake_wheel_volts: Voltage to apply to the intake wheel motor.
         :type intake_wheel_volts: float
         """
-        self.intake_wheel.set_control(
-            self.voltage_request.with_output(intake_wheel_volts)
-        )
+        self.intake_wheel.set_control(self.voltage_request.with_output(intake_wheel_volts))
 
     def set_setpoint(self, position):
         """
@@ -140,29 +154,38 @@ class Intake(Subsystem):
         :param position: Desired intake arm position in mechanism rotations.
         :type position: float
         """
-        self.set_position = position
+        self.commanded_position = position
 
-        self.intake_arm.set_control(
-            self.position_voltage_request.with_position(position)
-        )
+        # A new move starts clean, so clear any latched stall from the last move
+        # before commanding the arm again.
+        self.is_stalled = False
+        self.stall_timer.stop()
+        self.stall_timer.reset()
 
-        # print(f"set position: {position}")
-        # print(f"current position: {self.intake_arm_now}")
-        # print(f"voltage: {self.intake_arm.get_motor_voltage()}")
-        # print(f"stator current: {self.intake_arm.get_stator_current()}")
+        self.intake_arm.set_control(self.position_voltage_request.with_position(position))
 
     def detect_arm_movement_completion(self):
-        return self.intake_arm.get_position().is_near(self.set_position, .009) or self.is_stalled
+        """
+        Report whether the arm has finished its move.
 
-    def set_arm_voltage(self, voltage):
-        self.intake_arm.set_control(
-            self.voltage_request.with_output(voltage)
+        :returns: True once the arm reaches the commanded position or a stall is latched.
+        :rtype: bool
+        """
+        if self.commanded_position is None:
+            return False
+        return (
+            self.intake_arm.get_position().is_near(self.commanded_position, 0.009)
+            or self.is_stalled
         )
 
-        # print("voltage request sent")
-        # print(f"current position: {self.intake_arm_now}")
-        # print(f"voltage: {self.intake_arm.get_motor_voltage()}")
-        # print(f"stator current: {self.intake_arm.get_stator_current()}")
+    def set_arm_voltage(self, voltage):
+        """
+        Drive the intake arm with an open-loop voltage.
+
+        :param voltage: Voltage to apply to the arm motor.
+        :type voltage: float
+        """
+        self.intake_arm.set_control(self.voltage_request.with_output(voltage))
 
     def arm_down(self):
         """
@@ -183,40 +206,53 @@ class Intake(Subsystem):
         self.set_setpoint(self.shooting_position)
 
     def get_stall_detection(self):
-        is_commanding_motion = abs(self.set_position - self.intake_arm_now) > .009 # Should be False
-        
-        if .3 < self.intake_arm_now < .35 or .37 < self.intake_arm_now < .5:
-            if self.current > 6.7:
+        """
+        Watch the moving arm and cut power if it jams or stalls.
+
+        Two cases stop the arm early: a hard obstruction in the known pinch zone
+        (high current where the arm shouldn't be fighting anything), or a general
+        stall where the arm pulls current but barely moves for long enough.
+
+        :returns: True once a stall or obstruction is latched, otherwise False.
+        :rtype: bool
+        """
+        if self.commanded_position is None:
+            return False
+
+        # The arm pinches against the frame across most of its travel, except near the
+        # shooting position where it's expected to load up. High current inside that zone
+        # means something is jammed, so stop before the motor overheats.
+        in_obstruction_pathway = (
+            self.arm_movement_pathway_low < self.arm_position < self.arm_movement_pathway_high
+        )
+        near_shooting_position = (
+            abs(self.arm_position - self.shooting_position) <= self.obstruction_dead_band
+        )
+        if in_obstruction_pathway and not near_shooting_position:
+            if self.arm_stator_current > self.obstruction_current_threshold:
                 self.set_arm_voltage(0)
                 self.is_stalled = True
-                print("OBSTRUCTION !!!@1!!!1111")
                 return self.is_stalled
 
+        # General stall: still commanding a move, drawing current, but hardly moving.
+        is_commanding_motion = abs(self.commanded_position - self.arm_position) > 0.009
         stall_condition_met = (
             is_commanding_motion
-            and self.current > self.stall_current_threshold 
-            and abs(self.velocity) < self.stall_velocity_threshold
+            and self.arm_stator_current > self.stall_current_threshold
+            and self.arm_velocity < self.stall_velocity_threshold
         )
 
-        if self.set_position is None:
-                return
-
-        if stall_condition_met == True:
+        if stall_condition_met:
             self.stall_timer.start()
-            # print("stall condition met")
-
         else:
             self.stall_timer.stop()
             self.stall_timer.reset()
 
-        self.is_stalled = self.stall_timer.hasElapsed(self.stall_time_threshold) and stall_condition_met
+        self.is_stalled = (
+            self.stall_timer.hasElapsed(self.stall_time_threshold) and stall_condition_met
+        )
 
-        if self.is_stalled == True:
+        if self.is_stalled:
             self.set_arm_voltage(0)
-            # self.set_setpoint(self.intake_arm_now)
-            print("arm stopped")
-
-             # set the setpoint to the current position to the position that it's at RIGHT NOW
 
         return self.is_stalled
-            

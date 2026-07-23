@@ -6,6 +6,7 @@ from phoenix6 import swerve
 from constants.swerve_drivetrain_constants import SwerveDrivetrainConstants
 from subsystems.vision import Vision
 
+
 class VisionConstants:
     """
     Constants for Vision Subsystem.
@@ -34,14 +35,17 @@ class VisionConstants:
         get_robot_tilt: Callable[[], tuple[float, float]],
     ) -> Vision:
         """
-        Creates a Vision subsystem instance using the configured constant values.
+        Create a Vision subsystem instance using the configured constant values.
 
         :param cls: VisionConstants class used as the source of the subsystem constants.
         :type cls: type[VisionConstants]
-        :param add_vision_measurement: Callback used to inject accepted vision measurements into drivetrain odometry.
-        :type add_vision_measurement: Callable[[wpimath.geometry.Pose2d, float, tuple[float, float, float]], None]
+        :param add_vision_measurement: Callback used to inject accepted vision measurements into
+            drivetrain odometry.
+        :type add_vision_measurement:
+            Callable[[wpimath.geometry.Pose2d, float, tuple[float, float, float]], None]
         :param get_current_swerve_state: Function that returns the current drivetrain state.
-        :type get_current_swerve_state: Callable[[], phoenix6.swerve.SwerveDrivetrain.SwerveDriveState]
+        :type get_current_swerve_state:
+            Callable[[], phoenix6.swerve.SwerveDrivetrain.SwerveDriveState]
         :param get_robot_tilt: Function that returns the current robot pitch and roll in degrees.
         :type get_robot_tilt: Callable[[], tuple[float, float]]
         :returns: Configured vision subsystem.

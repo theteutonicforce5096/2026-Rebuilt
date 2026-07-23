@@ -32,3 +32,23 @@ requires = [
 # Enables Isolated Test Mode
 [tool.robotpy.pyfrc]
 isolated = true
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# PEP 8 style (E/W), pyflakes correctness (F), and import ordering (I).
+select = ["E", "W", "F", "I"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = ["constants", "subsystems", "robot", "robot_container"]
+
+[tool.ruff.lint.per-file-ignores]
+# pyfrc's test harness relies on a star import to pull in its shared tests.
+"tests/pyfrc_test.py" = ["F403"]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+# pyfrc's shared test harness is imported with a wildcard by design.
+reportWildcardImportFromLibrary = "none"

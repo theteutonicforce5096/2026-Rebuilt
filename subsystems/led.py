@@ -1,8 +1,8 @@
 import phoenix6
-from phoenix6.hardware import CANdle
-from phoenix6.signals import rgbw_color
 import phoenix6.controls as controls
 from commands2 import Subsystem
+from phoenix6.hardware import CANdle
+from phoenix6.signals import rgbw_color
 
 from subsystems.device_config import configure_device
 
@@ -12,9 +12,16 @@ class LED(Subsystem):
     Class for controlling LEDs.
     """
 
-    def __init__(self, canbus: phoenix6.CANBus, led_id: int, led_configs: phoenix6.configs.CANdleConfiguration, num_config_attempts: int, led_end_index: int):
+    def __init__(
+        self,
+        canbus: phoenix6.CANBus,
+        led_id: int,
+        led_configs: phoenix6.configs.CANdleConfiguration,
+        num_config_attempts: int,
+        led_end_index: int,
+    ):
         """
-        Constructor for initializing LEDs using the specified constants.
+        Initialize the LEDs using the specified constants.
 
         :param canbus: CANBus instance that electronics are on
         :type canbus: phoenix6.CANBus
@@ -43,7 +50,9 @@ class LED(Subsystem):
         """
         Set LEDs to a solid color to indicate autonomous is running.
         """
-        self.animation_control = controls.SolidColor(0, self.led_end_index, rgbw_color.RGBWColor(53, 147, 87, 0))
+        self.animation_control = controls.SolidColor(
+            0, self.led_end_index, rgbw_color.RGBWColor(53, 147, 87, 0)
+        )
         self.candle.set_control(self.animation_control)
 
     def hopper_full(self):
@@ -51,7 +60,9 @@ class LED(Subsystem):
         Play an animation to indicate the hopper is full.
         """
         self.extinguish()
-        self.animation_control = controls.LarsonAnimation(0, self.led_end_index, 0, rgbw_color.RGBWColor(225, 242, 0, 0))
+        self.animation_control = controls.LarsonAnimation(
+            0, self.led_end_index, 0, rgbw_color.RGBWColor(225, 242, 0, 0)
+        )
         self.candle.set_control(self.animation_control)
 
     def shooting_manual(self):
@@ -59,7 +70,16 @@ class LED(Subsystem):
         Play an animation to indicate a manual shot is in progress.
         """
         self.extinguish()
-        self.animation_control = controls.FireAnimation(0, self.led_end_index, 1, 1, phoenix6.signals.spn_enums.AnimationDirectionValue.FORWARD, 0.6, 0.3, 60)
+        self.animation_control = controls.FireAnimation(
+            0,
+            self.led_end_index,
+            1,
+            1,
+            phoenix6.signals.spn_enums.AnimationDirectionValue.FORWARD,
+            0.6,
+            0.3,
+            60,
+        )
         self.candle.set_control(self.animation_control)
 
     def shooting_calculated(self):
@@ -67,7 +87,9 @@ class LED(Subsystem):
         Play an animation to indicate a calculated shot is in progress.
         """
         self.extinguish()
-        self.animation_control = controls.LarsonAnimation(0, self.led_end_index, 0, rgbw_color.RGBWColor(40, 60, 255, 0))
+        self.animation_control = controls.LarsonAnimation(
+            0, self.led_end_index, 0, rgbw_color.RGBWColor(40, 60, 255, 0)
+        )
         self.candle.set_control(self.animation_control)
 
     def default(self):
@@ -75,7 +97,9 @@ class LED(Subsystem):
         Play the default idle animation.
         """
         self.extinguish()
-        self.animation_control = controls.StrobeAnimation(0, self.led_end_index, 4, rgbw_color.RGBWColor(102, 225, 0, 0), 4)
+        self.animation_control = controls.StrobeAnimation(
+            0, self.led_end_index, 4, rgbw_color.RGBWColor(102, 225, 0, 0), 4
+        )
         self.candle.set_control(self.animation_control)
 
     def pride(self):
@@ -83,7 +107,14 @@ class LED(Subsystem):
         Play a rainbow animation.
         """
         self.extinguish()
-        self.animation_control = controls.RainbowAnimation(0, self.led_end_index, 3, 1, phoenix6.signals.spn_enums.AnimationDirectionValue.FORWARD, 100)
+        self.animation_control = controls.RainbowAnimation(
+            0,
+            self.led_end_index,
+            3,
+            1,
+            phoenix6.signals.spn_enums.AnimationDirectionValue.FORWARD,
+            100,
+        )
         self.candle.set_control(self.animation_control)
 
     def five_seconds_left(self):
@@ -91,7 +122,15 @@ class LED(Subsystem):
         Play an animation to indicate five seconds are left in the match.
         """
         self.extinguish()
-        self.animation_control = controls.LarsonAnimation(0, self.led_end_index, 2, rgbw_color.RGBWColor(225, 0, 0, 0), 3, phoenix6.signals.spn_enums.LarsonBounceValue.FRONT, 25)
+        self.animation_control = controls.LarsonAnimation(
+            0,
+            self.led_end_index,
+            2,
+            rgbw_color.RGBWColor(225, 0, 0, 0),
+            3,
+            phoenix6.signals.spn_enums.LarsonBounceValue.FRONT,
+            25,
+        )
         self.candle.set_control(self.animation_control)
 
     # Number of CANdle animation slots cleared when turning the strip off

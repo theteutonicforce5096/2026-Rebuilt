@@ -1,34 +1,38 @@
 from commands2 import Command, Subsystem
 from commands2.sysid import SysIdRoutine
-
 from phoenix6 import CANBus, SignalLogger
 from phoenix6.configs import TalonFXConfiguration
 from phoenix6.controls import VelocityVoltage, VoltageOut
 from phoenix6.hardware import TalonFX
-
-from wpilib.sysid import SysIdRoutineLog
 from wpilib import RobotBase, SendableChooser
 from wpilib.shuffleboard import Shuffleboard
+from wpilib.sysid import SysIdRoutineLog
 
 from subsystems.device_config import configure_device
+
 
 class Hopper(Subsystem):
     """
     Class for controlling hopper.
     """
 
-    def __init__(self, canbus: CANBus, mecanum_wheel_id: int, agitator_wheel_id: int,
-                 mecanum_wheel_configs: TalonFXConfiguration,
-                 agitator_wheel_configs: TalonFXConfiguration,
-                 num_config_attempts: int,
-                 feed_mecanum_velocity: float,
-                 feed_agitator_volts: float,
-                 feed_forward_sec: float,
-                 shake_mecanum_velocity: float,
-                 shake_agitator_volts: float,
-                 shake_reverse_sec: float):
+    def __init__(
+        self,
+        canbus: CANBus,
+        mecanum_wheel_id: int,
+        agitator_wheel_id: int,
+        mecanum_wheel_configs: TalonFXConfiguration,
+        agitator_wheel_configs: TalonFXConfiguration,
+        num_config_attempts: int,
+        feed_mecanum_velocity: float,
+        feed_agitator_volts: float,
+        feed_forward_sec: float,
+        shake_mecanum_velocity: float,
+        shake_agitator_volts: float,
+        shake_reverse_sec: float,
+    ):
         """
-        Constructor for initializing hopper using the specified constants.
+        Initialize the hopper using the specified constants.
 
         :param canbus: CANBus instance that electronics are on
         :type canbus: phoenix6.CANBus
@@ -42,13 +46,15 @@ class Hopper(Subsystem):
         :type agitator_wheel_configs: phoenix6.configs.TalonFXConfiguration
         :param num_config_attempts: Number of times to attempt to configure each device
         :type num_config_attempts: int
-        :param feed_mecanum_velocity: Mecanum-wheel velocity in rotations per second during the forward feed pulse.
+        :param feed_mecanum_velocity: Mecanum-wheel velocity in rotations per second during the
+            forward feed pulse.
         :type feed_mecanum_velocity: float
         :param feed_agitator_volts: Agitator voltage during the forward feed pulse.
         :type feed_agitator_volts: float
         :param feed_forward_sec: Duration in seconds of the forward feed pulse.
         :type feed_forward_sec: float
-        :param shake_mecanum_velocity: Mecanum-wheel velocity in rotations per second during the reverse shake pulse.
+        :param shake_mecanum_velocity: Mecanum-wheel velocity in rotations per second during the
+            reverse shake pulse.
         :type shake_mecanum_velocity: float
         :param shake_agitator_volts: Agitator voltage during the reverse shake pulse.
         :type shake_agitator_volts: float
@@ -79,24 +85,27 @@ class Hopper(Subsystem):
             self.agitator_wheel.optimize_bus_utilization()
 
         # Create VelocityVoltage request
-        self.velocity_pid_request = VelocityVoltage(velocity = 0)
-        self.voltage_request = VoltageOut(output = 0)
+        self.velocity_pid_request = VelocityVoltage(velocity=0)
+        self.voltage_request = VoltageOut(output=0)
 
         # Create SysId routine for characterizing the mecanum wheel motor.
+        def record_mecanum_state(state):
+            SignalLogger.write_string(
+                "SysId_Hopper_mecanum_Motor_State", SysIdRoutineLog.stateEnumToString(state)
+            )
+
+        def drive_mecanum(output):
+            self.mecanum_wheel.set_control(self.voltage_request.with_output(output))
+
         self.mecanum_motor_sys_id_routine = SysIdRoutine(
             SysIdRoutine.Config(
-                rampRate = 0.5,
-                stepVoltage = 9.0,
-                timeout = 15.0,
-                recordState = lambda state: SignalLogger.write_string(
-                    "SysId_Hopper_mecanum_Motor_State",
-                    SysIdRoutineLog.stateEnumToString(state)
-                )
+                rampRate=0.5,
+                stepVoltage=9.0,
+                timeout=15.0,
+                recordState=record_mecanum_state,
             ),
             SysIdRoutine.Mechanism(
-                lambda output: self.mecanum_wheel.set_control(
-                    self.voltage_request.with_output(output)
-                ),
+                drive_mecanum,
                 lambda log: None,
                 self,
             ),
@@ -105,20 +114,22 @@ class Hopper(Subsystem):
         # Create widget for selecting SysId routine and set default value
         self.sys_id_routine_to_apply = self.mecanum_motor_sys_id_routine
         self.sys_id_routines = SendableChooser()
-        self.sys_id_routines.setDefaultOption("Mecanum Motor Routine", self.mecanum_motor_sys_id_routine)
+        self.sys_id_routines.setDefaultOption(
+            "Mecanum Motor Routine", self.mecanum_motor_sys_id_routine
+        )
 
         # Send widget to Shuffleboard
         Shuffleboard.getTab("SysId").add("Hopper Routines", self.sys_id_routines).withSize(2, 1)
 
     def set_sys_id_routine(self):
         """
-        Set the SysId Routine to run based off of the routine chosen in Shuffleboard.
+        Set the SysId Routine to run based on the routine chosen in Shuffleboard.
         """
         self.sys_id_routine_to_apply = self.sys_id_routines.getSelected()
 
     def sys_id_quasistatic(self, direction: SysIdRoutine.Direction):
         """
-        Runs the SysId Quasistatic test for the mecanum wheel motor.
+        Run the SysId Quasistatic test for the mecanum wheel motor.
 
         :param direction: Direction of the SysId Quasistatic test
         :type direction: SysIdRoutine.Direction
@@ -127,44 +138,40 @@ class Hopper(Subsystem):
 
     def sys_id_dynamic(self, direction: SysIdRoutine.Direction):
         """
-        Runs the SysId Dynamic test for the mecanum wheel motor.
+        Run the SysId Dynamic test for the mecanum wheel motor.
 
         :param direction: Direction of the SysId Dynamic test
         :type direction: SysIdRoutine.Direction
         """
         return self.sys_id_routine_to_apply.dynamic(direction)
 
-#Hopper functions
+    # Hopper functions
     def run_hopper(self, mecanum_velocity, agitator_volts):
         """
         Build a one-shot command that applies the requested hopper outputs.
 
-        :param mecanum_velocity: Desired closed-loop velocity for the mecanum wheel in rotations per second.
+        :param mecanum_velocity: Desired closed-loop velocity for the mecanum wheel in rotations
+            per second.
         :type mecanum_velocity: float
         :param agitator_volts: Desired open-loop voltage for the agitator wheel.
         :type agitator_volts: float
         :returns: Command that applies the requested hopper outputs once.
         :rtype: commands2.Command
         """
-        return self.runOnce(
-            lambda: self.set_hopper_speeds(mecanum_velocity, agitator_volts)
-        )
+        return self.runOnce(lambda: self.set_hopper_speeds(mecanum_velocity, agitator_volts))
 
     def set_hopper_speeds(self, mecanum_velocity, agitator_volts):
         """
         Apply the requested mecanum-wheel velocity and agitator voltage.
 
-        :param mecanum_velocity: Desired closed-loop velocity for the mecanum wheel in rotations per second.
+        :param mecanum_velocity: Desired closed-loop velocity for the mecanum wheel in rotations
+            per second.
         :type mecanum_velocity: float
         :param agitator_volts: Desired open-loop voltage for the agitator wheel.
         :type agitator_volts: float
         """
-        self.mecanum_wheel.set_control(
-            self.velocity_pid_request.with_velocity(mecanum_velocity)
-        )
-        self.agitator_wheel.set_control(
-            self.voltage_request.with_output(agitator_volts)
-        )
+        self.mecanum_wheel.set_control(self.velocity_pid_request.with_velocity(mecanum_velocity))
+        self.agitator_wheel.set_control(self.voltage_request.with_output(agitator_volts))
 
     def _drive_hopper_for(self, mecanum_velocity, agitator_volts, seconds) -> Command:
         """

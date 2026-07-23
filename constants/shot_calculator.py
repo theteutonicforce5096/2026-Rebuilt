@@ -12,7 +12,6 @@ from constants.shot_calculator_constants import (
 #   front-to-center correction on distance.
 # - 10 iPhone 240 fps slow-motion videos, ignoring the first launched ball in
 #   each clip.
-# Restored smooth simulator-seeded shot table.
 # Best-fit simulator params from tools/calibrate_shooter.py:
 # slip_factor=0.448, drag_coeff=0.104, magnus_coeff=-0.4,
 # launch_angle_deg=67.5.
@@ -232,7 +231,9 @@ class ShotCalculator:
         for distance_m, flywheel_rps, _ in _DEFAULT_CALIBRATION_ENTRIES:
             self.load_lut_entry(distance_m, flywheel_rps)
 
-    def _lookup_required(self, table: InterpolatingLookupTable, distance: float, label: str) -> float:
+    def _lookup_required(
+        self, table: InterpolatingLookupTable, distance: float, label: str
+    ) -> float:
         """
         Read a residual lookup value or raise if the table is unexpectedly empty.
 

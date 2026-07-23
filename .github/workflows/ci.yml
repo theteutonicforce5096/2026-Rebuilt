@@ -1,0 +1,49 @@
+name: CI
+
+# Run the style and type checks on every push and pull request.
+on:
+  push:
+  pull_request:
+
+jobs:
+  ruff:
+    name: Ruff (lint + format)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install ruff
+        run: pip install ruff==0.15.22
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format check
+        run: ruff format --check .
+
+  pyright:
+    name: Pyright (type check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      # Pyright needs the RobotPy/vendor packages installed so it can read their type stubs.
+      - name: Install dependencies
+        run: |
+          pip install "robotpy[commands2,apriltag]==2026.2.2" \
+            "phoenix6==26.1.0" \
+            "robotpy-pathplannerlib==2026.1.1" \
+            "photonlibpy==2026.3.4" \
+            "pyright==1.1.411"
+
+      - name: Type check
+        run: pyright

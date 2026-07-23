@@ -1,34 +1,42 @@
-from typing import Callable
 from math import hypot
+from typing import Callable
 
 from commands2 import Subsystem
+from phoenix6 import swerve, utils
+from photonlibpy import EstimatedRobotPose, PhotonCamera, PhotonPoseEstimator
 from robotpy_apriltag import AprilTagField, AprilTagFieldLayout
 from wpimath.geometry import Pose3d, Rotation3d, Transform3d, Translation3d
 from wpimath.units import inchesToMeters
 
-from phoenix6 import swerve
-
-from photonlibpy import EstimatedRobotPose, PhotonCamera, PhotonPoseEstimator
 
 class Vision(Subsystem):
     """
     Fuse AprilTag pose estimates from the robot's PhotonVision cameras.
     """
 
-    def __init__(self, add_vision_measurement, 
-                 get_current_swerve_state: Callable[[], swerve.SwerveDrivetrain.SwerveDriveState],
-                 get_robot_tilt: Callable[[], tuple[float, float]],
-                 field_type: str,
-                 linear_std_dev_baseline: float, angular_std_dev_baseline: float,
-                 camera_std_dev_factors: tuple[float, ...],max_linear_speed: float,
-                 max_angular_speed: float, max_tilt_deg: float):
+    def __init__(
+        self,
+        add_vision_measurement,
+        get_current_swerve_state: Callable[[], swerve.SwerveDrivetrain.SwerveDriveState],
+        get_robot_tilt: Callable[[], tuple[float, float]],
+        field_type: str,
+        linear_std_dev_baseline: float,
+        angular_std_dev_baseline: float,
+        camera_std_dev_factors: tuple[float, ...],
+        max_linear_speed: float,
+        max_angular_speed: float,
+        max_tilt_deg: float,
+    ):
         """
         Construct the vision subsystem and per-camera pose estimators.
 
-        :param add_vision_measurement: Callback used to inject accepted vision measurements into drivetrain odometry.
-        :type add_vision_measurement: Callable[[wpimath.geometry.Pose2d, float, tuple[float, float, float]], None]
+        :param add_vision_measurement: Callback used to inject accepted vision measurements into
+            drivetrain odometry.
+        :type add_vision_measurement:
+            Callable[[wpimath.geometry.Pose2d, float, tuple[float, float, float]], None]
         :param get_current_swerve_state: Function that returns the current drivetrain state.
-        :type get_current_swerve_state: Callable[[], phoenix6.swerve.SwerveDrivetrain.SwerveDriveState]
+        :type get_current_swerve_state:
+            Callable[[], phoenix6.swerve.SwerveDrivetrain.SwerveDriveState]
         :param get_robot_tilt: Function that returns the current robot pitch and roll in degrees.
         :type get_robot_tilt: Callable[[], tuple[float, float]]
         :param field_type: Name of the active field variant used to load the AprilTag layout.
@@ -37,7 +45,8 @@ class Vision(Subsystem):
         :type linear_std_dev_baseline: float
         :param angular_std_dev_baseline: Baseline angular measurement standard deviation in radians.
         :type angular_std_dev_baseline: float
-        :param camera_std_dev_factors: Per-camera multipliers applied to the baseline standard deviations.
+        :param camera_std_dev_factors: Per-camera multipliers applied to the baseline standard
+            deviations.
         :type camera_std_dev_factors: tuple[float, ...]
         :param max_linear_speed: Linear speed threshold above which vision trust is reduced.
         :type max_linear_speed: float
@@ -46,7 +55,7 @@ class Vision(Subsystem):
         :param max_tilt_deg: Tilt threshold in degrees beyond which measurements are rejected.
         :type max_tilt_deg: float
         """
-        
+
         Subsystem.__init__(self)
 
         self.add_vision_measurement = add_vision_measurement
@@ -54,6 +63,9 @@ class Vision(Subsystem):
         self.get_robot_tilt = get_robot_tilt
         self.field_type = field_type
         self.april_tag_layout = self._load_april_tag_layout(field_type)
+        # Field bounds never change, so read them once instead of every rejection check.
+        self.field_length = self.april_tag_layout.getFieldLength()
+        self.field_width = self.april_tag_layout.getFieldWidth()
         self.linear_std_dev_baseline = linear_std_dev_baseline
         self.angular_std_dev_baseline = angular_std_dev_baseline
         self.camera_std_dev_factors = camera_std_dev_factors
@@ -61,37 +73,39 @@ class Vision(Subsystem):
         self.max_angular_speed = max_angular_speed
         self.max_tilt_deg = max_tilt_deg
 
-        self.back_camera = PhotonCamera("back_camera")
-        self.front_left_camera = PhotonCamera("front_left_camera")
-        self.front_right_camera = PhotonCamera("front_right_camera")
-
-        robot_to_back_camera_translation = Transform3d(
-            Translation3d(inchesToMeters(4.25), inchesToMeters(10), inchesToMeters(20.5)),
-            Rotation3d.fromDegrees(1, 0, 180),
-        )
-        robot_to_front_left_camera_translation = Transform3d(
-            Translation3d(inchesToMeters(13.5), inchesToMeters(12.5), inchesToMeters(20.25)),
-            Rotation3d.fromDegrees(-1, 0, 0),
-        )
-        robot_to_front_right_camera_translation = Transform3d(
-            Translation3d(inchesToMeters(13.5), inchesToMeters(-12.25), inchesToMeters(20.25)),
-            Rotation3d.fromDegrees(-4, 0, 0),
-        )
-
-        self.back_camera_pose_est = PhotonPoseEstimator(
-            self.april_tag_layout, robot_to_back_camera_translation
-        )
-        self.front_left_camera_pose_est = PhotonPoseEstimator(
-            self.april_tag_layout, robot_to_front_left_camera_translation
-        )
-        self.front_right_camera_pose_est = PhotonPoseEstimator(
-            self.april_tag_layout, robot_to_front_right_camera_translation
-        )
+        # Each camera's name and its mounting transform on the robot. The order here sets
+        # the camera index used by camera_std_dev_factors, so keep it stable if you edit it.
+        camera_layout = [
+            (
+                "back_camera",
+                Transform3d(
+                    Translation3d(inchesToMeters(4.25), inchesToMeters(10), inchesToMeters(20.5)),
+                    Rotation3d.fromDegrees(1, 0, 180),
+                ),
+            ),
+            (
+                "front_left_camera",
+                Transform3d(
+                    Translation3d(
+                        inchesToMeters(13.5), inchesToMeters(12.5), inchesToMeters(20.25)
+                    ),
+                    Rotation3d.fromDegrees(-1, 0, 0),
+                ),
+            ),
+            (
+                "front_right_camera",
+                Transform3d(
+                    Translation3d(
+                        inchesToMeters(13.5), inchesToMeters(-12.25), inchesToMeters(20.25)
+                    ),
+                    Rotation3d.fromDegrees(-4, 0, 0),
+                ),
+            ),
+        ]
 
         self.cameras = [
-            (self.back_camera, self.back_camera_pose_est),
-            (self.front_left_camera, self.front_left_camera_pose_est),
-            (self.front_right_camera, self.front_right_camera_pose_est),
+            (PhotonCamera(name), PhotonPoseEstimator(self.april_tag_layout, robot_to_camera))
+            for name, robot_to_camera in camera_layout
         ]
 
     def _load_april_tag_layout(self, field_type: str) -> AprilTagFieldLayout:
@@ -120,12 +134,7 @@ class Vision(Subsystem):
         current_state = self.get_current_swerve_state()
 
         for camera_index, (camera, pose_est) in enumerate(self.cameras):
-            measurement = self.get_vision_measurement(
-                camera_index,
-                camera,
-                pose_est,
-                current_state
-            )
+            measurement = self.get_vision_measurement(camera_index, camera, pose_est, current_state)
 
             if measurement is None:
                 continue
@@ -133,7 +142,9 @@ class Vision(Subsystem):
             pose, timestamp, std_devs = measurement
             self.add_vision_measurement(pose, timestamp, std_devs)
 
-    def reject_pose_estimate(self, pose: Pose3d, current_state: swerve.SwerveDrivetrain.SwerveDriveState) -> bool:
+    def reject_pose_estimate(
+        self, pose: Pose3d, current_state: swerve.SwerveDrivetrain.SwerveDriveState
+    ) -> bool:
         """
         Reject pose estimates that are outside the field or current motion limits.
 
@@ -151,8 +162,8 @@ class Vision(Subsystem):
 
         return not (
             -0.25 < pose.Z() < 0.5
-            and 0.0 < pose.X() < self.april_tag_layout.getFieldLength()
-            and 0.0 < pose.Y() < self.april_tag_layout.getFieldWidth()
+            and 0.0 < pose.X() < self.field_length
+            and 0.0 < pose.Y() < self.field_width
             and current_vx <= self.max_linear_speed
             and current_vy <= self.max_linear_speed
             and current_omega <= self.max_angular_speed
@@ -185,7 +196,7 @@ class Vision(Subsystem):
         if tag_count == 0:
             return None
 
-        return total_distance / tag_count 
+        return total_distance / tag_count
 
     def speed_factor(self, current_speed: float, max_speed: float) -> float:
         """
@@ -203,9 +214,13 @@ class Vision(Subsystem):
             return 1.0
         else:
             return speed_ratio / 0.5
-    
-    def calc_std_dev(self, estimated_pose: EstimatedRobotPose, current_state: swerve.SwerveDrivetrain.SwerveDriveState,
-                     camera_index: int):
+
+    def calc_std_dev(
+        self,
+        estimated_pose: EstimatedRobotPose,
+        current_state: swerve.SwerveDrivetrain.SwerveDriveState,
+        camera_index: int,
+    ):
         """
         Estimate measurement standard deviations for a camera pose solution.
 
@@ -215,7 +230,8 @@ class Vision(Subsystem):
         :type current_state: phoenix6.swerve.SwerveDrivetrain.SwerveDriveState
         :param camera_index: Index of the camera that produced the estimate.
         :type camera_index: int
-        :returns: Standard deviation tuple for x, y, and heading, or None when the estimate is unusable.
+        :returns: Standard deviation tuple for x, y, and heading, or None when the estimate is
+            unusable.
         :rtype: tuple[float, float, float] | None
         """
         avg_tag_distance = self.get_average_tag_distance(estimated_pose)
@@ -225,7 +241,7 @@ class Vision(Subsystem):
         if avg_tag_distance is None or tag_count == 0:
             return None
 
-        distance_factor = (avg_tag_distance ** 2.0) / tag_count
+        distance_factor = (avg_tag_distance**2.0) / tag_count
 
         linear_speed_factor = self.speed_factor(current_linear_speed, self.max_linear_speed)
 
@@ -236,10 +252,7 @@ class Vision(Subsystem):
         )
 
         linear_std_dev = (
-            self.linear_std_dev_baseline
-            * distance_factor
-            * camera_factor
-            * linear_speed_factor
+            self.linear_std_dev_baseline * distance_factor * camera_factor * linear_speed_factor
         )
 
         # Vision heading is deliberately distrusted (huge baseline), so it is left unscaled
@@ -247,8 +260,13 @@ class Vision(Subsystem):
 
         return (linear_std_dev, linear_std_dev, angular_std_dev)
 
-    def get_vision_measurement(self, camera_index: int, camera: PhotonCamera, pose_est: PhotonPoseEstimator,
-                               current_state: swerve.SwerveDrivetrain.SwerveDriveState):
+    def get_vision_measurement(
+        self,
+        camera_index: int,
+        camera: PhotonCamera,
+        pose_est: PhotonPoseEstimator,
+        current_state: swerve.SwerveDrivetrain.SwerveDriveState,
+    ):
         """
         Return the latest accepted pose measurement from one camera, if any.
 
@@ -277,8 +295,11 @@ class Vision(Subsystem):
         if pose is None or self.reject_pose_estimate(pose.estimatedPose, current_state):
             return None
 
+        # PhotonVision stamps the pose in the FPGA/NT time base, but CTRE's odometry
+        # expects the Phoenix time base. Convert so the sample lands in the right spot
+        # in the odometry buffer instead of ~1.1M seconds in the past.
         return (
             pose.estimatedPose.toPose2d(),
-            pose.timestampSeconds,
-            self.calc_std_dev(pose, current_state, camera_index)
+            utils.fpga_to_current_time(pose.timestampSeconds),
+            self.calc_std_dev(pose, current_state, camera_index),
         )
