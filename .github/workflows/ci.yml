@@ -1,9 +1,11 @@
 name: CI
 
-# Run the style and type checks on every push and pull request.
+# Run the style and type checks on every commit to main and every PR targeting main.
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
   ruff:
