@@ -5,9 +5,7 @@ from subsystems.intake import Intake
 
 
 class IntakeConstants:
-    """
-    Constants for Intake Subsystem
-    """
+    """Hardware IDs, motor configs, arm positions, and stall thresholds for the intake."""
 
     # CANBus instance
     _canbus = CANBus("Drivetrain")
@@ -20,24 +18,30 @@ class IntakeConstants:
     # Number of times to attempt to configure each device
     _num_config_attempts = 3
 
-    # Arm Position Constants
+    # Arm positions in mechanism rotations, measured off the fused CANcoder
     _intake_position = 0.15
     _stowed_position = 0.559
     _shooting_position = 0.36
 
-    # Stall Detection Constants
-    _stall_current_threshold = 3.0  # stator current
-    _stall_velocity_threshold = 0.15  # rps
-    _stall_time_threshold = 0.25
+    # Stall detection: the arm must draw this much current while moving this slowly for this
+    # long before it counts as stalled
+    _stall_current_threshold = 3.0  # amps of stator current
+    _stall_velocity_threshold = 0.15  # rotations per second
+    _stall_time_threshold = 0.25  # seconds
 
-    # Obstruction Constants
+    # Hard timeout on a stall-watched arm move; the farthest no-jam move takes about 5 seconds,
+    # so this adds margin without letting a missed stall drive the arm forever
+    _arm_move_timeout_sec = 6.0
+
+    # Obstruction detection: the stretch of travel where the arm can pinch against the frame,
+    # and the current that means something is caught in it
     _arm_movement_pathway_low = 0.3
     _arm_movement_pathway_high = 0.5
-    _obstruction_current_threshold = 6.7  # stator
-    # rotations around the shooting position where high current is normal
+    _obstruction_current_threshold = 6.7  # amps of stator current
+    # Rotations around the shooting position where high current is normal, not an obstruction
     _obstruction_dead_band = 0.01
 
-    # Operator intake-wheel voltages
+    # Intake wheel voltages for pulling balls in and spitting them back out
     _intake_volts = 12.0
     _eject_volts = -12.0
 
@@ -87,12 +91,9 @@ class IntakeConstants:
         """
         Create an Intake subsystem instance using the configured constant values.
 
-        :param cls: IntakeConstants class used as the source of the subsystem constants.
-        :type cls: type[IntakeConstants]
         :returns: Configured intake subsystem.
         :rtype: subsystems.intake.Intake
         """
-
         return Intake(
             cls._canbus,
             cls._intake_wheel_id,

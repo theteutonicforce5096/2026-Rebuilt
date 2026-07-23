@@ -5,9 +5,7 @@ from subsystems.shooter import Shooter
 
 
 class ShooterConstants:
-    """
-    Constants for Shooter Subsystem
-    """
+    """Hardware IDs, motor configs, and shot tuning values for the shooter."""
 
     # CANBus instance
     _canbus = CANBus("Drivetrain")
@@ -17,7 +15,7 @@ class ShooterConstants:
     _flywheel_intake_motor_id = 31
 
     # Number of times to attempt to configure each device
-    _num_config_attempts = 5
+    _num_config_attempts = 3
 
     # Flywheel Motor Configs (NEO VORTEX - TalonFXS)
     _flywheel_motor_configs = TalonFXSConfiguration()
@@ -51,22 +49,20 @@ class ShooterConstants:
     _flywheel_intake_motor_configs.slot0.with_k_i(0)
     _flywheel_intake_motor_configs.slot0.with_k_d(0)
 
-    # Constant flywheel speed offset (rotations per second) added to every shot target.
-    # Increase if shots consistently land short, decrease if they consistently overshoot.
+    # Flywheel speed offset in rotations per second added to every shot target. Raise it if
+    # shots consistently land short, lower it if they consistently overshoot.
     _flywheel_target_offset_rps = 1.0
 
-    # Eject/unjam: reverse the flywheels to spit a stuck ball back out.
+    # Reverse flywheel speed used to spit a stuck ball back out
     _eject_flywheel_velocity = -30.0
 
-    # Auto: seconds to let the shooter run before dropping the intake arm to the
-    # intermediate shooting position.
+    # Seconds into an autonomous shot before the intake arm drops to the shooting position
     _auto_arm_down_delay_sec = 5.0
 
     @classmethod
     def create_shooter(
         cls,
         get_current_swerve_state,
-        get_robot_tilt,
         get_hub_center,
         launcher_offset_x: float,
         launcher_offset_y: float,
@@ -74,13 +70,9 @@ class ShooterConstants:
         """
         Create a Shooter subsystem instance using the configured constant values.
 
-        :param cls: ShooterConstants class used as the source of the subsystem constants.
-        :type cls: type[ShooterConstants]
         :param get_current_swerve_state: Function that returns the drivetrain state used by
             the shot solver.
         :type get_current_swerve_state: Callable[[], Any]
-        :param get_robot_tilt: Function that returns the current robot pitch and roll in degrees.
-        :type get_robot_tilt: Callable[[], tuple[float, float]]
         :param get_hub_center: Function that returns the current hub center translation for the
             active alliance.
         :type get_hub_center: Callable[[], wpimath.geometry.Translation2d]
@@ -91,7 +83,6 @@ class ShooterConstants:
         :returns: Configured shooter subsystem.
         :rtype: subsystems.shooter.Shooter
         """
-
         return Shooter(
             cls._canbus,
             cls._flywheel_motor_id,
@@ -100,7 +91,6 @@ class ShooterConstants:
             cls._flywheel_intake_motor_configs,
             cls._num_config_attempts,
             get_current_swerve_state,
-            get_robot_tilt,
             get_hub_center,
             launcher_offset_x,
             launcher_offset_y,

@@ -2,21 +2,21 @@ from bisect import bisect_left
 
 
 class InterpolatingLookupTable:
-    """Linear interpolation over distance-indexed lookup points."""
+    """
+    Looks up values between measured points by interpolating linearly between them.
+
+    Keys outside the measured range clamp to the nearest endpoint rather than extrapolating.
+    """
 
     def __init__(self) -> None:
-        """
-        Create an empty interpolation table.
-        """
-        # Keep keys and values in parallel sorted lists so bisect can find
-        # insertion and interpolation bounds in O(log n) time.
+        """Create an empty interpolation table."""
+        # Keys and values are kept in parallel sorted lists so bisect can find the surrounding
+        # points in O(log n) time.
         self._keys: list[float] = []
         self._values: list[float] = []
 
     def __len__(self) -> int:
-        """
-        Return the number of calibration points stored in the table.
-        """
+        """Return the number of calibration points stored in the table."""
         return len(self._keys)
 
     def put(self, key: float, value: float) -> None:
@@ -30,7 +30,7 @@ class InterpolatingLookupTable:
         """
         index = bisect_left(self._keys, key)
         if index < len(self._keys) and self._keys[index] == key:
-            # Overwrite existing calibration points instead of duplicating them.
+            # Re-adding a distance replaces its value rather than storing a second point there.
             self._values[index] = value
             return
 
@@ -52,7 +52,8 @@ class InterpolatingLookupTable:
         index = bisect_left(self._keys, key)
         if index < len(self._keys) and self._keys[index] == key:
             return self._values[index]
-        # Clamp to the nearest endpoint outside the calibrated range.
+
+        # Outside the measured range, hold the nearest endpoint instead of extrapolating.
         if index == 0:
             return self._values[0]
         if index >= len(self._keys):
@@ -66,13 +67,11 @@ class InterpolatingLookupTable:
         if high_key == low_key:
             return low_value
 
-        # Blend linearly between the surrounding calibration points.
+        # Blend linearly between the two surrounding points.
         blend = (key - low_key) / (high_key - low_key)
         return low_value + (high_value - low_value) * blend
 
     def clear(self) -> None:
-        """
-        Remove every stored calibration point.
-        """
+        """Remove every stored calibration point."""
         self._keys.clear()
         self._values.clear()

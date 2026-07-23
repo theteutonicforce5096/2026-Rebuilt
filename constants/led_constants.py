@@ -6,11 +6,9 @@ from subsystems.led import LED
 
 
 class LEDConstants:
-    """
-    Constants for LED Subsystem
-    """
+    """Hardware IDs and configs used to build the LED subsystem."""
 
-    # CANBus instance - Kellen wired it so that it would start from the roborio
+    # The CANdle is wired to the roboRIO CAN bus, not the CANivore the rest of the robot uses.
     _canbus = CANBus("rio")
 
     # CAN IDs
@@ -19,7 +17,7 @@ class LEDConstants:
     # Number of times to attempt to configure each device
     _num_config_attempts = 3
 
-    # LED Configs (CANdle - TalonFXS)
+    # LED Configs (CANdle)
     _led_configs = CANdleConfiguration()
     _led_configs.led.with_strip_type(StripTypeValue.GRB)
 
@@ -31,12 +29,9 @@ class LEDConstants:
         """
         Create an LED subsystem instance using the configured constant values.
 
-        :param cls: LEDConstants class used as the source of the subsystem constants.
-        :type cls: type[LEDConstants]
         :returns: Configured LED subsystem.
         :rtype: subsystems.led.LED
         """
-
         return LED(
             cls._canbus, cls._led_id, cls._led_configs, cls._num_config_attempts, cls._led_end_index
         )

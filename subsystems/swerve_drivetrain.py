@@ -1,5 +1,5 @@
 from math import copysign, hypot, pi
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from commands2 import FunctionalCommand, Subsystem
 from commands2.sysid import SysIdRoutine
@@ -12,25 +12,30 @@ from wpilib import (
     Notifier,
     RobotBase,
     RobotController,
-    SendableChooser,
     SmartDashboard,
     Timer,
+    reportError,
+    reportWarning,
 )
-from wpilib.shuffleboard import Shuffleboard
 from wpilib.sysid import SysIdRoutineLog
-from wpimath.geometry import Rotation2d, Translation2d
-from wpimath.kinematics import ChassisSpeeds
+from wpimath.geometry import Pose2d, Rotation2d, Translation2d
+from wpimath.kinematics import ChassisSpeeds, SwerveDrive4Kinematics, SwerveDrive4Odometry
 
 from constants.shot_calculator_constants import (
     default_shooter_offset,
     get_hub_center,
     get_hub_reset_pose,
 )
+from subsystems.device_config import check_signal_status
 
 
 class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
     """
-    Class for controlling swerve drive.
+    Drives the swerve modules and tracks where the robot is on the field.
+
+    Wraps CTRE's swerve API with the pieces this robot needs on top of it: shaped and
+    rate-limited teleop input, hub auto-alignment about the shooter, a PathPlanner hookup for
+    autonomous, and a plain odometry track kept next to the vision-fused pose for comparison.
     """
 
     def __init__(
@@ -74,10 +79,10 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         :param max_angular_speed: Max angular velocity of drivetrain in radians per second.
         :type max_angular_speed: float
         :param max_linear_rate_of_change: Max linear rate of change of drivetrain in meters per
-            second.
+            second per 20 ms loop.
         :type max_linear_rate_of_change: float
         :param max_angular_rate_of_change: Max angular rate of change of drivetrain in radians
-            per second.
+            per second per 20 ms loop.
         :type max_angular_rate_of_change: float
         :param teleop_precision_scale: Fraction of max speed applied when the left trigger is held.
         :type teleop_precision_scale: float
@@ -96,7 +101,6 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         :param wheel_radius: Effective drivetrain wheel radius in meters.
         :type wheel_radius: float
         """
-
         # Initialize parent classes
         Subsystem.__init__(self)
         swerve.SwerveDrivetrain.__init__(
@@ -114,17 +118,37 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         else:
             for num in range(4):
                 module = self.get_module(num)
-                module.drive_motor.optimize_bus_utilization()
-                module.steer_motor.optimize_bus_utilization()
-                module.encoder.optimize_bus_utilization()
+                check_signal_status(
+                    module.drive_motor.optimize_bus_utilization(),
+                    f"Drivetrain module {num} drive motor bus optimization",
+                )
+                check_signal_status(
+                    module.steer_motor.optimize_bus_utilization(),
+                    f"Drivetrain module {num} steer motor bus optimization",
+                )
+                check_signal_status(
+                    module.encoder.optimize_bus_utilization(),
+                    f"Drivetrain module {num} encoder bus optimization",
+                )
 
-            self.pigeon2.optimize_bus_utilization()
-            # Keep the signals we actually read fresh: pitch/roll gate vision and feed the
-            # shooter tilt, yaw drives wheel-radius characterization. 100 Hz is plenty for
-            # the 20 ms loop while everything else stays trimmed.
-            self.pigeon2.get_pitch().set_update_frequency(100.0)
-            self.pigeon2.get_roll().set_update_frequency(100.0)
-            self.pigeon2.get_yaw().set_update_frequency(100.0)
+            check_signal_status(
+                self.pigeon2.optimize_bus_utilization(), "Pigeon 2 bus optimization"
+            )
+            # Only the Pigeon signals something reads stay at a high rate: pitch and roll gate
+            # vision measurements, and yaw drives wheel-radius characterization. 100 Hz is plenty
+            # for the 20 ms loop while everything else stays trimmed.
+            check_signal_status(
+                self.pigeon2.get_pitch().set_update_frequency(100.0),
+                "Pigeon 2 pitch update frequency",
+            )
+            check_signal_status(
+                self.pigeon2.get_roll().set_update_frequency(100.0),
+                "Pigeon 2 roll update frequency",
+            )
+            check_signal_status(
+                self.pigeon2.get_yaw().set_update_frequency(100.0),
+                "Pigeon 2 yaw update frequency",
+            )
 
         # Create max speed and max acceleration variables
         self.max_linear_speed = max_linear_speed
@@ -161,7 +185,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         # Create current alliance variable
         self.current_alliance = None
 
-        # Create requests for controlling swerve drive
+        # Standard teleop driving request. Velocities are given from the driver's point of view,
+        # so "forward" always means away from the driver station regardless of robot heading.
         # https://www.chiefdelphi.com/t/motion-magic-velocity-control-for-drive-motors-in-phoenix6-swerve-drive-api/483669/6
         self.field_centric_request = (
             swerve.requests.FieldCentric()
@@ -179,9 +204,9 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             .with_desaturate_wheel_speeds(True)
         )
 
-        # Request used by the hub and shot auto-align helpers. It faces a field-frame (blue-origin)
-        # target angle, so it uses the blue-alliance perspective rather than the operator
-        # perspective.
+        # Request used by the hub auto-align helpers. Its target angle is a field-frame
+        # (blue-origin) heading, so it takes the blue-alliance perspective instead of the
+        # operator perspective the driving request uses.
         self.rotate_robot_request = (
             swerve.requests.FieldCentricFacingAngle()
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.BLUE_ALLIANCE)
@@ -210,6 +235,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                 "SysId_Translation_State", SysIdRoutineLog.stateEnumToString(state)
             )
 
+        # The mechanism log callback is a no-op in all three routines because Phoenix already
+        # logs every signal SysId needs through SignalLogger.
         self.sys_id_routine_translation = SysIdRoutine(
             SysIdRoutine.Config(
                 rampRate=1.0,
@@ -265,29 +292,61 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             ),
         )
 
-        # Create widget for selecting SysId routine and set default value
-        self.sys_id_routine_to_apply = self.sys_id_routine_translation
-        self.sys_id_routines = SendableChooser()
-        self.sys_id_routines.setDefaultOption(
-            "Translation Routine", self.sys_id_routine_translation
+        # Routines this subsystem can characterize. RobotContainer gathers these, along with the
+        # other subsystems' routines, into the single SysId chooser on the dashboard.
+        self.sys_id_routines = [
+            ("Translation", self.sys_id_routine_translation),
+            ("Steer", self.sys_id_routine_steer),
+            ("Rotation", self.sys_id_routine_rotation),
+        ]
+
+        # One field widget holding every pose the robot believes in. The fused pose is the robot
+        # marker, and the odometry-only track plus each camera's estimate ride along as field
+        # objects, which makes it easy to see whether they agree.
+        self.robot_pose_field = Field2d()
+        SmartDashboard.putData("Robot Pose", self.robot_pose_field)
+
+        # Plain dead reckoning running beside the fused pose with no vision mixed in. The gap
+        # between the two shows how hard vision is correcting. It is seeded from raw_heading
+        # because that is the one heading vision never touches.
+        current_state = self.get_state()
+        self.odometry_only = SwerveDrive4Odometry(
+            # Phoenix types the shared kinematics as a union over module counts, but this
+            # drivetrain always has four modules.
+            cast(SwerveDrive4Kinematics, self.kinematics),
+            current_state.raw_heading,
+            self._get_module_positions(current_state),
+            current_state.pose,
         )
-        self.sys_id_routines.addOption("Steer Routine", self.sys_id_routine_steer)
-        self.sys_id_routines.addOption("Rotation Routine", self.sys_id_routine_rotation)
+        self.odometry_only_pose = current_state.pose
 
-        # Send widget to Shuffleboard
-        Shuffleboard.getTab("SysId").add("Drivetrain Routines", self.sys_id_routines).withSize(2, 1)
+        def update_odometry_only(state):
+            """
+            Integrate the odometry-only pose from the latest swerve state.
 
-        self.fused_robot_pose_field = Field2d()
-        SmartDashboard.putData("Fused Robot Pose", self.fused_robot_pose_field)
+            :param state: Swerve drive state supplied by the odometry thread.
+            :type state: phoenix6.swerve.SwerveDrivetrain.SwerveDriveState
+            """
+            self.odometry_only_pose = self.odometry_only.update(
+                state.raw_heading, self._get_module_positions(state)
+            )
+
+        # Phoenix calls this on its odometry thread on every update, so both tracks integrate
+        # just as often. The callback only integrates, since slow work here would stall that
+        # thread; publishing happens in periodic() instead.
+        self.register_telemetry(update_odometry_only)
 
     def _configure_auto_builder(self):
-        """
-        Configure PathPlanner to use this drivetrain for autonomous paths.
-        """
-        config = RobotConfig.fromGUISettings()
+        """Configure PathPlanner to drive this drivetrain during autonomous paths."""
+        try:
+            config = RobotConfig.fromGUISettings()
+        except Exception:
+            reportError("PathPlanner robot config failed to load; autonomous paths disabled", True)
+            return
+
         AutoBuilder.configure(
             lambda: self.get_state().pose,  # Supplier of current robot pose
-            self.reset_pose,  # Consumer for seeding pose against auto
+            self.reset_all_poses,  # Consumer for seeding pose against auto
             lambda: self.get_state().speeds,  # Supplier of current robot speeds
             # Consumer of ChassisSpeeds and feedforwards to drive the robot
             lambda speeds, feedforwards: self.set_control(
@@ -302,7 +361,8 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
                 PIDConstants(7.0, 0.0, 0.0),
             ),
             config,
-            # Assume the path needs to be flipped for Red vs Blue, this is normally the case
+            # Paths are drawn on the blue side of the field, so they are mirrored when the robot
+            # is on the red alliance.
             lambda: (
                 (DriverStation.getAlliance() or DriverStation.Alliance.kBlue)
                 == DriverStation.Alliance.kRed
@@ -311,50 +371,78 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         )
 
     def _start_sim_thread(self):
-        """
-        Start the faster simulation notifier used for Phoenix swerve sim.
-        """
+        """Start the notifier that advances the Phoenix swerve simulation."""
 
         def _sim_periodic():
-            """
-            Advance the Phoenix drivetrain simulator at the notifier rate.
-            """
+            """Advance the Phoenix drivetrain simulator by the time since the last call."""
             current_time = utils.get_current_time_seconds()
             delta_time = current_time - self._last_sim_time
             self._last_sim_time = current_time
 
             self.update_sim_state(delta_time, RobotController.getBatteryVoltage())
 
-        # Run simulation at a faster rate so PID gains behave more reasonably
+        # The 4 ms notifier steps the physics model far more often than the 20 ms robot loop
+        # would, which keeps the simulated modules and gyro closer to how the real hardware
+        # responds between loops.
         self._last_sim_time = utils.get_current_time_seconds()
         self._sim_notifier = Notifier(_sim_periodic)
-        self._sim_notifier.startPeriodic(0.004)  # 4ms
+        self._sim_notifier.startPeriodic(0.004)  # 4 ms
 
     def periodic(self):
-        """
-        Update pose of the robot in network tables periodically.
-        """
-
-        # Get current state of the robot
+        """Publish the robot's fused and odometry-only poses to the dashboard."""
         current_state = self.get_state()
+        odometry_only_pose = self.odometry_only_pose
 
-        # Telemeterize the pose to Field2d
-        self.fused_robot_pose_field.setRobotPose(current_state.pose)
+        self.robot_pose_field.setRobotPose(current_state.pose)
+        self.robot_pose_field.getObject("Odometry").setPose(odometry_only_pose)
+
+        # How far vision has pulled the robot away from raw dead reckoning. A small number means
+        # vision is nudging the pose; a large one means it is fighting odometry.
+        SmartDashboard.putNumber(
+            "Drivetrain/Vision Correction (m)",
+            current_state.pose.translation().distance(odometry_only_pose.translation()),
+        )
+
+    def set_camera_pose(self, camera_name: str, pose: Pose2d):
+        """
+        Show a camera's latest accepted pose estimate alongside the robot pose.
+
+        :param camera_name: Name of the camera that produced the estimate.
+        :type camera_name: str
+        :param pose: Pose the camera estimated.
+        :type pose: wpimath.geometry.Pose2d
+        """
+        self.robot_pose_field.getObject(camera_name).setPose(pose)
+
+    @staticmethod
+    def _get_module_positions(state):
+        """
+        Pack the module positions out of a swerve state into the tuple odometry expects.
+
+        :param state: Swerve drive state to read the module positions from.
+        :type state: phoenix6.swerve.SwerveDrivetrain.SwerveDriveState
+        :returns: The four module positions in module order.
+        :rtype: tuple
+        """
+        front_left, front_right, back_left, back_right = state.module_positions
+        return (front_left, front_right, back_left, back_right)
 
     def set_forward_perspective(self):
         """
-        Set forward perspective of the robot for field oriented drive.
-        """
+        Point field-oriented "forward" away from the driver station for the current alliance.
 
+        Field coordinates always use the blue-alliance origin, so the two alliances face opposite
+        directions on the same field. Setting the perspective is what makes pushing the stick
+        forward drive away from the drivers on either side.
+        """
         alliance_color = DriverStation.getAlliance()
         if alliance_color == DriverStation.Alliance.kRed:
-            # Red alliance sees forward as 180 degrees (toward blue alliance wall)
+            # Red drivers look down the field toward the blue wall, which is 180 degrees.
             self.set_operator_perspective_forward(Rotation2d.fromDegrees(180))
             self.current_alliance = DriverStation.Alliance.kRed
         else:
-            # If alliance color is not detected or alliance is blue, default to/set blue
-            # alliance perspective
-            # Blue alliance sees forward as 0 degrees (toward red alliance wall)
+            # Blue drivers look toward the red wall, which is 0 degrees. An undetected alliance
+            # falls back to this so the robot still drives sensibly off the field.
             self.set_operator_perspective_forward(Rotation2d.fromDegrees(0))
             self.current_alliance = DriverStation.Alliance.kBlue
 
@@ -362,12 +450,10 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         """
         Seed the teleop slew-rate state from the robot's current velocity.
 
-        The default drive command is interrupted and rescheduled often, so the slew state must be
-        reset to the robot's actual velocity (in the operator-perspective command frame) rather than
-        to zero. Seeding to zero while the robot is moving would command a sudden decel then
-        re-accel.
+        The default drive command is interrupted and rescheduled often, so the slew state is
+        seeded from the robot's real velocity in the operator-perspective command frame. Starting
+        from zero while the robot is moving would command a hard stop followed by a re-accel.
         """
-
         current_state = self.get_state()
 
         # Convert the measured robot-relative velocity into the field frame, then into the
@@ -383,17 +469,37 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         self._last_commanded_vy = command_velocity.y
         self._last_commanded_omega = current_state.speeds.omega
 
+    def reset_all_poses(self, pose: Pose2d):
+        """
+        Seed both the fused pose and the odometry-only track to the same pose.
+
+        Anything that teleports the robot has to move both trackers. If only the fused pose moved,
+        the odometry-only track would keep its old pose and the dashboard comparison between them
+        would stop meaning anything.
+
+        :param pose: Pose to seed both trackers to.
+        :type pose: wpimath.geometry.Pose2d
+        """
+        self.reset_pose(pose)
+        self.odometry_only.resetPose(pose)
+        self.odometry_only_pose = pose
+
     def reset_pose_hub(self):
         """
-        Reset the robot pose to a hub-facing reference pose for the current alliance.
+        Re-seed odometry from a known spot at the hub.
+
+        Drivers use this after odometry has drifted: park the robot against the hub, press the
+        button, and both pose trackers snap back to the surveyed reference pose.
         """
-        self.reset_pose(get_hub_reset_pose(self.current_alliance))
+        self.reset_all_poses(get_hub_reset_pose(self.field_type, self.current_alliance))
 
     def get_robot_tilt(self) -> tuple[float, float]:
         """
-        Get the current pitch and roll in degrees of the robot from the Pigeon 2.
-        """
+        Read the robot's current pitch and roll from the Pigeon 2.
 
+        :returns: Pitch and roll in degrees.
+        :rtype: tuple[float, float]
+        """
         return (self.pigeon2.get_pitch().value_as_double, self.pigeon2.get_roll().value_as_double)
 
     def _get_operator_drive_request(
@@ -405,7 +511,11 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         rotation_speed: float,
     ):
         """
-        Get the desired drive request of the operator.
+        Turn raw stick and trigger input into a field-centric drive request.
+
+        The triggers pick a throttle scale, the sticks are deadbanded and curved so small motions
+        stay gentle, and the result is slew-rate limited so the drivers cannot ask for more
+        acceleration than the robot can deliver without tipping or slipping.
 
         :param left_trigger_pressed: Whether the left trigger of the operator's controller is
             pressed or not.
@@ -423,9 +533,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             angular speed where counterclockwise is positive.
         :type rotation_speed: float
         """
-
-        # Select the throttle scaling from the trigger state. Both triggers is turbo, left trigger
-        # alone is precision, and no trigger (or right trigger alone) is the default scale.
+        # Both triggers is turbo, left trigger alone is precision, anything else is the default.
         if left_trigger_pressed and right_trigger_pressed:
             throttle_scale = self.teleop_turbo_scale
         elif left_trigger_pressed:
@@ -436,17 +544,17 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         max_linear_speed = self.max_linear_speed * throttle_scale
         max_angular_speed = self.max_angular_speed * throttle_scale * self.teleop_rotation_scale
 
-        # Shape the translation inputs: deadband with rescaling, then square to soften the low end
+        # Deadband, then square the translation inputs to soften the low end of the stick.
         shaped_forward = self._apply_deadband(forward_speed, self.teleop_translation_deadband)
         shaped_strafe = self._apply_deadband(strafe_speed, self.teleop_translation_deadband)
         requested_vx = abs(shaped_forward) * shaped_forward * max_linear_speed
         requested_vy = abs(shaped_strafe) * shaped_strafe * max_linear_speed
 
-        # Shape the rotation input: deadband with rescaling, then cube for finer control near center
+        # Cubing rotation gives finer control near center than squaring, and keeps the sign.
         shaped_rotation = self._apply_deadband(rotation_speed, self.teleop_rotation_deadband)
         requested_omega = shaped_rotation * shaped_rotation * shaped_rotation * max_angular_speed
 
-        # Slew-rate limit the translation vector (preserving direction) and the rotation separately
+        # Translation is limited as a vector so the direction is kept; rotation is limited alone.
         limited_vx, limited_vy = self._slew_translation(requested_vx, requested_vy)
         limited_omega = self._slew_rotation(requested_omega)
 
@@ -475,7 +583,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
     def _slew_translation(self, requested_vx: float, requested_vy: float) -> tuple[float, float]:
         """
-        Slew-rate limit the translation command as a vector so acceleration keeps its direction.
+        Slew-rate limit the translation command as a vector so acceleration keeps its heading.
 
         :param requested_vx: Requested operator-perspective x velocity in meters per second.
         :type requested_vx: float
@@ -487,7 +595,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         delta_vx = requested_vx - self._last_commanded_vx
         delta_vy = requested_vy - self._last_commanded_vy
 
-        # Scale the whole delta vector down if its magnitude exceeds the per-loop limit
+        # Scale the whole delta down if it exceeds the per-loop limit, keeping its direction.
         delta_norm = hypot(delta_vx, delta_vy)
         if delta_norm > self.max_linear_rate_of_change:
             scale = self.max_linear_rate_of_change / delta_norm
@@ -525,7 +633,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         rotation_speed: Callable[[], float],
     ):
         """
-        Get the drive command for driving the robot.
+        Build the default teleop command that drives the robot from controller input.
 
         :param left_trigger: Function that returns whether the left trigger of the operator's
             controller is pressed or not.
@@ -534,16 +642,17 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             controller is pressed or not.
         :type right_trigger: Callable[[], bool]
         :param forward_speed: Function that returns the desired forward speed of the operator
-        in terms of percent of max linear speed where forward is positive.
+            in terms of percent of max linear speed where forward is positive.
         :type forward_speed: Callable[[], float]
         :param strafe_speed: Function that returns the desired strafe speed of the operator
-        in terms of percent of max linear speed where left is positive.
+            in terms of percent of max linear speed where left is positive.
         :type strafe_speed: Callable[[], float]
         :param rotation_speed: Function that returns the desired rotation speed of the operator
-        in terms of percent of max angular speed where counterclockwise is positive.
+            in terms of percent of max angular speed where counterclockwise is positive.
         :type rotation_speed: Callable[[], float]
+        :returns: Command that drives the robot from live controller input.
+        :rtype: commands2.Command
         """
-
         return self.run(
             lambda: self.set_control(
                 self._get_operator_drive_request(
@@ -557,22 +666,23 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         )
 
     def _get_hub_center(self) -> Translation2d:
-        """
-        Return the hub center for the current alliance and field variant.
-        """
+        """Return the hub center for the current alliance and field variant."""
         return get_hub_center(self.field_type, self.current_alliance)
 
     def _get_shooter_center_of_rotation(self) -> Translation2d:
-        """
-        Return the shooter offset used as the drivetrain center of rotation.
-        """
+        """Return the shooter offset used as the drivetrain center of rotation."""
         return self.shooter_offset.translation()
 
-    def _get_hub_alignment_angle(self) -> Rotation2d:
+    def _get_hub_alignment_angle(self, current_pose: Pose2d) -> Rotation2d:
         """
-        Compute the hub-facing heading from the shooter reference point.
+        Find the heading that aims the shooter at the hub.
+
+        The shooter sits off-center, so the aim is solved from the shooter's position rather than
+        the robot's, then converted back into a robot heading.
+
+        :param current_pose: Robot pose to solve the aim angle from.
+        :type current_pose: wpimath.geometry.Pose2d
         """
-        current_pose = self.get_state().pose
         shooter_pose = current_pose.transformBy(self.shooter_offset)
         hub_center = self._get_hub_center()
 
@@ -585,7 +695,10 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
     def _apply_alignment_target(self, target_angle: Rotation2d):
         """
-        Apply a rotate-in-place request about the shooter center of rotation.
+        Rotate the robot toward a target heading, pivoting about the shooter.
+
+        Pivoting about the shooter instead of the robot's center keeps the shooter roughly in
+        place while the robot turns, so the shot distance barely changes during alignment.
 
         :param target_angle: Field-relative heading to rotate the robot toward.
         :type target_angle: wpimath.geometry.Rotation2d
@@ -598,9 +711,13 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
     def get_hub_alignment_error(self) -> Rotation2d:
         """
-        Return the current signed heading error between robot and hub aim angle.
+        Return the signed heading error between the robot and the hub aim angle.
+
+        :returns: How far the robot still has to turn to face the hub.
+        :rtype: wpimath.geometry.Rotation2d
         """
-        return self._get_hub_alignment_angle() - self.get_state().pose.rotation()
+        current_pose = self.get_state().pose
+        return self._get_hub_alignment_angle(current_pose) - current_pose.rotation()
 
     def is_hub_alignment_within_tolerance(self, tolerance_deg: float = 2.5) -> bool:
         """
@@ -615,15 +732,28 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
     def create_hold_hub_alignment_command(self):
         """
-        Build a command that continuously rotates the robot toward the hub.
+        Build a command that keeps the robot turned toward the hub.
+
+        The heading controller is reset first so it does not act on error left over from an
+        earlier alignment.
+
+        :returns: Command that holds hub alignment until it is interrupted.
+        :rtype: commands2.Command
         """
         return self.runOnce(lambda: self.rotate_robot_pid_controller.reset()).andThen(
-            self.run(lambda: self._apply_alignment_target(self._get_hub_alignment_angle()))
+            self.run(
+                lambda: self._apply_alignment_target(
+                    self._get_hub_alignment_angle(self.get_state().pose)
+                )
+            )
         )
 
     def create_stop_command(self):
         """
-        Build a one-shot command that zeros all chassis velocity requests.
+        Build a one-shot command that zeroes all chassis velocity requests.
+
+        :returns: Command that stops the drivetrain.
+        :rtype: commands2.Command
         """
         return self.runOnce(
             lambda: self.set_control(
@@ -633,51 +763,26 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             )
         )
 
-    def set_sys_id_routine(self):
-        """
-        Set the SysId Routine to run based on the routine chosen in Shuffleboard.
-        """
-        self.sys_id_routine_to_apply = self.sys_id_routines.getSelected()
-
-    def sys_id_quasistatic(self, direction: SysIdRoutine.Direction):
-        """
-        Run the SysId Quasistatic test in the given direction for the routine specified by
-        self.sys_id_routine_to_apply.
-
-        :param direction: Direction of the SysId Quasistatic test
-        :type direction: SysIdRoutine.Direction
-        """
-        return self.sys_id_routine_to_apply.quasistatic(direction)
-
-    def sys_id_dynamic(self, direction: SysIdRoutine.Direction):
-        """
-        Run the SysId Dynamic test in the given direction for the routine specified by
-        self.sys_id_routine_to_apply.
-
-        :param direction: Direction of the SysId Dynamic test
-        :type direction: SysIdRoutine.Direction
-        """
-        return self.sys_id_routine_to_apply.dynamic(direction)
-
     def create_module_alignment_diagnostic_command(self):
         """
         Point all modules forward and publish each module's azimuth error for calibration.
 
-        Use this in test mode to check whether the modules truly point straight when commanded to
-        0 degrees. A nonzero error that differs per module points to CANcoder offsets needing
-        recalibration, which is the usual cause of the robot yawing while driving straight.
+        Run this in test mode to check that the modules really point straight when commanded to
+        0 degrees. A nonzero error that differs per module usually means the CANcoder offsets
+        need recalibrating, which is the common cause of the robot yawing while driving straight.
+
+        :returns: Command that holds the modules forward and reports their errors.
+        :rtype: commands2.Command
         """
         point_forward_request = swerve.requests.PointWheelsAt().with_module_direction(Rotation2d())
 
         def publish_module_errors():
-            """
-            Command the modules forward and report each module's azimuth error in degrees.
-            """
+            """Command the modules forward and report each module's azimuth error in degrees."""
             self.set_control(point_forward_request)
             for module_index in range(len(self.modules)):
                 current_angle = self.get_module(module_index).get_current_state().angle
                 SmartDashboard.putNumber(
-                    f"Module {module_index} Azimuth Error (deg)",
+                    f"Drivetrain/Module {module_index} Azimuth Error (deg)",
                     current_angle.degrees(),
                 )
 
@@ -685,19 +790,24 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
 
     def create_effective_wheel_radius_characterization_command(self):
         """
-        Spin the robot through a timed profile and print the effective wheel radius.
+        Spin the robot in place to measure the wheel radius the drivetrain actually has.
+
+        Comparing how far the wheels report travelling against how far the robot really turned
+        gives the true radius, which drifts from the nominal value as tread wears down. Feeding
+        the measured value back into the constants keeps odometry accurate.
+
+        :returns: Command that runs the spin test and publishes the measured radius.
+        :rtype: commands2.Command
         """
-        ramp_duration_sec = 2
-        hold_duration_sec = 1
+        ramp_duration_sec = 2.0
+        hold_duration_sec = 1.0
         characterization_duration_sec = (2.0 * ramp_duration_sec) + hold_duration_sec
         initial_yaw_deg = 0.0
         initial_distances_m = [0.0] * len(self.modules)
         timer = Timer()
 
         def initialize():
-            """
-            Capture the starting yaw and module distances before the spin test.
-            """
+            """Capture the starting yaw and module distances before the spin test."""
             nonlocal initial_yaw_deg, initial_distances_m
             initial_yaw_deg = self.pigeon2.get_yaw().value_as_double
             initial_distances_m = [
@@ -707,9 +817,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             timer.restart()
 
         def execute():
-            """
-            Ramp up, hold, and ramp down rotational speed for the characterization.
-            """
+            """Ramp up, hold, then ramp down the spin so the wheels do not slip."""
             elapsed_sec = timer.get()
             if elapsed_sec < ramp_duration_sec:
                 requested_omega_rad_per_sec = (self.max_angular_speed * 0.5) * (
@@ -754,19 +862,20 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             ]
             average_wheel_delta_m = sum(wheel_distance_delta_m) / len(wheel_distance_delta_m)
 
+            # Both deltas divide into the result, so a robot that never moved would produce a
+            # meaningless number rather than a measurement.
             if average_wheel_delta_m <= 1e-9 or yaw_delta_rad <= 1e-9:
-                print(
-                    "Effective wheel radius characterization did not collect enough movement data."
+                reportWarning(
+                    "Effective wheel radius characterization did not collect enough movement data.",
+                    False,
                 )
                 return
 
             effective_wheel_radius_m = (
                 self.wheel_radius * self._drive_base_radius * yaw_delta_rad / average_wheel_delta_m
             )
-            print(
-                "Effective wheel radius:"
-                f" {effective_wheel_radius_m:.6f} m"
-                f" ({effective_wheel_radius_m / 0.0254:.3f} in)"
+            SmartDashboard.putNumber(
+                "Drivetrain/Effective Wheel Radius (in)", effective_wheel_radius_m / 0.0254
             )
 
         return FunctionalCommand(

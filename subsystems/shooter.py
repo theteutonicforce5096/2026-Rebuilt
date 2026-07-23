@@ -15,28 +15,37 @@ from phoenix6 import CANBus, SignalLogger
 from phoenix6.configs import TalonFXConfiguration, TalonFXSConfiguration
 from phoenix6.controls import VelocityVoltage, VoltageOut
 from phoenix6.hardware import TalonFX, TalonFXS
-from wpilib import RobotBase, SendableChooser, Timer
-from wpilib.shuffleboard import Shuffleboard
+from wpilib import RobotBase, SmartDashboard, Timer
 from wpilib.sysid import SysIdRoutineLog
 from wpimath.geometry import Rotation2d, Transform2d, Translation2d
 
-from constants.shot_calculator import ShotCalculator
-from constants.shot_calculator_constants import (
-    Config as ShotCalculatorConfig,
-    calc_shooter_to_hub_distance,
-)
-from subsystems.device_config import configure_device
+from constants.shot_calculator_constants import calc_shooter_to_hub_distance
+from subsystems.device_config import check_signal_status, configure_device
+from subsystems.shot_calculator import ShotCalculator
 
 
 class Shooter(Subsystem):
     """
-    Class for controlling shooter.
+    Runs the flywheels that launch balls into the hub.
+
+    A main flywheel sets the launch speed and a smaller intake wheel feeds balls into it, both
+    under closed-loop velocity control. Shot targets come either from the operator's dashboard
+    entries or from a distance-based lookup, and the same sequence builder covers the manual,
+    calculated, and autonomous shots.
     """
 
+    DEFAULT_FLYWHEEL_TARGET_RPS: Final[float] = 60.0
     DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS: Final[float] = 40.0
+
+    # Ceiling on the operator-editable dashboard shot targets, just past the calibration table's
+    # fastest entry
+    MAX_FLYWHEEL_TARGET_RPS: Final[float] = 100.0
 
     # Seconds without an intake-motor surge before the hopper is considered empty
     EMPTY_TIMEOUT_SEC: Final[float] = 10.0
+
+    # Closed-loop error above which the intake motor counts as surging (a ball feeding through)
+    SURGE_ERROR_TOLERANCE_RPS: Final[float] = 1.0
 
     def __init__(
         self,
@@ -47,7 +56,6 @@ class Shooter(Subsystem):
         flywheel_intake_motor_configs: TalonFXConfiguration,
         num_config_attempts: int,
         get_current_swerve_state: Callable[[], Any],
-        get_robot_tilt: Callable[[], tuple[float, float]],
         get_hub_center: Callable[[], Translation2d],
         launcher_offset_x: float,
         launcher_offset_y: float,
@@ -71,8 +79,6 @@ class Shooter(Subsystem):
         :param get_current_swerve_state: Function that returns the drivetrain state used by
             the shot solver.
         :type get_current_swerve_state: Callable[[], Any]
-        :param get_robot_tilt: Function that returns the current robot pitch and roll in degrees.
-        :type get_robot_tilt: Callable[[], tuple[float, float]]
         :param get_hub_center: Function that returns the current hub center translation for the
             active alliance.
         :type get_hub_center: Callable[[], wpimath.geometry.Translation2d]
@@ -84,7 +90,6 @@ class Shooter(Subsystem):
             to trim consistent undershooting or overshooting.
         :type flywheel_target_offset_rps: float
         """
-
         # Initialize parent classes
         Subsystem.__init__(self)
 
@@ -99,26 +104,45 @@ class Shooter(Subsystem):
         )
 
         if not RobotBase.isSimulation():
-            # Trim every signal, then raise only the closed-loop errors we poll each loop.
-            # is_flywheel_at_setpoint and detect_empty read these, so stale values would
-            # feed at the wrong time; 100 Hz is fresh for the 20 ms scheduler without
-            # loading the bus like the default rates would.
-            self.flywheel_motor.optimize_bus_utilization()
-            self.flywheel_intake_motor.optimize_bus_utilization()
-            self.flywheel_motor.get_closed_loop_error().set_update_frequency(100.0)
-            self.flywheel_intake_motor.get_closed_loop_error().set_update_frequency(100.0)
+            # Trim every signal, then raise the ones the control logic reads each loop. The
+            # closed-loop errors drive both setpoint and empty detection, so a stale one would
+            # feed balls at the wrong moment. The velocities are dashboard-only.
+            check_signal_status(
+                self.flywheel_motor.optimize_bus_utilization(),
+                "Shooter flywheel bus optimization",
+            )
+            check_signal_status(
+                self.flywheel_intake_motor.optimize_bus_utilization(),
+                "Shooter flywheel intake bus optimization",
+            )
+            check_signal_status(
+                self.flywheel_motor.get_closed_loop_error().set_update_frequency(100.0),
+                "Shooter flywheel closed-loop error update rate",
+            )
+            check_signal_status(
+                self.flywheel_intake_motor.get_closed_loop_error().set_update_frequency(100.0),
+                "Shooter flywheel intake closed-loop error update rate",
+            )
+            check_signal_status(
+                self.flywheel_motor.get_velocity().set_update_frequency(50.0),
+                "Shooter flywheel velocity update rate",
+            )
+            check_signal_status(
+                self.flywheel_intake_motor.get_velocity().set_update_frequency(50.0),
+                "Shooter flywheel intake velocity update rate",
+            )
 
-        # Create VelocityVoltage request
+        # Create control requests
         self.velocity_pid_request = VelocityVoltage(velocity=0)
         self.intake_velocity_pid_request = VelocityVoltage(velocity=0)
 
         self.voltage_request = VoltageOut(output=0)
 
-        # Empty detection state
+        # Empty detection state: the timestamp of the last current surge, and whether one is
+        # happening right now
         self.empty_time = Timer.getFPGATimestamp()
         self.surging = False
 
-        # What to publish over networktables for shooter
         self._network_table_instance = NetworkTableInstance.getDefault()
 
         # Create SysId routine for characterizing flywheel motor
@@ -167,48 +191,45 @@ class Shooter(Subsystem):
             ),
         )
 
-        # Create widget for selecting SysId routine and set default value
-        self.sys_id_routine_to_apply = self.flywheel_motor_sys_id_routine
-        self.sys_id_routines = SendableChooser()
-        self.sys_id_routines.setDefaultOption(
-            "Flywheel Motor Routine", self.flywheel_motor_sys_id_routine
-        )
-        self.sys_id_routines.addOption(
-            "Flywheel Intake Motor Routine", self.flywheel_intake_motor_sys_id_routine
-        )
+        # Routines this subsystem can characterize. RobotContainer gathers these, along with the
+        # other subsystems' routines, into the single SysId chooser on the dashboard.
+        self.sys_id_routines = [
+            ("Flywheel", self.flywheel_motor_sys_id_routine),
+            ("Flywheel Intake", self.flywheel_intake_motor_sys_id_routine),
+        ]
 
-        # Send widget to Shuffleboard
-        Shuffleboard.getTab("SysId").add("Shooter Routines", self.sys_id_routines).withSize(2, 1)
-
-        # Shooter state
-        self._shooter_table = self._network_table_instance.getTable("Shooter State")
-        self.desired_ball_speed = self._shooter_table.getFloatTopic(
-            "Desired Ball Speed in Rotations per Second"
+        # Operator-editable shot targets, published under the SmartDashboard table so they land
+        # in the same tree as the rest of the robot's telemetry. A manual shot reads these every
+        # loop, and reading through a subscriber is cheaper than a keyed SmartDashboard lookup.
+        self._shooter_table = self._network_table_instance.getTable("SmartDashboard").getSubTable(
+            "Shooter"
+        )
+        self.desired_flywheel_speed = self._shooter_table.getFloatTopic(
+            "Desired Flywheel Speed (rps)"
         ).publish()
-        self.desired_ball_speed_sub = self._shooter_table.getFloatTopic(
-            "Desired Ball Speed in Rotations per Second"
-        ).subscribe(60)
+        self.desired_flywheel_speed_sub = self._shooter_table.getFloatTopic(
+            "Desired Flywheel Speed (rps)"
+        ).subscribe(self.DEFAULT_FLYWHEEL_TARGET_RPS)
         self.desired_flywheel_intake_speed = self._shooter_table.getFloatTopic(
-            "Desired Flywheel Intake Speed in Rotations per Second"
+            "Desired Flywheel Intake Speed (rps)"
         ).publish()
         self.desired_flywheel_intake_speed_sub = self._shooter_table.getFloatTopic(
-            "Desired Flywheel Intake Speed in Rotations per Second"
-        ).subscribe(40)
+            "Desired Flywheel Intake Speed (rps)"
+        ).subscribe(self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS)
+
+        # Seed the widgets once at startup so they come up showing the same defaults the
+        # subscribers fall back to. Publishing only here leaves later operator edits alone.
+        self.desired_flywheel_speed.set(self.DEFAULT_FLYWHEEL_TARGET_RPS)
+        self.desired_flywheel_intake_speed.set(self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS)
 
         self._get_current_swerve_state = get_current_swerve_state
-        self._get_robot_tilt = get_robot_tilt
         self._get_hub_center = get_hub_center
 
-        self.shot_calculator = ShotCalculator(
-            ShotCalculatorConfig(
-                launcher_offset_x=launcher_offset_x,
-                launcher_offset_y=launcher_offset_y,
-            )
-        )
+        self.shot_calculator = ShotCalculator()
         self._last_flywheel_target_rps = 0.0
 
-        # The launcher offset never changes, so build the transform once instead of
-        # rebuilding it every loop when we solve for the distance-based shot.
+        # The launcher offset never changes, so the transform is built once here and reused by
+        # every distance-based shot solve.
         self._shooter_offset = Transform2d(
             Translation2d(launcher_offset_x, launcher_offset_y),
             Rotation2d(),
@@ -217,31 +238,33 @@ class Shooter(Subsystem):
         # Constant flywheel speed offset added to every shot target for undershoot/overshoot trim
         self.flywheel_target_offset_rps = flywheel_target_offset_rps
 
-    def set_sys_id_routine(self):
-        """
-        Set the SysId Routine to run based on the routine chosen in Shuffleboard.
-        """
-        self.sys_id_routine_to_apply = self.sys_id_routines.getSelected()
+    def periodic(self):
+        """Publish the shooter's targets, velocities, and readiness to the dashboard."""
+        SmartDashboard.putNumber("Shooter/Target (rps)", self._last_flywheel_target_rps)
+        SmartDashboard.putNumber(
+            "Shooter/Flywheel Velocity (rps)",
+            self.flywheel_motor.get_velocity().value_as_double,
+        )
+        SmartDashboard.putNumber(
+            "Shooter/Intake Velocity (rps)",
+            self.flywheel_intake_motor.get_velocity().value_as_double,
+        )
+        SmartDashboard.putNumber(
+            "Shooter/Flywheel Error (rps)",
+            self.flywheel_motor.get_closed_loop_error().value_as_double,
+        )
+        SmartDashboard.putNumber(
+            "Shooter/Intake Error (rps)",
+            self.flywheel_intake_motor.get_closed_loop_error().value_as_double,
+        )
+        SmartDashboard.putBoolean("Shooter/At Setpoint", self.is_flywheel_at_setpoint())
 
-    def sys_id_quasistatic(self, direction: SysIdRoutine.Direction):
-        """
-        Run the SysId Quasistatic test in the given direction for the routine specified by
-        self.sys_id_routine_to_apply.
-
-        :param direction: Direction of the SysId Quasistatic test
-        :type direction: SysIdRoutine.Direction
-        """
-        return self.sys_id_routine_to_apply.quasistatic(direction)
-
-    def sys_id_dynamic(self, direction: SysIdRoutine.Direction):
-        """
-        Run the SysId Dynamic test in the given direction for the routine specified by
-        self.sys_id_routine_to_apply.
-
-        :param direction: Direction of the SysId Dynamic test
-        :type direction: SysIdRoutine.Direction
-        """
-        return self.sys_id_routine_to_apply.dynamic(direction)
+        # detect_empty refreshes the surge state as a side effect, so it runs before surging is
+        # published. Calling it here is safe because every shot reseeds the timer when it starts,
+        # so this extra call cannot shorten a real empty timeout.
+        is_empty = self.detect_empty()
+        SmartDashboard.putBoolean("Shooter/Surging", self.surging)
+        SmartDashboard.putBoolean("Shooter/Empty", is_empty)
 
     def is_flywheel_at_setpoint(self, tolerance_rps: float = 1.0) -> bool:
         """
@@ -259,7 +282,11 @@ class Shooter(Subsystem):
 
     def get_current_auto_shot_targets(self) -> tuple[float, float, float]:
         """
-        Measure the current shooter-to-hub distance and return the distance-based shot targets.
+        Solve the distance-based shot targets from where the robot is standing right now.
+
+        :returns: Shooter-to-hub distance in meters, flywheel target in rotations per second,
+            and flywheel-intake target in rotations per second.
+        :rtype: tuple[float, float, float]
         """
         current_state = self._get_current_swerve_state()
         distance_m = calc_shooter_to_hub_distance(
@@ -272,12 +299,11 @@ class Shooter(Subsystem):
 
     def create_shot_command(self, hopper, drivetrain=None, *, distance_based, end_when):
         """
-        Build one shooting sequence shared by the manual, calculated, and autonomous shots.
+        Build the shooting sequence used by the manual, calculated, and autonomous shots.
 
         The sequence spins the flywheel up, waits until it is ready, then feeds the hopper until
-        the end condition trips. Where the flywheel target comes from and whether the robot holds
-        hub alignment are the only things that change between the three shots, so they are passed
-        in rather than duplicated across separate methods.
+        the end condition trips. The three shots differ only in where the flywheel target comes
+        from and whether the robot holds hub alignment, so these are supplied by the caller.
 
         :param hopper: Hopper subsystem used to feed balls toward the shooter.
         :type hopper: subsystems.hopper.Hopper
@@ -298,10 +324,22 @@ class Shooter(Subsystem):
             if distance_based:
                 _, flywheel_rps, intake_rps = self.get_current_auto_shot_targets()
                 return flywheel_rps, intake_rps
-            return self.desired_ball_speed_sub.get(), self.desired_flywheel_intake_speed_sub.get()
+            # The dashboard entries are operator-typed, so clamp them to a range the flywheel
+            # can actually run at before commanding them.
+            return (
+                min(
+                    max(self.desired_flywheel_speed_sub.get(), 0.0),
+                    self.MAX_FLYWHEEL_TARGET_RPS,
+                ),
+                min(
+                    max(self.desired_flywheel_intake_speed_sub.get(), 0.0),
+                    self.MAX_FLYWHEEL_TARGET_RPS,
+                ),
+            )
 
         def apply(feed):
-            # Recompute the target every loop so a distance-based shot tracks the robot as it moves.
+            # Recompute the target every loop so a distance-based shot follows the robot as it
+            # moves. The intake wheel only turns once the flywheel is up to speed.
             flywheel_rps, intake_rps = targets()
             self.set_flywheel_velocities(
                 flywheel_rps + self.flywheel_target_offset_rps,
@@ -320,15 +358,16 @@ class Shooter(Subsystem):
             )
 
         def ready():
-            # Ready to feed once the flywheel is at speed and, if aligning, we are on target or the
-            # alignment has taken long enough that we feed anyway.
+            # Feeding starts once the flywheel is at speed and, when aligning, the robot is on
+            # target. The timeout keeps a shot from stalling forever if alignment never settles.
             return self.is_flywheel_at_setpoint() and (
                 drivetrain is None
-                or drivetrain.is_hub_alignment_within_tolerance(2.5)
+                or drivetrain.is_hub_alignment_within_tolerance()
                 or alignment_timeout.hasElapsed(1.0)
             )
 
-        # Hold hub alignment through the shot only when a drivetrain is supplied.
+        # The alignment commands are only added when a drivetrain is supplied, which is what
+        # makes the manual shot a fixed-heading shot.
         spin_up_extras = []
         feed_extras = []
         stop_extras = []
@@ -363,6 +402,9 @@ class Shooter(Subsystem):
     def create_stop_command(self):
         """
         Build a one-shot command that stops both shooter motors.
+
+        :returns: Command that zeroes both flywheel targets.
+        :rtype: commands2.Command
         """
         return self.runOnce(lambda: self.set_flywheel_velocities(0, 0))
 
@@ -383,26 +425,29 @@ class Shooter(Subsystem):
             self.intake_velocity_pid_request.with_velocity(intake_motor_velocity)
         )
 
-    # Detect amp surge functions (to determine if the hopper is empty)
     def detect_empty(self):
         """
-        Detect hopper-empty behavior by timing the last intake-motor surge.
+        Report whether the hopper has run dry, based on how long ago the last ball fed through.
+
+        Each ball briefly loads the flywheel-intake motor as it passes, which shows up as the
+        motor falling behind its velocity setpoint. Timing the gap between those surges avoids
+        needing a dedicated ball sensor.
+
+        :returns: True once no ball has passed through for EMPTY_TIMEOUT_SEC seconds.
+        :rtype: bool
         """
         # A surge is any moment the intake motor is not tracking its velocity setpoint
-        self.surging = not self.flywheel_intake_motor.get_closed_loop_error().is_near(0, 1)
+        self.surging = not self.flywheel_intake_motor.get_closed_loop_error().is_near(
+            0, self.SURGE_ERROR_TOLERANCE_RPS
+        )
 
+        # Every surge pushes the timestamp forward, so empty_time holds the moment the last ball
+        # went through.
         if self.surging:
             self.empty_time = Timer.getFPGATimestamp()
-            # Every amp surge resets empty_time, so empty_time holds the timestamp of the
-            # last surge.
-            # The hopper is considered empty once no surge has occurred for EMPTY_TIMEOUT_SEC
-            # seconds.
 
         return (Timer.getFPGATimestamp() - self.empty_time) >= self.EMPTY_TIMEOUT_SEC
 
     def reset_empty_time(self):
-        """
-        Reset the empty-detection timer before starting a feed sequence.
-        """
+        """Restart the empty-detection timer so a new feed sequence starts with a full timeout."""
         self.empty_time = Timer.getFPGATimestamp()
-        self.surging = True

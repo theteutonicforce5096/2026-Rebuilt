@@ -1,7 +1,7 @@
 import commands2
 from commands2.sysid import SysIdRoutine
 from pathplannerlib.auto import AutoBuilder, NamedCommands
-from wpilib import DriverStation, SendableChooser, SmartDashboard
+from wpilib import DriverStation, SendableChooser, SmartDashboard, reportWarning
 
 from constants.hopper_constants import HopperConstants
 from constants.intake_constants import IntakeConstants
@@ -14,20 +14,20 @@ from constants.vision_constants import VisionConstants
 
 class RobotContainer:
     """
-    Construct the robot subsystems, controller bindings, and autonomous chooser.
+    Holds the robot's subsystems and wires them to the controller and the dashboard.
+
+    Everything the robot owns is built here, so this is the one place to look for what a button
+    does or which subsystems a command touches.
     """
 
     # Trigger travel past which a controller trigger counts as pressed
     _TRIGGER_DEADBAND = 0.10
 
-    def __init__(self):
-        """
-        Create the shared robot subsystems and operator interface wiring.
-        """
-        # Define max speed variables
-        self.max_linear_speed = SwerveDrivetrainConstants._max_linear_speed
-        self.max_angular_rate = SwerveDrivetrainConstants._max_angular_speed
+    # Remaining teleop seconds at which the endgame LED warning starts
+    _ENDGAME_WARNING_SEC = 5
 
+    def __init__(self):
+        """Build the subsystems, dashboard choosers, and controller bindings."""
         # Create controller
         self.controller = commands2.button.CommandXboxController(0)
 
@@ -39,7 +39,6 @@ class RobotContainer:
         # Create shooter subsystem
         self.shooter = ShooterConstants.create_shooter(
             self.drivetrain.get_state,
-            self.drivetrain.get_robot_tilt,
             lambda: get_hub_center(
                 self.drivetrain.field_type,
                 self.drivetrain.current_alliance,
@@ -62,32 +61,54 @@ class RobotContainer:
             self.drivetrain.add_vision_measurement,
             self.drivetrain.get_state,
             self.drivetrain.get_robot_tilt,
+            self.drivetrain.set_camera_pose,
         )
 
         self.register_named_commands()
 
-        self.auto_chooser = AutoBuilder.buildAutoChooser()
+        # The chooser can only be built once AutoBuilder is configured, which the drivetrain
+        # skips when the PathPlanner robot config fails to load. An empty chooser keeps the
+        # dashboard usable instead of crashing startup.
+        if AutoBuilder.isConfigured():
+            self.auto_chooser = AutoBuilder.buildAutoChooser()
+        else:
+            self.auto_chooser = SendableChooser()
+            reportWarning("PathPlanner not configured; auto chooser is empty", False)
         SmartDashboard.putData("Auto Chooser", self.auto_chooser)
 
-        # Chooser for which subsystem the test-mode SysId buttons characterize.
-        # Each subsystem selects its own routine through its per-subsystem "Routines" chooser.
-        self.sys_id_subsystem_chooser = SendableChooser()
-        self.sys_id_subsystem_chooser.setDefaultOption("Drivetrain", self.drivetrain)
-        self.sys_id_subsystem_chooser.addOption("Shooter", self.shooter)
-        self.sys_id_subsystem_chooser.addOption("Hopper", self.hopper)
-        SmartDashboard.putData("SysId Subsystem", self.sys_id_subsystem_chooser)
+        # Every mechanism the test-mode SysId buttons can characterize, gathered into one
+        # chooser. Each option names both the subsystem and the routine, so there is no way to
+        # run a characterization on a mechanism other than the one shown.
+        sys_id_routines = [
+            (f"{subsystem_name} - {routine_name}", routine)
+            for subsystem_name, subsystem in (
+                ("Drivetrain", self.drivetrain),
+                ("Shooter", self.shooter),
+                ("Hopper", self.hopper),
+            )
+            for routine_name, routine in subsystem.sys_id_routines
+        ]
+
+        default_option_name, default_routine = sys_id_routines[0]
+        self.sys_id_routine_chooser = SendableChooser()
+        self.sys_id_routine_chooser.setDefaultOption(default_option_name, default_routine)
+        for option_name, routine in sys_id_routines[1:]:
+            self.sys_id_routine_chooser.addOption(option_name, routine)
+
+        SmartDashboard.putData("SysId Routine", self.sys_id_routine_chooser)
 
         self.create_button_bindings()
 
     def get_selected_auto_command(self):
-        """
-        Return the autonomous command selected on the dashboard chooser.
-        """
+        """Return the autonomous command selected on the dashboard chooser."""
         return self.auto_chooser.getSelected()
 
     def register_named_commands(self):
         """
-        Register PathPlanner named commands used by autonomous routines.
+        Register the commands PathPlanner paths can call by name.
+
+        These names are what the path editor lists as event markers, so they must match the
+        names used in the deployed paths.
         """
         NamedCommands.registerCommand(
             "Run Intake",
@@ -107,7 +128,8 @@ class RobotContainer:
                     commands2.WaitCommand(ShooterConstants._auto_arm_down_delay_sec),
                     self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
                 ),
-                # Same aligned, distance-based shot as teleop "b", ending when the hopper empties.
+                # The same aligned, distance-based shot as teleop B, ending when the hopper runs
+                # empty since there is no driver to stop it.
                 self.shooter.create_shot_command(
                     self.hopper,
                     self.drivetrain,
@@ -118,9 +140,7 @@ class RobotContainer:
         )
 
     def create_commands_auto(self):
-        """
-        Put subsystems into a known safe state before autonomous begins.
-        """
+        """Put every subsystem into a known safe state before autonomous begins."""
         self.intake.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
@@ -128,10 +148,9 @@ class RobotContainer:
         self.led.auto_in_progress()
 
     def create_commands_teleop(self):
-        """
-        Reset operator-facing state and safe subsystem outputs for teleop.
-        """
-        # Set the forward perspective of the robot for field oriented driving
+        """Reset driver-facing state and zero every subsystem output for teleop."""
+        # The alliance may only be known once connected to the FMS, so the driving perspective
+        # is set here rather than at startup.
         self.drivetrain.set_forward_perspective()
         self.drivetrain.reset_teleop_drive_state()
 
@@ -145,16 +164,16 @@ class RobotContainer:
         """
         Bind controller buttons to robot actions and default commands.
 
-        All bindings are created once here. Mode-specific bindings are gated by a
-        mode-scoped trigger (teleop vs. test) so they only fire in their own mode and
-        do not stack when a mode is re-entered. The color buttons drive shooting in
-        teleop and SysId characterization in test.
+        All bindings are created once here and gated by a teleop or test trigger, so a binding
+        only fires in its own mode and re-entering a mode does not stack duplicates. The color
+        buttons shoot in teleop and run SysId characterization in test.
         """
-        # Mode-scope triggers: a mode-specific binding is only live while its mode is enabled.
+        # A mode-specific binding is only live while its mode is enabled.
         teleop = commands2.button.Trigger(lambda: DriverStation.isTeleopEnabled())
         test = commands2.button.Trigger(lambda: DriverStation.isTestEnabled())
 
-        # Set default command for drivetrain
+        # Driving is the drivetrain's default command, so it resumes whenever nothing else
+        # (auto-align, a path, a characterization) is using the drivetrain.
         self.drivetrain.setDefaultCommand(
             self.drivetrain.get_operator_drive_command(
                 lambda: self.controller.getLeftTriggerAxis() > self._TRIGGER_DEADBAND,
@@ -169,7 +188,7 @@ class RobotContainer:
 
         # --- Teleop bindings ---
 
-        # Set button binding for reseting field centric heading
+        # Both bumpers together re-zero field-centric driving to wherever the robot is pointing.
         def reset_field_centric_heading():
             self.drivetrain.seed_field_centric()
             self.drivetrain.set_forward_perspective()
@@ -179,6 +198,8 @@ class RobotContainer:
             self.drivetrain.runOnce(reset_field_centric_heading)
         )
 
+        # A toggles the intake. The wait keeps a quick double-press from cancelling the intake
+        # before it has had a chance to pull anything in.
         (self.controller.a() & teleop).onTrue(
             commands2.SequentialCommandGroup(
                 self.intake.runOnce(
@@ -190,6 +211,7 @@ class RobotContainer:
             )
         )
 
+        # D-pad right reverses the intake, hopper, and flywheels together to clear a jam.
         (self.controller.povRight() & teleop).onTrue(
             commands2.ParallelCommandGroup(
                 self.intake.runOnce(
@@ -208,11 +230,12 @@ class RobotContainer:
             )
         )
 
+        # D-pad left re-seeds odometry from the hub after the pose has drifted.
         (self.controller.povLeft() & teleop).onTrue(
             self.drivetrain.runOnce(lambda: self.drivetrain.reset_pose_hub())
         )
 
-        # Drop and stow the arm with stall detection so a jammed arm stops instead of straining.
+        # Both arm moves watch for a stall so a jammed arm stops instead of straining.
         (self.controller.povDown() & teleop).onTrue(
             self._create_arm_move_command(lambda: self.intake.arm_down())
         )
@@ -221,7 +244,7 @@ class RobotContainer:
             self._create_arm_move_command(lambda: self.intake.arm_up())
         )
 
-        # Manual shot: operator-set flywheel speed, no auto-align. Ends when Y is pressed.
+        # X fires a manual shot: dashboard flywheel speed, no auto-align, ends on Y.
         (self.controller.x() & teleop).onTrue(
             commands2.SequentialCommandGroup(
                 self.led.runOnce(lambda: self.led.shooting_manual()),
@@ -237,8 +260,8 @@ class RobotContainer:
             )
         )
 
-        # Calculated shot: distance-based flywheel speed while auto-aligning to the hub.
-        # Ends when Y is pressed or the hopper runs empty.
+        # B fires a calculated shot: distance-based flywheel speed while auto-aligning to the
+        # hub, ending on Y or when the hopper runs empty.
         (self.controller.b() & teleop).onTrue(
             commands2.SequentialCommandGroup(
                 self.led.runOnce(lambda: self.led.shooting_calculated()),
@@ -257,15 +280,16 @@ class RobotContainer:
             )
         )
 
+        # Y is the panic stop for everything shooting-related.
         (self.controller.y() & teleop).onTrue(self._create_stop_all_command())
 
-        # Flash the "five seconds left" LED state near the end of a real teleop period,
-        # then return to the default state. Gated to a real timing source: getMatchTime()
-        # returns -1 without one, so require 0 < time <= 5 plus FMS or a practice match.
+        # Flash the LEDs for the last five seconds of teleop, then go back to the default state.
+        # getMatchTime() returns -1 without a real timing source, so this also requires an FMS or
+        # a practice match to avoid firing during a bench test.
         five_seconds_left = commands2.button.Trigger(
             lambda: (
                 DriverStation.isTeleopEnabled()
-                and 0 < DriverStation.getMatchTime() <= 5
+                and 0 < DriverStation.getMatchTime() <= self._ENDGAME_WARNING_SEC
                 and (
                     DriverStation.isFMSAttached()
                     or DriverStation.getMatchType() == DriverStation.MatchType.kPractice
@@ -278,25 +302,25 @@ class RobotContainer:
 
         # --- Test bindings (SysId characterization + drivetrain diagnostics) ---
 
-        # Color buttons run SysId on the dashboard-selected subsystem + its selected routine.
+        # Color buttons run SysId on whichever routine the dashboard chooser is set to.
         (self.controller.y() & test).whileTrue(
             self._create_sys_id_command(
-                lambda subsystem: subsystem.sys_id_quasistatic(SysIdRoutine.Direction.kForward)
+                lambda routine: routine.quasistatic(SysIdRoutine.Direction.kForward)
             )
         )
         (self.controller.a() & test).whileTrue(
             self._create_sys_id_command(
-                lambda subsystem: subsystem.sys_id_quasistatic(SysIdRoutine.Direction.kReverse)
+                lambda routine: routine.quasistatic(SysIdRoutine.Direction.kReverse)
             )
         )
         (self.controller.b() & test).whileTrue(
             self._create_sys_id_command(
-                lambda subsystem: subsystem.sys_id_dynamic(SysIdRoutine.Direction.kForward)
+                lambda routine: routine.dynamic(SysIdRoutine.Direction.kForward)
             )
         )
         (self.controller.x() & test).whileTrue(
             self._create_sys_id_command(
-                lambda subsystem: subsystem.sys_id_dynamic(SysIdRoutine.Direction.kReverse)
+                lambda routine: routine.dynamic(SysIdRoutine.Direction.kReverse)
             )
         )
 
@@ -304,7 +328,7 @@ class RobotContainer:
             self.drivetrain.create_effective_wheel_radius_characterization_command()
         )
 
-        # Hold the modules forward and publish their azimuth errors for offset calibration
+        # Hold the modules forward and publish their azimuth errors for offset calibration.
         (self.controller.povDown() & test).whileTrue(
             self.drivetrain.create_module_alignment_diagnostic_command()
         )
@@ -313,9 +337,8 @@ class RobotContainer:
         """
         Move the intake arm to a position while watching for a stall.
 
-        The stall watch runs until the arm reaches its target or the arm jams, so a blocked arm
-        stops driving instead of straining against the obstruction. Used by both the arm-down and
-        arm-up bindings so the pattern isn't copy-pasted.
+        The stall watch runs until the arm reaches its target or jams, so a blocked arm stops
+        driving instead of straining against whatever is in its way.
 
         :param arm_action: Callable that commands the arm toward its target position.
         :type arm_action: Callable[[], None]
@@ -323,21 +346,24 @@ class RobotContainer:
         :rtype: commands2.Command
         """
 
-        def watch_for_stall():
+        # run needs a None-returning action, so the stall check's result is discarded here.
+        def watch_for_stall() -> None:
             self.intake.get_stall_detection()
 
         return commands2.SequentialCommandGroup(
             self.intake.runOnce(arm_action),
-            self.intake.run(watch_for_stall).until(
-                lambda: self.intake.detect_arm_movement_completion()
-            ),
+            # The timeout is a backstop for a move that neither finishes nor trips the stall
+            # watch, so the arm cannot keep driving forever.
+            self.intake.run(watch_for_stall)
+            .until(lambda: self.intake.detect_arm_movement_completion())
+            .withTimeout(IntakeConstants._arm_move_timeout_sec),
         )
 
     def _create_stop_all_command(self):
         """
-        Stop the intake, hopper, and shooter and return the LEDs to their default state.
+        Stop the intake, hopper, and shooter, and return the LEDs to their default state.
 
-        Shared by the shot bindings and the Y stop button so the same idle state isn't duplicated.
+        This is the idle state a shot ends in and the state the Y button forces at any time.
 
         :returns: Command that puts every shooting-related subsystem back to idle.
         :rtype: commands2.Command
@@ -351,32 +377,30 @@ class RobotContainer:
 
     def _create_sys_id_command(self, run_routine):
         """
-        Build a deferred SysId command targeting the dashboard-selected subsystem.
+        Build a deferred SysId command targeting the dashboard-selected routine.
 
-        The subsystem and its routine are resolved at schedule time so the dashboard
-        choosers can be changed between runs. The command requires all characterizable
-        subsystems so the deferred inner command's requirement is always satisfied.
+        The routine is resolved when the button is pressed, so the chooser can be changed between
+        runs. Every characterizable subsystem is required up front so whichever routine is chosen
+        already holds the subsystem it needs.
 
-        :param run_routine: Callable mapping the selected subsystem to the SysId command
-            to run (quasistatic/dynamic in a given direction).
-        :type run_routine: Callable[[commands2.Subsystem], commands2.Command]
-        :returns: Deferred command that runs the selected subsystem's SysId routine.
+        :param run_routine: Callable mapping the selected routine to the SysId command to run
+            (quasistatic/dynamic in a given direction).
+        :type run_routine: Callable[[commands2.sysid.SysIdRoutine], commands2.Command]
+        :returns: Deferred command that runs the selected SysId routine.
         :rtype: commands2.Command
         """
 
         def build():
-            subsystem = self.sys_id_subsystem_chooser.getSelected()
-            subsystem.set_sys_id_routine()
-            return run_routine(subsystem)
+            return run_routine(self.sys_id_routine_chooser.getSelected())
 
         return commands2.DeferredCommand(build, self.drivetrain, self.shooter, self.hopper)
 
     def create_commands_test(self):
         """
-        Reset subsystem outputs for test mode.
+        Zero every subsystem output for test mode.
 
-        Test-mode button bindings live in create_button_bindings, scoped to test mode,
-        so they are created once instead of re-bound on every entry into test mode.
+        The test-mode button bindings themselves live in create_button_bindings, scoped to test
+        mode, so nothing needs to be re-bound here.
         """
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)

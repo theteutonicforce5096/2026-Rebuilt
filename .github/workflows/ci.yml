@@ -44,7 +44,7 @@ jobs:
           pip install "robotpy[commands2,apriltag]==2026.2.2" \
             "phoenix6==26.1.0" \
             "robotpy-pathplannerlib==2026.1.1" \
-            "photonlibpy==2026.3.4" \
+            "photonlibpy==2026.3.2" \
             "pyright==1.1.411"
 
       - name: Type check

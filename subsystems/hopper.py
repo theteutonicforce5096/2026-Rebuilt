@@ -4,8 +4,7 @@ from phoenix6 import CANBus, SignalLogger
 from phoenix6.configs import TalonFXConfiguration
 from phoenix6.controls import VelocityVoltage, VoltageOut
 from phoenix6.hardware import TalonFX
-from wpilib import RobotBase, SendableChooser
-from wpilib.shuffleboard import Shuffleboard
+from wpilib import RobotBase, SmartDashboard
 from wpilib.sysid import SysIdRoutineLog
 
 from subsystems.device_config import configure_device
@@ -13,7 +12,10 @@ from subsystems.device_config import configure_device
 
 class Hopper(Subsystem):
     """
-    Class for controlling hopper.
+    Moves balls from the hopper into the shooter.
+
+    A mecanum wheel carries balls toward the shooter under closed-loop velocity control, and an
+    agitator wheel stirs the stack so balls do not bridge over each other on the way out.
     """
 
     def __init__(
@@ -61,7 +63,6 @@ class Hopper(Subsystem):
         :param shake_reverse_sec: Duration in seconds of the reverse shake pulse.
         :type shake_reverse_sec: float
         """
-
         Subsystem.__init__(self)
 
         # Store feed/shake oscillation tunables
@@ -81,17 +82,22 @@ class Hopper(Subsystem):
         configure_device(self.agitator_wheel, agitator_wheel_configs, num_config_attempts)
 
         if not RobotBase.isSimulation():
+            # Nothing here reads the motors, so every signal stays trimmed except the two
+            # velocities the dashboard reports. Those are how the drivers confirm the hopper is
+            # actually turning during a feed.
             self.mecanum_wheel.optimize_bus_utilization()
             self.agitator_wheel.optimize_bus_utilization()
+            self.mecanum_wheel.get_velocity().set_update_frequency(50.0)
+            self.agitator_wheel.get_velocity().set_update_frequency(50.0)
 
-        # Create VelocityVoltage request
+        # Create control requests
         self.velocity_pid_request = VelocityVoltage(velocity=0)
         self.voltage_request = VoltageOut(output=0)
 
-        # Create SysId routine for characterizing the mecanum wheel motor.
+        # Create SysId routine for characterizing the mecanum wheel motor
         def record_mecanum_state(state):
             SignalLogger.write_string(
-                "SysId_Hopper_mecanum_Motor_State", SysIdRoutineLog.stateEnumToString(state)
+                "SysId_Hopper_Mecanum_Motor_State", SysIdRoutineLog.stateEnumToString(state)
             )
 
         def drive_mecanum(output):
@@ -111,41 +117,19 @@ class Hopper(Subsystem):
             ),
         )
 
-        # Create widget for selecting SysId routine and set default value
-        self.sys_id_routine_to_apply = self.mecanum_motor_sys_id_routine
-        self.sys_id_routines = SendableChooser()
-        self.sys_id_routines.setDefaultOption(
-            "Mecanum Motor Routine", self.mecanum_motor_sys_id_routine
+        # Routines this subsystem can characterize. RobotContainer gathers these, along with the
+        # other subsystems' routines, into the single SysId chooser on the dashboard.
+        self.sys_id_routines = [("Mecanum", self.mecanum_motor_sys_id_routine)]
+
+    def periodic(self):
+        """Publish the hopper's wheel velocities to the dashboard."""
+        SmartDashboard.putNumber(
+            "Hopper/Mecanum Velocity (rps)", self.mecanum_wheel.get_velocity().value_as_double
+        )
+        SmartDashboard.putNumber(
+            "Hopper/Agitator Velocity (rps)", self.agitator_wheel.get_velocity().value_as_double
         )
 
-        # Send widget to Shuffleboard
-        Shuffleboard.getTab("SysId").add("Hopper Routines", self.sys_id_routines).withSize(2, 1)
-
-    def set_sys_id_routine(self):
-        """
-        Set the SysId Routine to run based on the routine chosen in Shuffleboard.
-        """
-        self.sys_id_routine_to_apply = self.sys_id_routines.getSelected()
-
-    def sys_id_quasistatic(self, direction: SysIdRoutine.Direction):
-        """
-        Run the SysId Quasistatic test for the mecanum wheel motor.
-
-        :param direction: Direction of the SysId Quasistatic test
-        :type direction: SysIdRoutine.Direction
-        """
-        return self.sys_id_routine_to_apply.quasistatic(direction)
-
-    def sys_id_dynamic(self, direction: SysIdRoutine.Direction):
-        """
-        Run the SysId Dynamic test for the mecanum wheel motor.
-
-        :param direction: Direction of the SysId Dynamic test
-        :type direction: SysIdRoutine.Direction
-        """
-        return self.sys_id_routine_to_apply.dynamic(direction)
-
-    # Hopper functions
     def run_hopper(self, mecanum_velocity, agitator_volts):
         """
         Build a one-shot command that applies the requested hopper outputs.
@@ -192,12 +176,16 @@ class Hopper(Subsystem):
 
     def create_feed_cycle_command(self) -> Command:
         """
-        Feed one net-forward oscillation: push balls toward the shooter, then shake back briefly.
+        Build one feed oscillation: push balls toward the shooter, then shake back briefly.
 
         The forward pulse drives balls into the shooter, and the shorter reverse pulse jostles a
-        packed hopper so bridged balls break loose instead of stalling the wheels. The forward pulse
-        moves more than the shake pulse, so the net motion is toward the shooter. The command ends
-        after one oscillation so the caller can re-check whether the flywheel is still at speed.
+        packed hopper so bridged balls break loose instead of stalling the wheels. The forward
+        pulse moves more than the shake pulse, so the net motion is toward the shooter. The
+        command covers a single oscillation, which lets the caller re-check whether the flywheel
+        is still at speed before feeding again.
+
+        :returns: Command that runs one forward-then-shake feed oscillation.
+        :rtype: commands2.Command
         """
         return self._drive_hopper_for(
             self.feed_mecanum_velocity, self.feed_agitator_volts, self.feed_forward_sec
@@ -207,8 +195,11 @@ class Hopper(Subsystem):
             )
         )
 
-    def create_stop_command(self):
+    def create_stop_command(self) -> Command:
         """
-        Build a command that stops both hopper motors.
+        Build a one-shot command that stops both hopper motors.
+
+        :returns: Command that zeroes both hopper outputs.
+        :rtype: commands2.Command
         """
         return self.run_hopper(0, 0)

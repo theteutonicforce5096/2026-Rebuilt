@@ -5,9 +5,7 @@ from subsystems.hopper import Hopper
 
 
 class HopperConstants:
-    """
-    Constants for Hopper Subsystem
-    """
+    """Hardware IDs, motor configs, and tuned pulse timings used to build the hopper."""
 
     # CANBus instance
     _canbus = CANBus("Drivetrain")
@@ -19,7 +17,7 @@ class HopperConstants:
     # Number of times to attempt to configure each device
     _num_config_attempts = 3
 
-    # mecanum Wheel Configs (TalonFX)
+    # Mecanum Wheel Configs (TalonFX)
     _mecanum_wheel_configs = TalonFXConfiguration()
     _mecanum_wheel_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
     _mecanum_wheel_configs.current_limits.with_stator_current_limit(40)
@@ -41,10 +39,9 @@ class HopperConstants:
     _feed_agitator_volts = 3.0
     _feed_forward_sec = 0.375
 
-    # Shake pulse: a brief reverse that unbridges a full hopper so the balls keep moving.
-    # Feeding alternates a forward pulse with this shake so a packed hopper is constantly
-    # jostled loose instead of relying on the wheels to overpower a jam head-on. The forward
-    # pulse moves more than the shake pulse, so the net motion is still toward the shooter.
+    # Shake pulse: a brief reverse that breaks up balls bridged across a full hopper. Feeding
+    # alternates the forward pulse with this one, and the forward pulse moves more, so the net
+    # motion is still toward the shooter.
     _shake_mecanum_velocity = -15.0
     _shake_agitator_volts = -3.0
     _shake_reverse_sec = 0.125
@@ -58,12 +55,9 @@ class HopperConstants:
         """
         Create a Hopper subsystem instance using the configured constant values.
 
-        :param cls: HopperConstants class used as the source of the subsystem constants.
-        :type cls: type[HopperConstants]
         :returns: Configured hopper subsystem.
         :rtype: subsystems.hopper.Hopper
         """
-
         return Hopper(
             cls._canbus,
             cls._mecanum_wheel_id,
