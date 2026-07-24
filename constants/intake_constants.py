@@ -24,10 +24,12 @@ class IntakeConstants:
     _shooting_position = 0.36
     _stowed_position = 0.559
 
-    # Stall detection: a commanded arm moving slower than this for this long counts as stalled.
-    # The hold time rules out normal acceleration, including slower starts on a sagged battery.
-    _stall_velocity_threshold = 0.15  # rotations per second
-    _stall_time_threshold = 0.4  # seconds
+    # Stall detection: a commanded arm must close at least this much position error over each
+    # detection window or it counts as stalled. The slowest healthy move closes about 0.04
+    # rotations per window (farthest move takes ~5 seconds), giving 4x margin over the
+    # threshold, while a jammed arm closes essentially none.
+    _stall_progress_threshold = 0.01  # rotations of error closed per window
+    _stall_time_threshold = 0.5  # seconds per detection window
 
     # Hard timeout on a stall-watched arm move; the farthest no-jam move takes about 5 seconds,
     # so this adds margin without letting a missed stall drive the arm forever
@@ -62,9 +64,9 @@ class IntakeConstants:
     _intake_arm_configs = TalonFXConfiguration()
     _intake_arm_configs.motor_output.with_inverted(signals.InvertedValue.COUNTER_CLOCKWISE_POSITIVE)
     _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
-    # The ~167:1 reduction turns 10 A into roughly 30 N-m at the arm, ample for every move
+    # The ~167:1 reduction turns 15 A into roughly 45 N-m at the arm, ample for every move
     # while limiting how hard a jammed arm can push during stall detection
-    _intake_arm_configs.current_limits.with_stator_current_limit(10)
+    _intake_arm_configs.current_limits.with_stator_current_limit(15)
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_arm_configs.feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
     _intake_arm_configs.feedback.with_feedback_sensor_source(
@@ -103,6 +105,6 @@ class IntakeConstants:
             cls._intake_position,
             cls._stowed_position,
             cls._shooting_position,
-            cls._stall_velocity_threshold,
+            cls._stall_progress_threshold,
             cls._stall_time_threshold,
         )
