@@ -32,6 +32,9 @@ class Intake(Subsystem):
     # must not read as a jam. A jam inside this final sliver is ended by the arm-move command
     # timeout instead.
     _STALL_POSITION_ERROR_MIN_ROT: Final = 0.009
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
     def __init__(
@@ -48,8 +51,11 @@ class Intake(Subsystem):
         stowed_position: float,
         shooting_position: float,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         stall_progress_threshold: float,
 =======
+=======
+>>>>>>> Stashed changes
         stall_current_threshold: float,
         stall_velocity_threshold: float,
 >>>>>>> Stashed changes
@@ -151,8 +157,11 @@ class Intake(Subsystem):
 
         # Stall detection tunables
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         self.stall_progress_threshold = stall_progress_threshold
 =======
+=======
+>>>>>>> Stashed changes
         self.stall_current_threshold = stall_current_threshold
         self.stall_velocity_threshold = stall_velocity_threshold
 >>>>>>> Stashed changes
