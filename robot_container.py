@@ -243,7 +243,7 @@ class RobotContainer:
         # straining. The target resolves at press time, so a press during a move steps from
         # the position already commanded.
         (self.controller.povDown() & teleop).onTrue(
-            self._create_arm_move_command(lambda: self.intake.step_arm_down())
+            self._create_arm_move_command(lambda: self.intake.arm_down())
         )
 
         (self.controller.povUp() & teleop).onTrue(
@@ -378,7 +378,7 @@ class RobotContainer:
             self.intake.runOnce(lambda: self.intake.set_intake_speed(0)),
             self.hopper.create_stop_command(),
             self.shooter.create_stop_command(),
-            self.led.runOnce(lambda: self.led.default()),
+            self.led.runOnce(lambda: self.led.pride()),
         )
 
     def _create_sys_id_command(self, run_routine):

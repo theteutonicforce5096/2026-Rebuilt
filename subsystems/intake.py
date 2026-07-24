@@ -23,9 +23,16 @@ class Intake(Subsystem):
     _ARM_POSITION_TOLERANCE_ROT: Final = 0.009
 
     # Minimum position error at which a stall may be declared. Inside this band the closed-loop
+<<<<<<< Updated upstream
     # output tapers off and the arm legitimately stops closing error, which must not read as a
     # jam. A jam inside this final sliver is ended by the arm-move command timeout instead.
     _STALL_POSITION_ERROR_MIN_ROT: Final = 0.027
+=======
+    # output tapers off and the arm naturally slows below the stall velocity threshold, which
+    # must not read as a jam. A jam inside this final sliver is ended by the arm-move command
+    # timeout instead.
+    _STALL_POSITION_ERROR_MIN_ROT: Final = 0.009
+>>>>>>> Stashed changes
 
     def __init__(
         self,
@@ -40,7 +47,12 @@ class Intake(Subsystem):
         intake_position: float,
         stowed_position: float,
         shooting_position: float,
+<<<<<<< Updated upstream
         stall_progress_threshold: float,
+=======
+        stall_current_threshold: float,
+        stall_velocity_threshold: float,
+>>>>>>> Stashed changes
         stall_time_threshold: float,
     ):
         """
@@ -138,7 +150,12 @@ class Intake(Subsystem):
         self.is_stalled = False
 
         # Stall detection tunables
+<<<<<<< Updated upstream
         self.stall_progress_threshold = stall_progress_threshold
+=======
+        self.stall_current_threshold = stall_current_threshold
+        self.stall_velocity_threshold = stall_velocity_threshold
+>>>>>>> Stashed changes
         self.stall_time_threshold = stall_time_threshold
         self.stall_timer = Timer()
 
@@ -297,7 +314,18 @@ class Intake(Subsystem):
         if self.is_stalled:
             return True
 
+<<<<<<< Updated upstream
         position_error = abs(self.commanded_position - self.arm_position)
+=======
+        # Stall: still commanding a move, but hardly moving. The wider error band keeps the
+        # closed-loop taper near the target from reading as a stall (see the class constant).
+        is_commanding_motion = (
+            abs(self.commanded_position - self.arm_position) > self._STALL_POSITION_ERROR_MIN_ROT
+        )
+        stall_condition_met = (
+            is_commanding_motion and self.arm_velocity < self.stall_velocity_threshold and self.arm_stator_current > self.stall_current_threshold
+        )
+>>>>>>> Stashed changes
 
         # Near the target the closed-loop output tapers and progress legitimately shrinks, so
         # the watch stands down and arrival detection takes over (see the class constant).

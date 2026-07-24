@@ -23,6 +23,9 @@ class IntakeConstants:
     _intake_position = 0.15
     _shooting_position = 0.36
     _stowed_position = 0.559
+    _intake_position = .165 #0.15
+    _shooting_position = .36 #0.36
+    _stowed_position = .534 #0.559
 
     # Stall detection: a commanded arm must close at least this much position error over each
     # detection window or it counts as stalled. The slowest healthy move closes about 0.04
@@ -67,6 +70,9 @@ class IntakeConstants:
     # The ~167:1 reduction turns 15 A into roughly 45 N-m at the arm, ample for every move
     # while limiting how hard a jammed arm can push during stall detection
     _intake_arm_configs.current_limits.with_stator_current_limit(15)
+=======
+    _intake_arm_configs.current_limits.with_stator_current_limit(12)
+>>>>>>> Stashed changes
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_arm_configs.feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
     _intake_arm_configs.feedback.with_feedback_sensor_source(
@@ -107,4 +113,5 @@ class IntakeConstants:
             cls._shooting_position,
             cls._stall_progress_threshold,
             cls._stall_time_threshold,
+=======
         )
