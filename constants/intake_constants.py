@@ -20,9 +20,6 @@ class IntakeConstants:
     _num_config_attempts = 20
 
     # Arm positions in mechanism rotations, measured off the fused CANcoder
-    _intake_position = 0.15
-    _shooting_position = 0.36
-    _stowed_position = 0.559
     _intake_position = .165 #0.15
     _shooting_position = .36 #0.36
     _stowed_position = .534 #0.559
@@ -33,6 +30,13 @@ class IntakeConstants:
     # threshold, while a jammed arm closes essentially none.
     _stall_progress_threshold = 0.01  # rotations of error closed per window
     _stall_time_threshold = 0.5  # seconds per detection window
+=======
+    # Stall detection: a commanded arm moving slower than this for this long counts as stalled.
+    # The hold time rules out normal acceleration, including slower starts on a sagged battery.
+    _stall_current_threshold = 3.0 # amps
+    _stall_velocity_threshold = 0.15  # rotations per second
+    _stall_time_threshold = 0.25  # seconds
+>>>>>>> Stashed changes
 
     # Hard timeout on a stall-watched arm move; the farthest no-jam move takes about 5 seconds,
     # so this adds margin without letting a missed stall drive the arm forever
@@ -114,4 +118,8 @@ class IntakeConstants:
             cls._stall_progress_threshold,
             cls._stall_time_threshold,
 =======
+            cls._stall_current_threshold,
+            cls._stall_velocity_threshold,
+            cls._stall_time_threshold
+>>>>>>> Stashed changes
         )
