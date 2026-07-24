@@ -23,9 +23,8 @@ class Intake(Subsystem):
     _ARM_POSITION_TOLERANCE_ROT: Final = 0.009
 
     # Minimum position error at which a stall may be declared. Inside this band the closed-loop
-    # output tapers off and the arm naturally slows below the stall velocity threshold, which
-    # must not read as a jam. A jam inside this final sliver is ended by the arm-move command
-    # timeout instead.
+    # output tapers off and the arm legitimately stops closing error, which must not read as a
+    # jam. A jam inside this final sliver is ended by the arm-move command timeout instead.
     _STALL_POSITION_ERROR_MIN_ROT: Final = 0.027
 
     def __init__(
@@ -147,6 +146,7 @@ class Intake(Subsystem):
         # is open. Progress is judged per window rather than from instantaneous velocity, which
         # is too noisy to trust at the arm's slow travel speeds.
         self._stall_window_start_error: float | None = None
+        self._stall_window_is_first = True
 
         # Arm signals refreshed each loop for stall detection and telemetry
         self.arm_stator_current = 0.0
@@ -316,11 +316,20 @@ class Intake(Subsystem):
 
         progress = self._stall_window_start_error - position_error
         if progress < self.stall_progress_threshold:
+            # The first window after a new setpoint may legitimately show no progress while
+            # the arm reverses momentum from an interrupted move, so it gets one grace
+            # restart; a real jam simply fails the next window as well.
+            if self._stall_window_is_first:
+                self._stall_window_is_first = False
+                self._stall_window_start_error = position_error
+                self.stall_timer.restart()
+                return False
             self.set_arm_voltage(0)
             self.is_stalled = True
             return True
 
         # Healthy progress; watch the next window.
+        self._stall_window_is_first = False
         self._stall_window_start_error = position_error
         self.stall_timer.restart()
         return False
@@ -328,5 +337,6 @@ class Intake(Subsystem):
     def _reset_stall_watch(self):
         """Close any open stall detection window so the next watched loop starts a fresh one."""
         self._stall_window_start_error = None
+        self._stall_window_is_first = True
         self.stall_timer.stop()
         self.stall_timer.reset()
