@@ -31,10 +31,19 @@ class RobotContainer:
         # Create controller
         self.controller = commands2.button.CommandXboxController(0)
 
+        # Create LED subsystem
+        self.led = LEDConstants.create_led()
+
+        # Create hopper subsystem
+        self.hopper = HopperConstants.create_hopper()
+
         # Create drivetrain subsystem
         self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
 
         launcher_offset = self.drivetrain.shooter_offset.translation()
+
+        # Create intake subsystem
+        self.intake = IntakeConstants.create_intake()
 
         # Create shooter subsystem
         self.shooter = ShooterConstants.create_shooter(
@@ -46,15 +55,6 @@ class RobotContainer:
             launcher_offset.x,
             launcher_offset.y,
         )
-
-        # Create hopper subsystem
-        self.hopper = HopperConstants.create_hopper()
-
-        # Create intake subsystem
-        self.intake = IntakeConstants.create_intake()
-
-        # Create LED subsystem
-        self.led = LEDConstants.create_led()
 
         # Create vision subsystem
         self.camera = VisionConstants.create_vision(
@@ -158,7 +158,7 @@ class RobotContainer:
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
-        self.led.default()
+        self.led.pride()
 
     def create_button_bindings(self):
         """

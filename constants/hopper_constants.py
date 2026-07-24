@@ -15,7 +15,7 @@ class HopperConstants:
     _agitator_wheel_id = 51
 
     # Number of times to attempt to configure each device
-    _num_config_attempts = 3
+    _num_config_attempts = 10
 
     # Mecanum Wheel Configs (TalonFX)
     _mecanum_wheel_configs = TalonFXConfiguration()
@@ -37,7 +37,7 @@ class HopperConstants:
     # Feed pulse: net-forward push that drives balls toward the shooter.
     _feed_mecanum_velocity = 25.0
     _feed_agitator_volts = 3.0
-    _feed_forward_sec = 0.375
+    _feed_forward_sec = 0.5
 
     # Shake pulse: a brief reverse that breaks up balls bridged across a full hopper. Feeding
     # alternates the forward pulse with this one, and the forward pulse moves more, so the net

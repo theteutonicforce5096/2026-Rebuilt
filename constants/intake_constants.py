@@ -16,7 +16,7 @@ class IntakeConstants:
     _intake_arm_encoder_id = 42
 
     # Number of times to attempt to configure each device
-    _num_config_attempts = 3
+    _num_config_attempts = 25
 
     # Arm positions in mechanism rotations, measured off the fused CANcoder
     _intake_position = 0.15
@@ -37,7 +37,7 @@ class IntakeConstants:
     # and the current that means something is caught in it
     _arm_movement_pathway_low = 0.3
     _arm_movement_pathway_high = 0.5
-    _obstruction_current_threshold = 6.7  # amps of stator current
+    _obstruction_current_threshold = 20  # amps of stator current
     # Rotations around the shooting position where high current is normal, not an obstruction
     _obstruction_dead_band = 0.01
 

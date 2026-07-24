@@ -25,7 +25,7 @@ class SwerveDrivetrainConstants:
     _max_angular_speed = 16  # Max angular velocity in radians per second
 
     # Time in seconds to ramp teleop commands from rest to max speed
-    _linear_accel_time = 0.35
+    _linear_accel_time = 0.5
     _angular_accel_time = 0.30
 
     # The most a teleop command may change in one 20 ms loop, which works out to reaching max
@@ -104,7 +104,7 @@ class SwerveDrivetrainConstants:
             configs.CurrentLimitsConfigs()
             # Supply-side limit on the drive motors to help avoid brownouts. The stator (slip)
             # limit is applied separately via with_slip_current on the module constants factory.
-            .with_supply_current_limit(70.0)
+            .with_supply_current_limit(50.0)
             .with_supply_current_limit_enable(True)
         )
     )
@@ -118,7 +118,7 @@ class SwerveDrivetrainConstants:
             configs.CurrentLimitsConfigs()
             # Swerve azimuth does not require much torque output, so we can set a relatively low
             # stator current limit to help avoid brownouts without impacting performance.
-            .with_stator_current_limit(60.0)
+            .with_stator_current_limit(40.0)
             .with_stator_current_limit_enable(True)
         )
     )
@@ -148,7 +148,7 @@ class SwerveDrivetrainConstants:
 
     _drive_gear_ratio = 5.67
     _steer_gear_ratio = 12.1
-    _wheel_radius: units.meter = 0.050147  # inchesToMeters(1.974)
+    _wheel_radius: units.meter = 0.04953  # inchesToMeters(1.974) 1.919048156363767
 
     _invert_left_side = False
     _invert_right_side = True

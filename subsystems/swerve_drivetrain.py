@@ -211,9 +211,9 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             swerve.requests.FieldCentricFacingAngle()
             .with_forward_perspective(swerve.requests.ForwardPerspectiveValue.BLUE_ALLIANCE)
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
-            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.MOTION_MAGIC_EXPO)
+            .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
             .with_desaturate_wheel_speeds(True)
-            .with_heading_pid(7.5, 0, 0)
+            .with_heading_pid(5.0, 0, 0)
         )
 
         self.rotate_robot_pid_controller = self.rotate_robot_request.heading_controller

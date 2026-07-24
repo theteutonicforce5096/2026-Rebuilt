@@ -15,7 +15,7 @@ class LEDConstants:
     _led_id = 3
 
     # Number of times to attempt to configure each device
-    _num_config_attempts = 3
+    _num_config_attempts = 10
 
     # LED Configs (CANdle)
     _led_configs = CANdleConfiguration()
