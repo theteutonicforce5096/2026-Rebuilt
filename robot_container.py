@@ -37,13 +37,16 @@ class RobotContainer:
         # Create hopper subsystem
         self.hopper = HopperConstants.create_hopper()
 
+        # Create intake subsystem. The hopper and intake are built before the drivetrain on
+        # purpose: their configs retry through the several seconds after code start when Phoenix
+        # license checks can reject configs on the CANivore, so by the time CTRE's swerve
+        # constructor applies its own configs (which retry far less) that window has passed.
+        self.intake = IntakeConstants.create_intake()
+
         # Create drivetrain subsystem
         self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
 
         launcher_offset = self.drivetrain.shooter_offset.translation()
-
-        # Create intake subsystem
-        self.intake = IntakeConstants.create_intake()
 
         # Create shooter subsystem
         self.shooter = ShooterConstants.create_shooter(
@@ -235,13 +238,16 @@ class RobotContainer:
             self.drivetrain.runOnce(lambda: self.drivetrain.reset_pose_hub())
         )
 
-        # Both arm moves watch for a stall so a jammed arm stops instead of straining.
+        # Each press steps the arm one preset (intake <-> shooting <-> stowed) in that
+        # direction, and both moves watch for a stall so a jammed arm stops instead of
+        # straining. The target resolves at press time, so a press during a move steps from
+        # the position already commanded.
         (self.controller.povDown() & teleop).onTrue(
-            self._create_arm_move_command(lambda: self.intake.arm_down())
+            self._create_arm_move_command(lambda: self.intake.step_arm_down())
         )
 
         (self.controller.povUp() & teleop).onTrue(
-            self._create_arm_move_command(lambda: self.intake.arm_up())
+            self._create_arm_move_command(lambda: self.intake.step_arm_up())
         )
 
         # X fires a manual shot: dashboard flywheel speed, no auto-align, ends on Y.

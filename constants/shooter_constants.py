@@ -14,8 +14,9 @@ class ShooterConstants:
     _flywheel_motor_id = 30
     _flywheel_intake_motor_id = 31
 
-    # Number of times to attempt to configure each device
-    _num_config_attempts = 3
+    # Number of times to attempt to configure each device. Sized so retries span the several
+    # seconds after code start when Phoenix license checks can reject configs on a pro bus.
+    _num_config_attempts = 20
 
     # Flywheel Motor Configs (NEO VORTEX - TalonFXS)
     _flywheel_motor_configs = TalonFXSConfiguration()
@@ -29,6 +30,13 @@ class ShooterConstants:
     _flywheel_motor_configs.motor_output.with_inverted(signals.InvertedValue.CLOCKWISE_POSITIVE)
     _flywheel_motor_configs.current_limits.with_stator_current_limit(80)
     _flywheel_motor_configs.current_limits.with_stator_current_limit_enable(True)
+    # Supply limit shaped for shot recovery: each ball costs a burst of tens of milliseconds,
+    # well inside the higher budget, and the draw dips between balls reset the lower-limit
+    # timer, so rapid-fire recovery keeps full torque while sustained draw is clamped.
+    _flywheel_motor_configs.current_limits.with_supply_current_limit(60)
+    _flywheel_motor_configs.current_limits.with_supply_current_limit_enable(True)
+    _flywheel_motor_configs.current_limits.with_supply_current_lower_limit(30)
+    _flywheel_motor_configs.current_limits.with_supply_current_lower_time(1.0)
     _flywheel_motor_configs.slot0.with_k_s(0.11618)
     _flywheel_motor_configs.slot0.with_k_v(0.10922)
     _flywheel_motor_configs.slot0.with_k_p(0.1275)
@@ -43,6 +51,12 @@ class ShooterConstants:
     )
     _flywheel_intake_motor_configs.current_limits.with_stator_current_limit(80)
     _flywheel_intake_motor_configs.current_limits.with_stator_current_limit_enable(True)
+    # Same burst-then-clamp shape as the flywheel so feeding keeps its torque headroom while
+    # a stalled feed cannot hold high battery draw
+    _flywheel_intake_motor_configs.current_limits.with_supply_current_limit(40)
+    _flywheel_intake_motor_configs.current_limits.with_supply_current_limit_enable(True)
+    _flywheel_intake_motor_configs.current_limits.with_supply_current_lower_limit(20)
+    _flywheel_intake_motor_configs.current_limits.with_supply_current_lower_time(1.0)
     _flywheel_intake_motor_configs.slot0.with_k_s(0.31895)
     _flywheel_intake_motor_configs.slot0.with_k_v(0.11374)
     _flywheel_intake_motor_configs.slot0.with_k_p(0.75)

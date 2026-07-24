@@ -15,12 +15,18 @@ class Intake(Subsystem):
     Picks balls up off the floor and holds the pivoting arm that carries the intake wheel.
 
     The arm runs closed-loop to a handful of preset positions using a fused CANcoder for absolute
-    feedback. Because the arm can pinch against the frame, a stall watch cuts power when the arm
-    draws current without moving.
+    feedback. Because the arm can jam against the frame or an obstruction, a stall watch cuts
+    power when a commanded arm stops making progress toward its target.
     """
 
     # Rotations from a target position within which the arm counts as having arrived
     _ARM_POSITION_TOLERANCE_ROT: Final = 0.009
+
+    # Minimum position error at which a stall may be declared. Inside this band the closed-loop
+    # output tapers off and the arm naturally slows below the stall velocity threshold, which
+    # must not read as a jam. A jam inside this final sliver is ended by the arm-move command
+    # timeout instead.
+    _STALL_POSITION_ERROR_MIN_ROT: Final = 0.027
 
     def __init__(
         self,
@@ -35,13 +41,8 @@ class Intake(Subsystem):
         intake_position: float,
         stowed_position: float,
         shooting_position: float,
-        stall_current_threshold: float,
         stall_velocity_threshold: float,
         stall_time_threshold: float,
-        arm_movement_pathway_low: float,
-        arm_movement_pathway_high: float,
-        obstruction_current_threshold: float,
-        obstruction_dead_band: float,
     ):
         """
         Initialize the intake using the specified constants.
@@ -68,23 +69,11 @@ class Intake(Subsystem):
         :type stowed_position: float
         :param shooting_position: Encoder position where the arm is at an intermediate position
         :type shooting_position: float
-        :param stall_current_threshold: Minimum stator current required to detect a stall
-        :type stall_current_threshold: float
         :param stall_velocity_threshold: Arm velocity below which the arm counts as stalled
         :type stall_velocity_threshold: float
         :param stall_time_threshold: Time the stall conditions must hold before a stall is
             declared
         :type stall_time_threshold: float
-        :param arm_movement_pathway_low: Low position in the arm movement pathway
-        :type arm_movement_pathway_low: float
-        :param arm_movement_pathway_high: High position in the arm movement pathway
-        :type arm_movement_pathway_high: float
-        :param obstruction_current_threshold: Minimum stator current required to detect an
-            obstruction
-        :type obstruction_current_threshold: float
-        :param obstruction_dead_band: Range around the shooting position where high current is
-            expected, not an obstruction
-        :type obstruction_dead_band: float
         """
         Subsystem.__init__(self)
 
@@ -122,8 +111,10 @@ class Intake(Subsystem):
                 self.intake_arm.get_velocity().set_update_frequency(100.0),
                 "Intake arm velocity update rate",
             )
+            # Stator current is only published for dashboard tuning, so it does not need the
+            # high rate the control-loop signals run at.
             check_signal_status(
-                self.intake_arm.get_stator_current().set_update_frequency(100.0),
+                self.intake_arm.get_stator_current().set_update_frequency(20.0),
                 "Intake arm stator current update rate",
             )
             check_signal_status(
@@ -142,24 +133,17 @@ class Intake(Subsystem):
         self.stowed_position = stowed_position
         self.shooting_position = shooting_position
 
-        # Obstruction detection tunables
-        self.arm_movement_pathway_low = arm_movement_pathway_low
-        self.arm_movement_pathway_high = arm_movement_pathway_high
-        self.obstruction_current_threshold = obstruction_current_threshold
-        self.obstruction_dead_band = obstruction_dead_band
-
         # None until the arm has been commanded somewhere, which the stall and move-complete
         # checks both treat as "nothing to watch"
         self.commanded_position: float | None = None
         self.is_stalled = False
 
         # Stall detection tunables
-        self.stall_current_threshold = stall_current_threshold
         self.stall_velocity_threshold = stall_velocity_threshold
         self.stall_time_threshold = stall_time_threshold
         self.stall_timer = Timer()
 
-        # Arm signals refreshed each loop for stall and obstruction detection
+        # Arm signals refreshed each loop for stall detection and telemetry
         self.arm_stator_current = 0.0
         self.arm_velocity = 0.0
         self.arm_position = 0.0
@@ -175,9 +159,9 @@ class Intake(Subsystem):
         # is published so the dashboard shows this loop's verdict.
         self.get_stall_detection()
 
-        # These are the same three signals the stall logic runs on, so publishing them costs no
-        # extra CAN traffic. Watching the real current and position is what makes the obstruction
-        # and stall thresholds tunable from measurements instead of guesses.
+        # Velocity and position are the signals the stall logic runs on, and current shows how
+        # hard the arm is working; watching the real values is what makes the stall thresholds
+        # and current limit tunable from measurements instead of guesses.
         SmartDashboard.putBoolean("Intake/Arm Stalled", self.is_stalled)
         SmartDashboard.putNumber("Intake/Arm Current (A)", self.arm_stator_current)
         SmartDashboard.putNumber("Intake/Arm Velocity (rps)", self.arm_velocity)
@@ -253,52 +237,70 @@ class Intake(Subsystem):
         """Move the intake arm to the intermediate position used while shooting."""
         self.set_setpoint(self.shooting_position)
 
+    def step_arm_up(self):
+        """Move the intake arm up one preset position toward stowed."""
+        self.set_setpoint(self._next_arm_position(moving_up=True))
+
+    def step_arm_down(self):
+        """Move the intake arm down one preset position toward intake."""
+        self.set_setpoint(self._next_arm_position(moving_up=False))
+
+    def _next_arm_position(self, moving_up: bool) -> float:
+        """
+        Return the preset position one step above or below the arm's reference position.
+
+        The reference is the last commanded position, or the measured position when nothing has
+        been commanded yet (such as after a code restart), so an arm resting between presets
+        still steps to the next preset in the requested direction. The presets bound the travel:
+        stepping up from stowed or down from intake returns that same bound.
+
+        :param moving_up: True to step toward the stowed position, False toward intake.
+        :type moving_up: bool
+        :returns: Preset position one step in the requested direction.
+        :rtype: float
+        """
+        reference = (
+            self.commanded_position if self.commanded_position is not None else self.arm_position
+        )
+        presets = (self.intake_position, self.shooting_position, self.stowed_position)
+
+        # The tolerance keeps the preset the arm is already at from being chosen again.
+        if moving_up:
+            candidates = [p for p in presets if p > reference + self._ARM_POSITION_TOLERANCE_ROT]
+            return min(candidates) if candidates else self.stowed_position
+        candidates = [p for p in presets if p < reference - self._ARM_POSITION_TOLERANCE_ROT]
+        return max(candidates) if candidates else self.intake_position
+
     def get_stall_detection(self):
         """
-        Watch the moving arm and cut power if it jams or stalls.
+        Watch the moving arm and cut power if it stops making progress.
 
-        Two cases stop the arm early. The first is a hard obstruction inside the pinch zone,
-        meaning high current somewhere the arm should not be pushing against anything. The
-        second is a general stall, where the arm pulls current but barely moves for long enough
-        to rule out normal acceleration.
+        A stall is any lack of movement while the arm is commanded well short of its target:
+        the arm barely moves for long enough to rule out normal acceleration. Detection is
+        purely movement-based, so it catches a jam anywhere in the travel regardless of how
+        much current the obstruction happens to draw.
 
-        :returns: True once a stall or obstruction has been detected, otherwise False.
+        :returns: True once a stall has been detected, otherwise False.
         :rtype: bool
         """
         if self.commanded_position is None:
             return False
 
         # A stall latches until the next setpoint clears it, so a jammed arm stays stopped
-        # instead of re-driving once the current briefly drops.
+        # instead of re-driving the moment it springs back.
         if self.is_stalled:
             return True
 
-        # The arm pinches against the frame across most of its travel, except near the shooting
-        # position where it is expected to load up. High current inside that zone means something
-        # is jammed, so stop before the motor overheats.
-        in_obstruction_pathway = (
-            self.arm_movement_pathway_low < self.arm_position < self.arm_movement_pathway_high
-        )
-        near_shooting_position = (
-            abs(self.arm_position - self.shooting_position) <= self.obstruction_dead_band
-        )
-        if in_obstruction_pathway and not near_shooting_position:
-            if self.arm_stator_current > self.obstruction_current_threshold:
-                self.set_arm_voltage(0)
-                self.is_stalled = True
-                return self.is_stalled
-
-        # General stall: still commanding a move, drawing current, but hardly moving.
+        # Stall: still commanding a move, but hardly moving. The wider error band keeps the
+        # closed-loop taper near the target from reading as a stall (see the class constant).
         is_commanding_motion = (
-            abs(self.commanded_position - self.arm_position) > self._ARM_POSITION_TOLERANCE_ROT
+            abs(self.commanded_position - self.arm_position) > self._STALL_POSITION_ERROR_MIN_ROT
         )
         stall_condition_met = (
-            is_commanding_motion
-            and self.arm_stator_current > self.stall_current_threshold
-            and self.arm_velocity < self.stall_velocity_threshold
+            is_commanding_motion and self.arm_velocity < self.stall_velocity_threshold
         )
 
-        # The timer only runs while the conditions hold, so a brief current spike during normal
+        # The timer only runs while the conditions hold, so a brief hesitation during normal
         # acceleration resets it instead of counting toward a stall.
         if stall_condition_met:
             self.stall_timer.start()

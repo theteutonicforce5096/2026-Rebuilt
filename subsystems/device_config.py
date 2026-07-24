@@ -10,8 +10,8 @@ def configure_device(
     num_attempts: int,
     *,
     per_attempt_timeout: float = 0.25,
-    retry_delay: float = 0.1,
-    max_wait: float = 5.0,
+    retry_delay: float = 0.25,
+    max_wait: float = 10.0,
 ) -> StatusCode:
     """
     Apply a set of configs to a CTRE device once that device is on the bus.
@@ -19,8 +19,10 @@ def configure_device(
     Waits for the device to appear on its CAN bus, then retries the config until the device
     reports OK or the time budget runs out. Each device is gated on its own connection, so
     devices on the CANivore and on the roboRIO bus are each configured as soon as they are
-    ready. A device that never answers logs a warning instead of raising, so one bad device
-    cannot stop the rest of the robot from starting.
+    ready. The retry budget also covers the several seconds after code start during which
+    Phoenix license checks can reject configs on a pro bus ("Using Pro Feature on Unlicensed
+    Device") even though every device is licensed. A device that never answers logs a warning
+    instead of raising, so one bad device cannot stop the rest of the robot from starting.
 
     :param device: The CTRE device (motor controller, CANcoder, CANdle) to configure.
     :type device: Any

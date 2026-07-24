@@ -14,8 +14,9 @@ class LEDConstants:
     # CAN IDs
     _led_id = 3
 
-    # Number of times to attempt to configure each device
-    _num_config_attempts = 10
+    # Number of times to attempt to configure each device. Sized so retries span the several
+    # seconds after code start when Phoenix license checks can reject configs on a pro bus.
+    _num_config_attempts = 20
 
     # LED Configs (CANdle)
     _led_configs = CANdleConfiguration()

@@ -15,31 +15,23 @@ class IntakeConstants:
     _intake_arm_id = 41
     _intake_arm_encoder_id = 42
 
-    # Number of times to attempt to configure each device
-    _num_config_attempts = 25
+    # Number of times to attempt to configure each device. Sized so retries span the several
+    # seconds after code start when Phoenix license checks can reject configs on a pro bus.
+    _num_config_attempts = 20
 
     # Arm positions in mechanism rotations, measured off the fused CANcoder
     _intake_position = 0.15
-    _stowed_position = 0.559
     _shooting_position = 0.36
+    _stowed_position = 0.559
 
-    # Stall detection: the arm must draw this much current while moving this slowly for this
-    # long before it counts as stalled
-    _stall_current_threshold = 3.0  # amps of stator current
+    # Stall detection: a commanded arm moving slower than this for this long counts as stalled.
+    # The hold time rules out normal acceleration, including slower starts on a sagged battery.
     _stall_velocity_threshold = 0.15  # rotations per second
-    _stall_time_threshold = 0.25  # seconds
+    _stall_time_threshold = 0.4  # seconds
 
     # Hard timeout on a stall-watched arm move; the farthest no-jam move takes about 5 seconds,
     # so this adds margin without letting a missed stall drive the arm forever
     _arm_move_timeout_sec = 6.0
-
-    # Obstruction detection: the stretch of travel where the arm can pinch against the frame,
-    # and the current that means something is caught in it
-    _arm_movement_pathway_low = 0.3
-    _arm_movement_pathway_high = 0.5
-    _obstruction_current_threshold = 20  # amps of stator current
-    # Rotations around the shooting position where high current is normal, not an obstruction
-    _obstruction_dead_band = 0.01
 
     # Intake wheel voltages for pulling balls in and spitting them back out
     _intake_volts = 12.0
@@ -59,6 +51,9 @@ class IntakeConstants:
     _intake_wheel_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
     _intake_wheel_configs.current_limits.with_stator_current_limit(25)
     _intake_wheel_configs.current_limits.with_stator_current_limit_enable(True)
+    # Supply cap bounds what a jammed wheel can pull from the battery
+    _intake_wheel_configs.current_limits.with_supply_current_limit(15)
+    _intake_wheel_configs.current_limits.with_supply_current_limit_enable(True)
     _intake_wheel_configs.commutation.with_brushed_motor_wiring(
         signals.BrushedMotorWiringValue.LEADS_A_AND_C
     )
@@ -67,7 +62,9 @@ class IntakeConstants:
     _intake_arm_configs = TalonFXConfiguration()
     _intake_arm_configs.motor_output.with_inverted(signals.InvertedValue.COUNTER_CLOCKWISE_POSITIVE)
     _intake_arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
-    _intake_arm_configs.current_limits.with_stator_current_limit(12)
+    # The ~167:1 reduction turns 10 A into roughly 30 N-m at the arm, ample for every move
+    # while limiting how hard a jammed arm can push during stall detection
+    _intake_arm_configs.current_limits.with_stator_current_limit(10)
     _intake_arm_configs.current_limits.with_stator_current_limit_enable(True)
     _intake_arm_configs.feedback.with_feedback_remote_sensor_id(_intake_arm_encoder_id)
     _intake_arm_configs.feedback.with_feedback_sensor_source(
@@ -76,7 +73,7 @@ class IntakeConstants:
     _intake_arm_configs.feedback.with_sensor_to_mechanism_ratio(1.0)
     _intake_arm_configs.feedback.with_rotor_to_sensor_ratio(125 * (4 / 3))
     _intake_arm_configs.closed_loop_general.with_continuous_wrap(True)
-    _intake_arm_configs.slot0.with_k_p(28)
+    _intake_arm_configs.slot0.with_k_p(30)
     _intake_arm_configs.slot0.with_k_i(0)
     _intake_arm_configs.slot0.with_k_d(0)
 
@@ -106,11 +103,6 @@ class IntakeConstants:
             cls._intake_position,
             cls._stowed_position,
             cls._shooting_position,
-            cls._stall_current_threshold,
             cls._stall_velocity_threshold,
             cls._stall_time_threshold,
-            cls._arm_movement_pathway_low,
-            cls._arm_movement_pathway_high,
-            cls._obstruction_current_threshold,
-            cls._obstruction_dead_band,
         )

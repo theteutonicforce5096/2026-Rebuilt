@@ -24,9 +24,10 @@ class SwerveDrivetrainConstants:
     _max_linear_speed = 5.25  # Max linear speed in meters per second
     _max_angular_speed = 16  # Max angular velocity in radians per second
 
-    # Time in seconds to ramp teleop commands from rest to max speed
-    _linear_accel_time = 0.5
-    _angular_accel_time = 0.30
+    # Time in seconds to ramp teleop commands from rest to max speed. The ramp only shapes the
+    # commanded speed; battery draw during acceleration is bounded by the current limits below.
+    _linear_accel_time = 0.25
+    _angular_accel_time = 0.25
 
     # The most a teleop command may change in one 20 ms loop, which works out to reaching max
     # speed in the accel times above.
@@ -47,6 +48,11 @@ class SwerveDrivetrainConstants:
 
     # Frequency to run the odometry loop at in hertz
     _odometry_update_frequency = 250.0
+
+    # Number of times to attempt to configure the license-probe device built ahead of the
+    # swerve devices. Sized so retries span the several seconds after code start when Phoenix
+    # license checks can reject configs on a pro bus.
+    _num_config_attempts = 20
 
     _field_type = default_field_type
 
@@ -90,7 +96,7 @@ class SwerveDrivetrainConstants:
     # stator current limit. Pushing past it only spins the wheels.
     # https://v6.docs.ctr-electronics.com/en/2024/docs/api-reference/mechanisms/swerve/swerve-builder-api.html
     # https://v6.docs.ctr-electronics.com/en/latest/docs/hardware-reference/talonfx/improving-performance-with-current-limits.html#preventing-brownouts
-    _slip_current: units.ampere = 60.0
+    _slip_current: units.ampere = 50.0
 
     # Initial configs for the drive and steer motors and the azimuth encoder; these cannot be null.
     # Some configs will be overwritten; check the `with_*_initial_configs()` API documentation.
@@ -102,10 +108,15 @@ class SwerveDrivetrainConstants:
         )
         .with_current_limits(
             configs.CurrentLimitsConfigs()
-            # Supply-side limit on the drive motors to help avoid brownouts. The stator (slip)
-            # limit is applied separately via with_slip_current on the module constants factory.
-            .with_supply_current_limit(50.0)
+            # Supply-side limit on the drive motors to help avoid brownouts. It must sit below
+            # the 50 A stator (slip) limit to ever engage, since supply current cannot exceed
+            # stator current; the slip limit itself is applied via with_slip_current on the
+            # module constants factory. Sustained draw drops further so a multi-second pushing
+            # match cannot hold four motors at full supply draw.
+            .with_supply_current_limit(40.0)
             .with_supply_current_limit_enable(True)
+            .with_supply_current_lower_limit(30.0)
+            .with_supply_current_lower_time(1.0)
         )
     )
 
@@ -306,6 +317,7 @@ class SwerveDrivetrainConstants:
                 cls.back_left,
                 cls.back_right,
             ],
+            cls._num_config_attempts,
             cls._odometry_update_frequency,
             cls._max_linear_speed,
             cls._max_angular_speed,

@@ -14,14 +14,18 @@ class HopperConstants:
     _mecanum_wheel_id = 50
     _agitator_wheel_id = 51
 
-    # Number of times to attempt to configure each device
-    _num_config_attempts = 10
+    # Number of times to attempt to configure each device. Sized so retries span the several
+    # seconds after code start when Phoenix license checks can reject configs on a pro bus.
+    _num_config_attempts = 20
 
     # Mecanum Wheel Configs (TalonFX)
     _mecanum_wheel_configs = TalonFXConfiguration()
     _mecanum_wheel_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
     _mecanum_wheel_configs.current_limits.with_stator_current_limit(40)
     _mecanum_wheel_configs.current_limits.with_stator_current_limit_enable(True)
+    # Supply cap bounds what a jammed feed can pull from the battery
+    _mecanum_wheel_configs.current_limits.with_supply_current_limit(20)
+    _mecanum_wheel_configs.current_limits.with_supply_current_limit_enable(True)
     _mecanum_wheel_configs.slot0.with_k_s(0.15736)
     _mecanum_wheel_configs.slot0.with_k_v(0.122)
     _mecanum_wheel_configs.slot0.with_k_p(0.5)
@@ -31,8 +35,14 @@ class HopperConstants:
     # Agitator Wheel Configs (TalonFX)
     _agitator_wheel_configs = TalonFXConfiguration()
     _agitator_wheel_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.COAST)
+    # Breaking a fully packed hopper loose is a stall-torque problem, and torque comes from
+    # stator current, so the limit stays high. At the ~3 V drive voltage (~25% duty) even a
+    # hard stall at 80 A stator draws only about 20 A from the battery, which the supply cap
+    # formalizes.
     _agitator_wheel_configs.current_limits.with_stator_current_limit(80)
     _agitator_wheel_configs.current_limits.with_stator_current_limit_enable(True)
+    _agitator_wheel_configs.current_limits.with_supply_current_limit(20)
+    _agitator_wheel_configs.current_limits.with_supply_current_limit_enable(True)
 
     # Feed pulse: net-forward push that drives balls toward the shooter.
     _feed_mecanum_velocity = 25.0

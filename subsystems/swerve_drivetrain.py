@@ -5,7 +5,7 @@ from commands2 import FunctionalCommand, Subsystem
 from commands2.sysid import SysIdRoutine
 from pathplannerlib.auto import AutoBuilder, RobotConfig
 from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
-from phoenix6 import SignalLogger, swerve, utils
+from phoenix6 import SignalLogger, hardware, swerve, utils
 from wpilib import (
     DriverStation,
     Field2d,
@@ -26,7 +26,7 @@ from constants.shot_calculator_constants import (
     get_hub_center,
     get_hub_reset_pose,
 )
-from subsystems.device_config import check_signal_status
+from subsystems.device_config import check_signal_status, configure_device
 
 
 class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
@@ -45,6 +45,7 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         encoder_type: Any,
         drivetrain_constants: swerve.SwerveDrivetrainConstants,
         modules: list[swerve.SwerveModuleConstants],
+        num_config_attempts: int,
         odometry_update_frequency: float,
         max_linear_speed: float,
         max_angular_speed: float,
@@ -72,6 +73,9 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         :type drivetrain_constants: phoenix6.swerve.SwerveDrivetrainConstants
         :param modules: Constants for each specific module
         :type modules: list[phoenix6.swerve.SwerveModuleConstants]
+        :param num_config_attempts: Number of times to attempt to configure the license probe
+            device before the swerve devices are constructed.
+        :type num_config_attempts: int
         :param odometry_update_frequency: The frequency to run the odometry loop at.
         :type odometry_update_frequency: hertz
         :param max_linear_speed: Max linear speed of drivetrain in meters per second.
@@ -103,6 +107,21 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
         """
         # Initialize parent classes
         Subsystem.__init__(self)
+
+        # CTRE's swerve constructor applies module configs internally with only two quick
+        # attempts, which loses the race against the Phoenix license checks that reject configs
+        # on a pro bus for the first few seconds after code start. Configuring the Pigeon
+        # through the robust retry path first proves the bus and license checks are live before
+        # those fragile applies run; the constructor then reapplies the Pigeon configs, which
+        # is harmless.
+        if not RobotBase.isSimulation():
+            license_probe = hardware.Pigeon2(
+                drivetrain_constants.pigeon2_id, drivetrain_constants.can_bus_name
+            )
+            configure_device(
+                license_probe, drivetrain_constants.pigeon2_configs, num_config_attempts
+            )
+
         swerve.SwerveDrivetrain.__init__(
             self,
             drive_motor_type,
