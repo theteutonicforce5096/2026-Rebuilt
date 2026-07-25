@@ -187,13 +187,28 @@ class RobotContainer:
 
         # Driving is the drivetrain's default command, so it resumes whenever nothing else
         # (auto-align, a path, a characterization) is using the drivetrain.
+        #
+        # A default command runs in every enabled mode, not just teleop, and an autonomous routine
+        # releases the drivetrain in the gaps between its own commands. A knocked stick would
+        # otherwise steer the robot through those gaps. Silencing the inputs rather than the
+        # command keeps the drivetrain commanded to zero there, which is what it should be doing
+        # between autonomous steps anyway, instead of coasting on whichever request was last
+        # written. Only autonomous is excluded, so test mode still drives.
+        def stick_axis(axis):
+            return lambda: 0.0 if DriverStation.isAutonomousEnabled() else axis()
+
+        def stick_button(button):
+            return lambda: not DriverStation.isAutonomousEnabled() and button()
+
         self.drivetrain.setDefaultCommand(
             self.drivetrain.get_operator_drive_command(
-                lambda: self.controller.getLeftTriggerAxis() > self._TRIGGER_DEADBAND,
-                lambda: self.controller.getRightTriggerAxis() > self._TRIGGER_DEADBAND,
-                lambda: -self.controller.getLeftY(),
-                lambda: -self.controller.getLeftX(),
-                lambda: -self.controller.getRightX(),
+                stick_button(lambda: self.controller.getLeftTriggerAxis() > self._TRIGGER_DEADBAND),
+                stick_button(
+                    lambda: self.controller.getRightTriggerAxis() > self._TRIGGER_DEADBAND
+                ),
+                stick_axis(lambda: -self.controller.getLeftY()),
+                stick_axis(lambda: -self.controller.getLeftX()),
+                stick_axis(lambda: -self.controller.getRightX()),
             ).beforeStarting(
                 self.drivetrain.runOnce(lambda: self.drivetrain.reset_teleop_drive_state())
             )
@@ -282,8 +297,9 @@ class RobotContainer:
             )
         )
 
-        # B fires a calculated shot: distance-based flywheel speed while auto-aligning to the
-        # hub, ending on Y or when the hopper runs empty.
+        # B fires a calculated shot: auto-aligns to the hub and solves the flywheel speed while
+        # spinning up, then hands the drivetrain back so the driver can reposition without
+        # disturbing the shot. Ends on Y or when the hopper runs empty.
         (self.controller.b() & teleop).onTrue(
             commands2.SequentialCommandGroup(
                 self.led.runOnce(lambda: self.led.shooting_calculated()),
@@ -297,6 +313,7 @@ class RobotContainer:
                     end_when=lambda: (
                         self.controller.getHID().getYButton() or self.shooter.detect_empty()
                     ),
+                    release_to_driver_after_aim=True,
                 ),
                 self._create_stop_all_command(),
             )

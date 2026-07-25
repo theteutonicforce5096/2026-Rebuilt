@@ -333,24 +333,42 @@ class Shooter(Subsystem):
         flywheel_target_velocity = self.shot_calculator.get_profile_for_distance(distance_m)
         return distance_m, flywheel_target_velocity, self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
 
-    def create_shot_command(self, hopper, drivetrain=None, *, distance_based, end_when):
+    def create_shot_command(
+        self,
+        hopper,
+        drivetrain=None,
+        *,
+        distance_based,
+        end_when,
+        release_to_driver_after_aim=False,
+    ):
         """
         Build the shooting sequence used by the manual, calculated, and autonomous shots.
 
         The sequence spins the flywheel up, waits until it is ready, then feeds the hopper until
         the end condition trips. The three shots differ only in where the flywheel target comes
-        from and whether the robot holds hub alignment, so these are supplied by the caller.
+        from and whether the robot aims itself first, so these are supplied by the caller.
+
+        By default the robot holds its aim for the whole shot and the hopper only runs while the
+        flywheel is at speed, which is what an unattended shot wants. Handing control back is opt-in
+        (see release_to_driver_after_aim) because it only makes sense where a driver is there to
+        take it.
 
         :param hopper: Hopper subsystem used to feed balls toward the shooter.
         :type hopper: subsystems.hopper.Hopper
-        :param drivetrain: Drivetrain subsystem to hold hub alignment during the shot, or None to
-            skip alignment (manual shot).
+        :param drivetrain: Drivetrain subsystem to aim at the hub while spinning up, or None to
+            skip aiming (manual shot).
         :type drivetrain: subsystems.swerve_drivetrain.SwerveDrivetrain | None
         :param distance_based: True solves the flywheel target from the live hub distance; False
             reads the operator's NetworkTables targets.
         :type distance_based: bool
         :param end_when: Predicate that ends the feeding phase (button released, hopper empty, ...).
         :type end_when: Callable[[], bool]
+        :param release_to_driver_after_aim: True hands the drivetrain back once aiming finishes and
+            lets the hopper keep running while the flywheel chases the moving target, for a shot a
+            driver may reposition mid-way. False holds aim and gates the hopper on flywheel speed
+            for the whole shot.
+        :type release_to_driver_after_aim: bool
         :returns: Full shooting sequence command.
         :rtype: commands2.Command
         """
@@ -373,26 +391,32 @@ class Shooter(Subsystem):
                 ),
             )
 
+        # The most recent in-range solve. Driving outside the calibrated band mid-shot would
+        # otherwise solve to zero and spin the flywheel down, so the last good speed is held
+        # instead and the shot carries on at the edge of what the table can vouch for.
+        last_valid: list[tuple[float, float]] = []
+
         def apply(feed):
-            # Recompute the target every loop so a distance-based shot follows the robot as it
-            # moves. The intake wheel only turns once the flywheel is up to speed.
             flywheel_rps, intake_rps = targets()
+            if distance_based:
+                if flywheel_rps > 0.0:
+                    last_valid[:] = [(flywheel_rps, intake_rps)]
+                elif feed and last_valid:
+                    flywheel_rps, intake_rps = last_valid[0]
+
             self.set_flywheel_velocities(
                 # A zeroed target means there is no shot to take, so the trim offset stays off it
                 # and the flywheel is left stopped rather than spun to the offset alone.
                 flywheel_rps + self.flywheel_target_offset_rps if flywheel_rps > 0.0 else 0.0,
-                intake_rps if (feed and self.is_flywheel_at_setpoint()) else 0.0,
-            )
-
-        def feed_cycle():
-            # Only run a hopper cycle once the flywheel is at speed, otherwise hold it stopped.
-            return DeferredCommand(
-                lambda: (
-                    hopper.create_feed_cycle_command()
-                    if self.is_flywheel_at_setpoint()
-                    else hopper.create_stop_command()
-                ),
-                hopper,
+                # Waiting for the flywheel is right whenever the target sits still: a dip means a
+                # ball or the battery loaded it down, and pausing lets it recover. It is wrong only
+                # when the driver is moving the robot, because the target then moves too - the
+                # calibration shifts about 7.5 rotations per second per metre against a one
+                # rotation per second tolerance, so the feed would stop at every reposition, which
+                # is when it is least wanted.
+                intake_rps
+                if feed and (release_to_driver_after_aim or self.is_flywheel_at_setpoint())
+                else 0.0,
             )
 
         def ready():
@@ -409,18 +433,44 @@ class Shooter(Subsystem):
                 or alignment_timeout.hasElapsed(1.0)
             )
 
-        # The alignment commands are only added when a drivetrain is supplied, which is what
-        # makes the manual shot a fixed-heading shot.
+        def feed_cycle():
+            if release_to_driver_after_aim:
+                return hopper.create_feed_cycle_command()
+            # Only run a hopper cycle once the flywheel is at speed, otherwise hold it stopped.
+            return DeferredCommand(
+                lambda: (
+                    hopper.create_feed_cycle_command()
+                    if self.is_flywheel_at_setpoint()
+                    else hopper.create_stop_command()
+                ),
+                hopper,
+            )
+
+        # Alignment is only added when a drivetrain is supplied, which is what makes the manual
+        # shot a fixed-heading shot.
         spin_up_extras = []
         feed_extras = []
         stop_extras = []
         if drivetrain is not None:
-            spin_up_extras.append(drivetrain.create_hold_hub_alignment_command())
-            feed_extras.append(drivetrain.create_hold_hub_alignment_command())
-            stop_extras.append(drivetrain.create_stop_command())
+            if release_to_driver_after_aim:
+                # Proxied so the drivetrain is not folded into this composition's requirements: a
+                # command group reserves the union of everything it contains for its whole life,
+                # which would keep the driver locked out long after aiming finished. Proxied, it is
+                # held only while the spin-up phase runs and is handed back the moment that phase
+                # ends, whether alignment settled or ran out its timeout.
+                spin_up_extras.append(drivetrain.create_hold_hub_alignment_command().asProxy())
+            else:
+                # Nobody is waiting to take the drivetrain, so the robot holds its aim for the
+                # whole shot and stops itself at the end.
+                spin_up_extras.append(drivetrain.create_hold_hub_alignment_command())
+                feed_extras.append(drivetrain.create_hold_hub_alignment_command())
+                stop_extras.append(drivetrain.create_stop_command())
 
         return SequentialCommandGroup(
             self.runOnce(lambda: self.reset_empty_time()),
+            # Cleared alongside the timer because the command instance is reused across presses,
+            # so a speed held from the previous shot must not leak into this one.
+            self.runOnce(lambda: last_valid.clear()),
             self.runOnce(lambda: alignment_timeout.restart()),
             # Spin up (and align) until ready, but let the end condition bail out early.
             ParallelDeadlineGroup(
@@ -428,7 +478,9 @@ class Shooter(Subsystem):
                 self.run(lambda: apply(False)),
                 *spin_up_extras,
             ),
-            # Feed (and keep aligning) until the end condition trips.
+            # Feed until the end condition trips. A distance-based target keeps resolving from the
+            # live pose, so a robot that moves during this phase steers the flywheel toward the
+            # shot it has moved to rather than leaving it solved for the one it left.
             ParallelDeadlineGroup(
                 WaitUntilCommand(end_when),
                 self.run(lambda: apply(True)),
