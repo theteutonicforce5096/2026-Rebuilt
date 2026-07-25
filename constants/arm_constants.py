@@ -28,7 +28,7 @@ class ArmConstants:
     # about 4.5 seconds, closing roughly 0.016 rotations per window, so this leaves better than 3x
     # margin while a jammed arm closes essentially none.
     _stall_progress_threshold = 0.001  # rotations of error closed per window
-    _stall_time_threshold = 0.2  # seconds per detection window
+    _stall_time_threshold = 0.05  # seconds per detection window
 
     # Time after a new setpoint during which no stall may be declared. A setpoint that reverses a
     # move in flight makes the arm lose ground while its momentum turns around, which is
