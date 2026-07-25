@@ -19,15 +19,15 @@ class ArmConstants:
     _num_config_attempts = 20
 
     # Arm positions in mechanism rotations, measured off the fused CANcoder
-    _intake_position = 0.160
-    _shooting_position = 0.36
-    _stowed_position = 0.541
+    _intake_position = 0.1550
+    _shooting_position = 0.375
+    _stowed_position = 0.545
 
     # Stall detection: a commanded arm must close at least this much position error over each
     # detection window or it counts as stalled. The slowest healthy move covers 0.369 rotations in
     # about 4.5 seconds, closing roughly 0.016 rotations per window, so this leaves better than 3x
     # margin while a jammed arm closes essentially none.
-    _stall_progress_threshold = 0.001  # rotations of error closed per window
+    _stall_progress_threshold = 0.005  # rotations of error closed per window
     _stall_time_threshold = 0.25  # seconds per detection window
 
     # Current the arm must also be drawing, for a full detection window, before stalled progress
@@ -48,7 +48,7 @@ class ArmConstants:
     # than nominal before a healthy move is cut short. The stall watch catches a real jam in about
     # a quarter second, so this only ever fires for a jam the watch missed and costs nothing to
     # sit well clear of the healthy case.
-    _arm_move_timeout_sec = 5.0
+    _arm_move_timeout_sec = 10
 
     # Arm Configs (Falcon500 - TalonFX)
     _arm_configs = TalonFXConfiguration()
@@ -56,7 +56,7 @@ class ArmConstants:
     _arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
     # The ~167:1 reduction turns 12 A into roughly 36 N-m at the arm, ample for every move while
     # limiting how hard a jammed arm can push during stall detection
-    _arm_configs.current_limits.with_stator_current_limit(12)
+    _arm_configs.current_limits.with_stator_current_limit(11.5)
     _arm_configs.current_limits.with_stator_current_limit_enable(True)
     _arm_configs.feedback.with_feedback_remote_sensor_id(_arm_encoder_id)
     _arm_configs.feedback.with_feedback_sensor_source(
@@ -68,7 +68,7 @@ class ArmConstants:
     # Proportional-only control, so the arm rests wherever k_p times the remaining error can no
     # longer break static friction. That resting error is what sets the arrival tolerance and the
     # stall stand-down band in the Arm subsystem.
-    _arm_configs.slot0.with_k_p(40)
+    _arm_configs.slot0.with_k_p(42.5)
     _arm_configs.slot0.with_k_i(0)
     _arm_configs.slot0.with_k_d(0)
     _arm_configs.slot0.with_k_s(0.2)
