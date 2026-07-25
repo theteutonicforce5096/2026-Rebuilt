@@ -6,6 +6,7 @@ from phoenix6.configs import CANcoderConfiguration, TalonFXConfiguration
 from phoenix6.controls import PositionVoltage, VoltageOut
 from phoenix6.hardware import CANcoder, TalonFX
 from wpilib import RobotBase, RobotState, SmartDashboard, Timer
+from wpimath.filter import Debouncer
 
 from subsystems.device_config import check_signal_status, configure_device
 
@@ -42,6 +43,9 @@ class Arm(Subsystem):
         stall_progress_threshold: float,
         stall_time_threshold: float,
         stall_grace_sec: float,
+        obstruction_position: float,
+        obstruction_current_threshold_amps: float,
+        obstruction_current_hold_sec: float,
     ):
         """
         Initialize the arm using the specified constants.
@@ -73,6 +77,15 @@ class Arm(Subsystem):
         :param stall_grace_sec: Time after a new setpoint during which no stall may be declared,
             covering the arm reversing momentum out of an interrupted move
         :type stall_grace_sec: float
+        :param obstruction_position: Encoder position below which the obstruction failsafe is
+            disarmed, bounding it to the upward approach to stowed
+        :type obstruction_position: float
+        :param obstruction_current_threshold_amps: Stator current at or above which the arm counts
+            as pushing against something
+        :type obstruction_current_threshold_amps: float
+        :param obstruction_current_hold_sec: Time that current must be sustained before the
+            failsafe declares a stall
+        :type obstruction_current_hold_sec: float
         """
         Subsystem.__init__(self)
 
@@ -104,10 +117,10 @@ class Arm(Subsystem):
                 self.motor.get_velocity().set_update_frequency(100.0),
                 "Arm velocity update rate",
             )
-            # Stator current is only published for dashboard tuning, so it does not need the high
-            # rate the control-loop signals run at.
+            # The obstruction failsafe cuts power off this signal, so it is published at the rate
+            # the loop reading it runs at rather than the slower rate telemetry alone would need.
             check_signal_status(
-                self.motor.get_stator_current().set_update_frequency(20.0),
+                self.motor.get_stator_current().set_update_frequency(50.0),
                 "Arm stator current update rate",
             )
             check_signal_status(
@@ -153,6 +166,17 @@ class Arm(Subsystem):
         # pushes it off target is the current limit's job rather than a reason to cut power.
         self._has_arrived = False
 
+        # Obstruction failsafe, watching current rather than progress so it catches a jam the
+        # position signal cannot see: an arm inching through something compliant still closes error
+        # every window while drawing near its limit. A rising debouncer expresses the requirement
+        # directly, holding its output false until the input has been true for the full duration.
+        self.obstruction_position = obstruction_position
+        self.obstruction_current_threshold_amps = obstruction_current_threshold_amps
+        self._obstruction_debouncer = Debouncer(
+            obstruction_current_hold_sec, Debouncer.DebounceType.kRising
+        )
+        self._obstruction_armed = False
+
         # Signals refreshed each loop for stall detection and telemetry
         self.stator_current = 0.0
         self.velocity = 0.0
@@ -176,10 +200,15 @@ class Arm(Subsystem):
         # published so the dashboard shows this loop's verdict.
         self.get_stall_detection()
 
+        # Runs after the progress watch so it sees this loop's arrival verdict, which is what
+        # disarms it once the arm is holding.
+        self._check_obstruction_current()
+
         # Position and velocity are the signals the stall logic runs on, and current shows how hard
         # the arm is working; watching the real values is what makes the stall thresholds and
         # current limit tunable from measurements instead of guesses.
         SmartDashboard.putBoolean("Arm/Stalled", self.is_stalled)
+        SmartDashboard.putBoolean("Arm/Obstruction Armed", self._obstruction_armed)
         SmartDashboard.putNumber("Arm/Current (A)", self.stator_current)
         SmartDashboard.putNumber("Arm/Velocity (rps)", self.velocity)
         SmartDashboard.putNumber("Arm/Position (rot)", self.position)
@@ -355,9 +384,50 @@ class Arm(Subsystem):
 
         return False
 
+    def _check_obstruction_current(self):
+        """
+        Cut power when the arm sustains a hard push on its way up to stowed.
+
+        The progress watch only sees a jam that stops the arm, so an arm grinding into something
+        compliant can inch forward past it while loaded to near its limit. Current is an
+        independent measurement of that, and holding it above the threshold for longer than the
+        arm takes to cross the guarded band separates a stuck arm from a healthy one on timing
+        alone, without depending on where the threshold sits relative to a normal move.
+        """
+        self._obstruction_armed = (
+            RobotState.isEnabled()
+            and not self.is_stalled
+            # A holding arm still sits inside the band under its stowed setpoint, so arrival is
+            # what disarms this; without it, holding current above the threshold would cut power
+            # and drop the arm shortly after every successful stow.
+            and not self._has_arrived
+            and self.commanded_position == self.stowed_position
+            and self.obstruction_position <= self.position <= self.stowed_position
+        )
+
+        # Stator current is signed by motoring versus regenerative braking rather than by travel
+        # direction, so an arm driving into an obstruction reads positive whichever way it pushes
+        # and the comparison is deliberately unsigned-free: an absolute value here would also fire
+        # on heavy braking, which is not a jam.
+        pushing = (
+            self._obstruction_armed
+            and self.stator_current >= self.obstruction_current_threshold_amps
+        )
+
+        # Fed every loop rather than skipped while disarmed, because a false input is what restarts
+        # the hold. Skipping would freeze the count and let two separate approaches add up to one
+        # trip.
+        if self._obstruction_debouncer.calculate(pushing):
+            self.stop_and_latch_stall()
+
     def _reset_stall_watch(self):
         """Drop the sample history and restart the grace period so the next watch starts fresh."""
         self._last_error = None
         self._last_sample_time = 0.0
         self._progress_rate = self._stall_rate_threshold
         self._stall_grace_timer.restart()
+
+        # Debouncer has no reset of its own, and a false input is what clears it. Without this, a
+        # move that built up most of its hold before being re-commanded would carry that count into
+        # the next move and trip early instead of starting from a full hold.
+        self._obstruction_debouncer.calculate(False)
