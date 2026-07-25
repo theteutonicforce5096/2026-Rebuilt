@@ -171,7 +171,7 @@ class RobotContainer:
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
-        self.led.pride()
+        self.led.default()
 
     def create_button_bindings(self):
         """

@@ -105,12 +105,13 @@ class LED(Subsystem):
 
     def default(self):
         """Play the idle animation the robot shows whenever nothing else is happening."""
-        self.extinguish()
-        animation_control = controls.StrobeAnimation(
-            0, self.led_end_index, 4, rgbw_color.RGBWColor(102, 225, 0, 0), 4
-        )
-        self.candle.set_control(animation_control)
-        self.current_state = "Default"
+        self.pride()
+        # self.extinguish()
+        # animation_control = controls.StrobeAnimation(
+        #     0, self.led_end_index, 4, rgbw_color.RGBWColor(102, 225, 0, 0), 4
+        # )
+        # self.candle.set_control(animation_control)
+        # self.current_state = "Default"
 
     def pride(self):
         """Play a rainbow animation."""

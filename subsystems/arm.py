@@ -21,13 +21,13 @@ class Arm(Subsystem):
     """
 
     # Rotations from a target position within which the arm counts as having arrived
-    _ARM_POSITION_TOLERANCE_ROT: Final = 0.0075
+    _ARM_POSITION_TOLERANCE_ROT: Final = 0.0050
 
     # Minimum position error at which a stall may be declared. Inside this band the closed-loop
     # output tapers off and the arm legitimately stops closing error, which must not read as a jam.
     # Set to twice the arrival tolerance so the band still covers the taper once static friction
     # parks the arm at the far edge of that tolerance.
-    _STALL_POSITION_ERROR_MIN_ROT: Final = 0.0075
+    _STALL_POSITION_ERROR_MIN_ROT: Final = 0.0050
 
     def __init__(
         self,

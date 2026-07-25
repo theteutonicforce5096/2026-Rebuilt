@@ -27,25 +27,25 @@ class ArmConstants:
     # detection window or it counts as stalled. The slowest healthy move covers 0.369 rotations in
     # about 4.5 seconds, closing roughly 0.016 rotations per window, so this leaves better than 3x
     # margin while a jammed arm closes essentially none.
-    _stall_progress_threshold = 0.005  # rotations of error closed per window
-    _stall_time_threshold = 0.20  # seconds per detection window
+    _stall_progress_threshold = 0.0025  # rotations of error closed per window
+    _stall_time_threshold = 0.25  # seconds per detection window
 
     # Time after a new setpoint during which no stall may be declared. A setpoint that reverses a
     # move in flight makes the arm lose ground while its momentum turns around, which is
     # indistinguishable from a jam until the reversal finishes.
-    _stall_grace_sec = 0.3
+    _stall_grace_sec = 0.5
 
     # Obstruction failsafe, which backs up the progress watch on the upward approach to stowed. An
     # arm grinding into something compliant can keep inching forward, closing enough error each
     # window to pass the progress test while drawing near its limit the whole way, so current is
     # watched independently over that stretch of travel.
-    _obstruction_position = 0.45  # lower edge of the guarded band, in mechanism rotations
-    _obstruction_current_threshold_amps = 9.0  # 75% of the stator limit: above any healthy move
+    _obstruction_position = 0.50  # lower edge of the guarded band, in mechanism rotations
+    _obstruction_current_threshold_amps = 20  # 75% of the stator limit: above any healthy move
     # The arm clears the guarded band in about 0.9 seconds at its nominal speed and 1.3 seconds at
     # the slowest speed a healthy move can run, so a hold longer than either means only an arm that
     # has stopped in the band can sustain it. That makes a false trip a timing impossibility rather
     # than something the current threshold alone has to rule out.
-    _obstruction_current_hold_sec = 1.5
+    _obstruction_current_hold_sec = 2.0
 
     # Hard timeout on a stall-watched arm move. The farthest no-jam move takes about 4.5 seconds at
     # the arm's nominal speed, and a move that reaches this limit has its power cut, so the margin
@@ -73,7 +73,7 @@ class ArmConstants:
     # Proportional-only control, so the arm rests wherever k_p times the remaining error can no
     # longer break static friction. That resting error is what sets the arrival tolerance and the
     # stall stand-down band in the Arm subsystem.
-    _arm_configs.slot0.with_k_p(28)
+    _arm_configs.slot0.with_k_p(30)
     _arm_configs.slot0.with_k_i(0)
     _arm_configs.slot0.with_k_d(0)
 
