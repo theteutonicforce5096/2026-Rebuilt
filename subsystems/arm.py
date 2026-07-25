@@ -6,6 +6,7 @@ from phoenix6.configs import CANcoderConfiguration, TalonFXConfiguration
 from phoenix6.controls import PositionVoltage, VoltageOut
 from phoenix6.hardware import CANcoder, TalonFX
 from wpilib import RobotBase, RobotState, SmartDashboard, Timer
+from wpimath.filter import Debouncer
 
 from subsystems.device_config import check_signal_status, configure_device
 
@@ -16,7 +17,7 @@ class Arm(Subsystem):
 
     The arm runs closed-loop to a handful of preset positions using a fused CANcoder for absolute
     feedback. Because it can jam against the frame or an obstruction, a stall watch cuts power when
-    a commanded arm stops closing position error.
+    a commanded arm both stops closing position error and stays loaded while doing so.
     """
 
     # Rotations from a target position within which the arm counts as having arrived
@@ -42,6 +43,7 @@ class Arm(Subsystem):
         stall_progress_threshold: float,
         stall_time_threshold: float,
         stall_grace_sec: float,
+        stall_current_threshold_amps: float,
     ):
         """
         Initialize the arm using the specified constants.
@@ -73,6 +75,9 @@ class Arm(Subsystem):
         :param stall_grace_sec: Time after a new setpoint during which no stall may be declared,
             covering the arm reversing momentum out of an interrupted move
         :type stall_grace_sec: float
+        :param stall_current_threshold_amps: Stator current the arm must draw for one detection
+            window, alongside stalled progress, before a jam is declared
+        :type stall_current_threshold_amps: float
         """
         Subsystem.__init__(self)
 
@@ -104,10 +109,11 @@ class Arm(Subsystem):
                 self.motor.get_velocity().set_update_frequency(100.0),
                 "Arm velocity update rate",
             )
-            # Stator current is only published for dashboard tuning, so it does not need the high
-            # rate the control-loop signals run at.
+            # Stall detection gates its power cut on this signal, so it runs at the same rate as
+            # the position and velocity it is judged alongside. Publishing faster than the loop
+            # reads guarantees a fresh sample every loop instead of one repeated across two.
             check_signal_status(
-                self.motor.get_stator_current().set_update_frequency(20.0),
+                self.motor.get_stator_current().set_update_frequency(100.0),
                 "Arm stator current update rate",
             )
             check_signal_status(
@@ -156,10 +162,25 @@ class Arm(Subsystem):
         self._last_sample_time = 0.0
         self._stall_grace_timer = Timer()
 
+        # A jam loads the motor, so stalled progress only counts as one when the arm is also
+        # pulling current. A rising debouncer states that requirement directly: its output stays
+        # false until the current has been over the threshold for a full detection window.
+        self.stall_current_threshold_amps = stall_current_threshold_amps
+        self._stall_current_debouncer = Debouncer(
+            stall_time_threshold, Debouncer.DebounceType.kRising
+        )
+        self._is_loaded = False
+
         # Set once the arm reaches its commanded position, standing the watch down until the next
         # setpoint. The watch exists to protect moves; once the arm is holding, a disturbance that
         # pushes it off target is the current limit's job rather than a reason to cut power.
         self._has_arrived = False
+
+        # Held rather than re-fetched so all three can be refreshed in one synchronized call, which
+        # keeps the stall verdict on a single coherent sample of the mechanism.
+        self._position_signal = self.motor.get_position()
+        self._velocity_signal = self.motor.get_velocity()
+        self._stator_current_signal = self.motor.get_stator_current()
 
         # Signals refreshed each loop for stall detection and telemetry
         self.stator_current = 0.0
@@ -168,15 +189,25 @@ class Arm(Subsystem):
 
     def periodic(self):
         """Refresh the arm signals used for stall detection and report them to the dashboard."""
-        self.stator_current = self.motor.get_stator_current().value_as_double
-        self.velocity = abs(self.motor.get_velocity().value_as_double)
+        # One synchronized refresh so progress and load are judged on the same instant rather than
+        # on three signals sampled at whatever point each was last polled.
+        BaseStatusSignal.refresh_all(
+            self._position_signal, self._velocity_signal, self._stator_current_signal
+        )
+
+        # Current is compared as a level against a threshold that must hold for a full window, so
+        # a frame a few milliseconds old shifts the verdict by that much and nothing more. There is
+        # no rate-of-change-of-current signal to compensate against in any case, which is why the
+        # answer for this one is a fast frame rather than extrapolation.
+        self.stator_current = self._stator_current_signal.value_as_double
+        self.velocity = abs(self._velocity_signal.value_as_double)
 
         # Progress is a difference of positions, so a position frame that is a few milliseconds
         # stale shows up directly as rate noise. Compensating by the signal's own measured latency
         # removes that at the source; during a real jam the velocity term is zero, so the
         # correction vanishes exactly when it must not mask anything.
         self.position = BaseStatusSignal.get_latency_compensated_value(
-            self.motor.get_position(), self.motor.get_velocity()
+            self._position_signal, self._velocity_signal
         )
 
         # The stall watch runs every loop, not just while an arm-move command is scheduled, so a
@@ -188,6 +219,7 @@ class Arm(Subsystem):
         # the arm is working; watching the real values is what makes the stall thresholds and
         # current limit tunable from measurements instead of guesses.
         SmartDashboard.putBoolean("Arm/Stalled", self.is_stalled)
+        SmartDashboard.putBoolean("Arm/Loaded", self._is_loaded)
         SmartDashboard.putNumber("Arm/Current (A)", self.stator_current)
         SmartDashboard.putNumber("Arm/Velocity (rps)", self.velocity)
         SmartDashboard.putNumber("Arm/Position (rot)", self.position)
@@ -291,13 +323,18 @@ class Arm(Subsystem):
 
     def get_stall_detection(self):
         """
-        Watch the moving arm and cut power if it stops making progress.
+        Watch the moving arm and cut power if it stops making progress under load.
 
         A commanded arm must close position error at least as fast as the configured progress
         threshold allows for over one detection window. The rate is low-passed with the detection
         window as its time constant and every term is scaled by the real elapsed time, so the
         threshold means the same thing regardless of how often this runs and a jam is caught about
         one window after it happens rather than up to two.
+
+        Stalled progress on its own is not enough: the arm must also have been drawing at least the
+        current threshold for a full window, since a jam necessarily loads the motor. Requiring
+        both measurements to agree means neither a slow-coasting arm nor a momentarily flat
+        position signal can cut power on its own.
 
         :returns: True once a stall has been detected, otherwise False.
         :rtype: bool
@@ -327,6 +364,14 @@ class Arm(Subsystem):
             self._reset_stall_watch()
             return False
 
+        # Sampled on every armed loop, ahead of the returns below, so a dip under the threshold
+        # restarts the hold rather than pausing it partway. Stator current is signed by motoring
+        # versus regenerative braking rather than by travel direction, so an arm driving into a jam
+        # reads positive whichever way it pushes and no absolute value is wanted here.
+        self._is_loaded = self._stall_current_debouncer.calculate(
+            self.stator_current >= self.stall_current_threshold_amps
+        )
+
         now = Timer.getFPGATimestamp()
 
         # The first sample of a watched move only establishes the reference the next one differs
@@ -352,7 +397,10 @@ class Arm(Subsystem):
         if not self._stall_grace_timer.hasElapsed(self.stall_grace_sec):
             return False
 
-        if self._progress_rate < self._stall_rate_threshold:
+        # Both conditions have to hold over the same window: the arm has stopped closing error and
+        # is loaded while doing so. Either alone is ordinary - a light arm can coast slowly, and a
+        # loaded arm making progress is just a normal move against gravity.
+        if self._progress_rate < self._stall_rate_threshold and self._is_loaded:
             self.stop_and_latch_stall()
             return True
 
@@ -364,3 +412,8 @@ class Arm(Subsystem):
         self._last_sample_time = 0.0
         self._progress_rate = self._stall_rate_threshold
         self._stall_grace_timer.restart()
+
+        # Debouncer has no reset of its own, and a false input is what clears it, so the current
+        # hold only accumulates across loops where the watch is actually armed.
+        self._is_loaded = False
+        self._stall_current_debouncer.calculate(False)

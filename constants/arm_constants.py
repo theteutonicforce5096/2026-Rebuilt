@@ -30,6 +30,13 @@ class ArmConstants:
     _stall_progress_threshold = 0.001  # rotations of error closed per window
     _stall_time_threshold = 0.25  # seconds per detection window
 
+    # Current the arm must also be drawing, for a full detection window, before stalled progress
+    # counts as a jam. A jammed arm is loaded by definition, so requiring both keeps an unloaded
+    # arm that is merely coasting slowly, or a position signal that momentarily reads flat, from
+    # cutting power. The window is shared with the progress test so both conditions describe the
+    # same stretch of time.
+    _stall_current_threshold_amps = 3.0
+
     # Time after a new setpoint during which no stall may be declared. A setpoint that reverses a
     # move in flight makes the arm lose ground while its momentum turns around, which is
     # indistinguishable from a jam until the reversal finishes.
@@ -61,9 +68,10 @@ class ArmConstants:
     # Proportional-only control, so the arm rests wherever k_p times the remaining error can no
     # longer break static friction. That resting error is what sets the arrival tolerance and the
     # stall stand-down band in the Arm subsystem.
-    _arm_configs.slot0.with_k_p(35)
+    _arm_configs.slot0.with_k_p(40)
     _arm_configs.slot0.with_k_i(0)
     _arm_configs.slot0.with_k_d(0)
+    _arm_configs.slot0.with_k_s(0.2)
 
     _arm_encoder_configs = CANcoderConfiguration()
     _arm_encoder_configs.magnet_sensor.with_sensor_direction(
@@ -92,4 +100,5 @@ class ArmConstants:
             cls._stall_progress_threshold,
             cls._stall_time_threshold,
             cls._stall_grace_sec,
+            cls._stall_current_threshold_amps,
         )
