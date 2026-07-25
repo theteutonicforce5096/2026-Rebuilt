@@ -37,6 +37,21 @@ class InterpolatingLookupTable:
         self._keys.insert(index, key)
         self._values.insert(index, value)
 
+    def key_range(self) -> tuple[float, float] | None:
+        """
+        Return the span of keys the table was actually measured over.
+
+        Callers need this to tell an interpolated value from a clamped one, since get() reports
+        both the same way.
+
+        :returns: Lowest and highest calibrated key, or None when the table is empty.
+        :rtype: tuple[float, float] | None
+        """
+        if not self._keys:
+            return None
+
+        return (self._keys[0], self._keys[-1])
+
     def get(self, key: float) -> float | None:
         """
         Return the interpolated value for a key, clamping outside the range.

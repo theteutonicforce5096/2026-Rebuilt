@@ -3,32 +3,32 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 2.7734120370370374,
-        "y": 7.153665436921297
+        "x": 3.579408187431664,
+        "y": 6.361922564801334
       },
       "prevControl": null,
       "nextControl": {
-        "x": 3.2539798863645206,
-        "y": 7.184167368353623
+        "x": 3.352489950916319,
+        "y": 6.257003005439096
       },
-      "isLocked": true,
-      "linkedName": "Left Trench Hub"
+      "isLocked": false,
+      "linkedName": "Left Trench Starting Pose"
     },
     {
       "anchor": {
-        "x": 2.0166601562500004,
-        "y": 5.96
+        "x": 1.6,
+        "y": 5.75
       },
       "prevControl": {
-        "x": 2.802450510707682,
-        "y": 5.96
+        "x": 2.1692742742969595,
+        "y": 5.75
       },
       "nextControl": {
-        "x": 1.2983344625136237,
-        "y": 5.96
+        "x": 0.580201242598708,
+        "y": 5.75
       },
-      "isLocked": false,
-      "linkedName": null
+      "isLocked": true,
+      "linkedName": "Depot Approach Position 1"
     },
     {
       "anchor": {
@@ -36,31 +36,79 @@
         "y": 5.75
       },
       "prevControl": {
-        "x": 1.1793351849260443,
+        "x": 1.1591027591772636,
         "y": 5.75
       },
       "nextControl": {
-        "x": 0.18066481507395538,
+        "x": 0.33000000000000007,
         "y": 5.75
       },
-      "isLocked": false,
-      "linkedName": "depot"
+      "isLocked": true,
+      "linkedName": "Depot Position 1"
     },
     {
       "anchor": {
-        "x": 2.0,
-        "y": 5.96
+        "x": 1.6,
+        "y": 5.75
       },
       "prevControl": {
-        "x": 1.4560793797323452,
-        "y": 5.96
+        "x": 1.2293750319725745,
+        "y": 5.75
       },
       "nextControl": {
-        "x": 2.543920620267655,
-        "y": 5.96
+        "x": 1.85,
+        "y": 5.75
       },
       "isLocked": false,
-      "linkedName": null
+      "linkedName": "Depot Finish Position 1"
+    },
+    {
+      "anchor": {
+        "x": 1.6,
+        "y": 6.13
+      },
+      "prevControl": {
+        "x": 1.85,
+        "y": 6.13
+      },
+      "nextControl": {
+        "x": 1.265000337658396,
+        "y": 6.13
+      },
+      "isLocked": true,
+      "linkedName": "Depot Approach Position 2"
+    },
+    {
+      "anchor": {
+        "x": 0.68,
+        "y": 6.13
+      },
+      "prevControl": {
+        "x": 1.1570725822529533,
+        "y": 6.13
+      },
+      "nextControl": {
+        "x": 0.33000000000000007,
+        "y": 6.13
+      },
+      "isLocked": true,
+      "linkedName": "Depot Position 2"
+    },
+    {
+      "anchor": {
+        "x": 1.6,
+        "y": 6.13
+      },
+      "prevControl": {
+        "x": 1.35,
+        "y": 6.13
+      },
+      "nextControl": {
+        "x": 2.1,
+        "y": 6.13
+      },
+      "isLocked": false,
+      "linkedName": "Depot Finish Position 2"
     },
     {
       "anchor": {
@@ -68,8 +116,8 @@
         "y": 7.153665436921297
       },
       "prevControl": {
-        "x": 2.52739637816232,
-        "y": 7.10920989071569
+        "x": 2.366028546978336,
+        "y": 7.1147233076889735
       },
       "nextControl": null,
       "isLocked": true,
@@ -82,50 +130,27 @@
       "rotationDegrees": 180.0
     },
     {
-      "waypointRelativePos": 2.9173930921052635,
+      "waypointRelativePos": 5.8293996710526335,
       "rotationDegrees": 180.0
     }
   ],
   "constraintZones": [
     {
       "name": "Constraints Zone",
-      "minWaypointRelativePos": 1.2741901993355473,
-      "maxWaypointRelativePos": 2.8009240033222613,
+      "minWaypointRelativePos": 0.7899709302325583,
+      "maxWaypointRelativePos": 5.989371366279076,
       "constraints": {
-        "maxVelocity": 0.4,
-        "maxAcceleration": 3.0,
-        "maxAngularVelocity": 540.0,
-        "maxAngularAcceleration": 720.0,
+        "maxVelocity": 0.5,
+        "maxAcceleration": 1.0,
+        "maxAngularVelocity": 250.0,
+        "maxAngularAcceleration": 500.0,
         "nominalVoltage": 12.0,
         "unlimited": false
       }
     }
   ],
   "pointTowardsZones": [],
-  "eventMarkers": [
-    {
-      "name": "Run Intake",
-      "waypointRelativePos": 1.3595307308970102,
-      "endWaypointRelativePos": null,
-      "command": {
-        "type": "named",
-        "data": {
-          "name": "Run Intake"
-        }
-      }
-    },
-    {
-      "name": "Turn Off Intake",
-      "waypointRelativePos": 2.8790490033222587,
-      "endWaypointRelativePos": null,
-      "command": {
-        "type": "named",
-        "data": {
-          "name": "Turn Off Intake"
-        }
-      }
-    }
-  ],
+  "eventMarkers": [],
   "globalConstraints": {
     "maxVelocity": 3.0,
     "maxAcceleration": 3.0,
@@ -142,7 +167,7 @@
   "folder": null,
   "idealStartingState": {
     "velocity": 0,
-    "rotation": -52.000190505693446
+    "rotation": 180.0
   },
   "useDefaultConstraints": true
 }

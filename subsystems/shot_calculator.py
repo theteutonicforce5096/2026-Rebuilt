@@ -98,6 +98,25 @@ class ShotCalculator:
             "RPS residual",
         )
 
+    def is_distance_in_range(self, distance: float) -> bool:
+        """
+        Report whether a distance falls inside the calibrated shot table.
+
+        Outside the table the correction clamps to its nearest endpoint, so the returned speed is
+        a guess rather than a measurement and a shot taken on it will miss.
+
+        :param distance: Shooting distance in meters.
+        :type distance: float
+        :returns: True when the distance lies within the measured calibration range.
+        :rtype: bool
+        """
+        key_range = self._rps_residual_map.key_range()
+        if key_range is None:
+            return False
+
+        min_distance, max_distance = key_range
+        return min_distance <= distance <= max_distance
+
     def get_profile_for_distance(self, distance: float) -> float:
         """
         Get the flywheel speed to shoot from a given distance.

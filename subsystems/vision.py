@@ -14,10 +14,10 @@ class Vision(Subsystem):
     """
     Feeds AprilTag pose estimates from the PhotonVision cameras into drivetrain odometry.
 
-    Each camera is polled every loop and its multi-tag solution is checked against the field
-    bounds and the robot's motion before it is accepted. Accepted estimates are handed to
-    odometry with standard deviations that grow with tag distance and robot speed, so a shaky
-    estimate pulls the fused pose less than a confident one.
+    Each camera is polled every loop and its multi-tag solution is checked for physical
+    plausibility before it is accepted. Accepted estimates are handed to odometry with standard
+    deviations that grow with tag distance and robot speed, so a shaky estimate pulls the fused
+    pose less than a confident one rather than being thrown away.
     """
 
     # At 30 fps against the 50 Hz robot loop there is normally at most one unread frame per
@@ -36,9 +36,10 @@ class Vision(Subsystem):
         linear_std_dev_baseline: float,
         angular_std_dev_baseline: float,
         camera_std_dev_factors: tuple[float, ...],
-        max_linear_speed: float,
-        max_angular_speed: float,
+        max_linear_speed_reference: float,
+        max_angular_speed_reference: float,
         max_tilt_deg: float,
+        max_pose_height_m: float,
     ):
         """
         Construct the vision subsystem and per-camera pose estimators.
@@ -64,16 +65,18 @@ class Vision(Subsystem):
         :param camera_std_dev_factors: Per-camera multipliers applied to the baseline standard
             deviations.
         :type camera_std_dev_factors: tuple[float, ...]
-        :param max_linear_speed: Linear speed used both as a hard rejection gate on measurements
-            and as the reference speed for trust scaling. VisionConstants supplies 25% of the
-            drivetrain's physical maximum.
-        :type max_linear_speed: float
-        :param max_angular_speed: Angular speed used both as a hard rejection gate on
-            measurements and as the reference speed for trust scaling. VisionConstants supplies
-            20% of the drivetrain's physical maximum.
-        :type max_angular_speed: float
+        :param max_linear_speed_reference: Linear speed at which the standard deviation is doubled
+            by speed scaling. VisionConstants supplies 25% of the drivetrain's physical maximum.
+        :type max_linear_speed_reference: float
+        :param max_angular_speed_reference: Angular speed at which the standard deviation is
+            doubled by speed scaling. VisionConstants supplies 20% of the drivetrain's physical
+            maximum.
+        :type max_angular_speed_reference: float
         :param max_tilt_deg: Tilt threshold in degrees beyond which measurements are rejected.
         :type max_tilt_deg: float
+        :param max_pose_height_m: Distance in meters a solved pose may sit above or below the
+            floor before it is rejected.
+        :type max_pose_height_m: float
         """
         Subsystem.__init__(self)
 
@@ -89,9 +92,10 @@ class Vision(Subsystem):
         self.linear_std_dev_baseline = linear_std_dev_baseline
         self.angular_std_dev_baseline = angular_std_dev_baseline
         self.camera_std_dev_factors = camera_std_dev_factors
-        self.max_linear_speed = max_linear_speed
-        self.max_angular_speed = max_angular_speed
+        self.max_linear_speed_reference = max_linear_speed_reference
+        self.max_angular_speed_reference = max_angular_speed_reference
         self.max_tilt_deg = max_tilt_deg
+        self.max_pose_height_m = max_pose_height_m
 
         # Each camera's name and where it sits on the robot. The order here is the camera index
         # used by camera_std_dev_factors, so adding a camera means adding a factor to match.
@@ -206,35 +210,26 @@ class Vision(Subsystem):
         SmartDashboard.putNumber(f"Vision/{camera_name}/Avg Tag Distance (m)", avg_tag_distance)
         SmartDashboard.putNumber(f"Vision/{camera_name}/Std Dev (m)", linear_std_dev)
 
-    def reject_pose_estimate(
-        self, pose: Pose3d, current_state: swerve.SwerveDrivetrain.SwerveDriveState
-    ) -> bool:
+    def reject_pose_estimate(self, pose: Pose3d) -> bool:
         """
-        Check a pose estimate against the field bounds and the robot's current motion.
+        Check a pose estimate for physical plausibility.
 
-        A solve that puts the robot off the field or underground is wrong outright. One taken
-        while the robot is moving or tilted fast enough is unreliable, since the image and the
-        odometry sample it is matched against no longer describe the same instant.
+        A solve that puts the robot off the field, above the floor, or underground is wrong
+        outright and nothing can be recovered from it. Robot speed is deliberately not a rejection
+        criterion: a measurement taken while moving is still informative, just less precise, so it
+        is weighed down through the standard deviations instead of being discarded.
 
         :param pose: Estimated robot pose from PhotonVision.
         :type pose: wpimath.geometry.Pose3d
-        :param current_state: Current swerve drivetrain state used for motion gating.
-        :type current_state: phoenix6.swerve.SwerveDrivetrain.SwerveDriveState
         :returns: True when the pose estimate should be rejected.
         :rtype: bool
         """
-        current_vx = abs(current_state.speeds.vx)
-        current_vy = abs(current_state.speeds.vy)
-        current_omega = abs(current_state.speeds.omega)
         pitch_deg, roll_deg = self.get_robot_tilt()
 
         return not (
-            -0.25 < pose.Z() < 0.5
+            -self.max_pose_height_m < pose.Z() < self.max_pose_height_m
             and 0.0 < pose.X() < self.field_length
             and 0.0 < pose.Y() < self.field_width
-            and current_vx <= self.max_linear_speed
-            and current_vy <= self.max_linear_speed
-            and current_omega <= self.max_angular_speed
             and abs(pitch_deg) <= self.max_tilt_deg
             and abs(roll_deg) <= self.max_tilt_deg
         )
@@ -266,31 +261,39 @@ class Vision(Subsystem):
 
         return total_distance / tag_count
 
-    def speed_factor(self, current_speed: float, max_speed: float) -> float:
+    def speed_factor(self, linear_speed: float, angular_speed: float) -> float:
         """
-        Grow the measurement uncertainty once the robot passes half of the speed reference.
+        Grow the measurement uncertainty with how fast the robot is moving.
 
-        Below that point the estimate is taken at face value. Above it the standard deviation
-        scales with speed, since motion blur and pose latency both get worse the faster the
-        robot is moving.
+        Motion blur and the latency between the frame and the odometry sample it is matched
+        against both worsen with speed, so trust falls off quadratically in each speed ratio. The
+        factor is exactly 1.0 at rest, leaving a stationary estimate at its baseline trust, and it
+        is smooth throughout, so trust never jumps at a threshold. Translation and rotation are
+        summed rather than maximized because doing both at once blurs a frame worse than either
+        alone. Speeds are taken as magnitudes so a diagonal drive is treated the same as the same
+        speed along one axis.
 
-        :param current_speed: Current robot speed for the axis being evaluated.
-        :type current_speed: float
-        :param max_speed: Maximum speed used as the scaling reference.
-        :type max_speed: float
+        :param linear_speed: Current translational speed magnitude in meters per second.
+        :type linear_speed: float
+        :param angular_speed: Current rotational speed magnitude in radians per second.
+        :type angular_speed: float
         :returns: Multiplier applied to the baseline standard deviation.
         :rtype: float
         """
-        # A non-positive reference speed cannot produce a meaningful ratio, so the estimate is
-        # taken at face value instead of dividing by zero.
-        if max_speed <= 0.0:
-            return 1.0
+        # A non-positive reference cannot produce a meaningful ratio, so that term contributes
+        # nothing instead of dividing by zero.
+        linear_ratio = (
+            linear_speed / self.max_linear_speed_reference
+            if self.max_linear_speed_reference > 0.0
+            else 0.0
+        )
+        angular_ratio = (
+            angular_speed / self.max_angular_speed_reference
+            if self.max_angular_speed_reference > 0.0
+            else 0.0
+        )
 
-        speed_ratio = current_speed / max_speed
-        if speed_ratio <= 0.5:
-            return 1.0
-        else:
-            return speed_ratio / 0.5
+        return 1.0 + linear_ratio**2.0 + angular_ratio**2.0
 
     def calc_std_dev(
         self,
@@ -323,13 +326,14 @@ class Vision(Subsystem):
         if avg_tag_distance is None or tag_count == 0:
             return None
 
-        current_linear_speed = hypot(current_state.speeds.vx, current_state.speeds.vy)
-
         # Uncertainty grows with the square of tag distance and shrinks as more tags contribute
         # to the solve.
         distance_factor = (avg_tag_distance**2.0) / tag_count
 
-        linear_speed_factor = self.speed_factor(current_linear_speed, self.max_linear_speed)
+        motion_factor = self.speed_factor(
+            hypot(current_state.speeds.vx, current_state.speeds.vy),
+            abs(current_state.speeds.omega),
+        )
 
         camera_factor = (
             self.camera_std_dev_factors[camera_index]
@@ -338,7 +342,7 @@ class Vision(Subsystem):
         )
 
         linear_std_dev = (
-            self.linear_std_dev_baseline * distance_factor * camera_factor * linear_speed_factor
+            self.linear_std_dev_baseline * distance_factor * camera_factor * motion_factor
         )
 
         # The Pigeon tracks heading far better than vision does, so the angular baseline is set
@@ -372,7 +376,7 @@ class Vision(Subsystem):
         :type camera: photonlibpy.PhotonCamera
         :param pose_est: PhotonPoseEstimator associated with the camera.
         :type pose_est: photonlibpy.PhotonPoseEstimator
-        :param current_state: Current drivetrain state used for gating and covariance scaling.
+        :param current_state: Current drivetrain state used for covariance scaling.
         :type current_state: phoenix6.swerve.SwerveDrivetrain.SwerveDriveState
         :returns: Accepted pose measurement tuples, oldest first; empty when no usable result
             exists.
@@ -406,7 +410,7 @@ class Vision(Subsystem):
 
             pose = pose_est.estimateCoprocMultiTagPose(result)
 
-            if pose is None or self.reject_pose_estimate(pose.estimatedPose, current_state):
+            if pose is None or self.reject_pose_estimate(pose.estimatedPose):
                 if is_newest:
                     self._publish_camera_status(camera_name, False, tag_count, -1.0, -1.0)
                 continue

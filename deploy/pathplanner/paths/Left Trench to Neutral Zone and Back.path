@@ -3,16 +3,32 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 2.7734120370370374,
-        "y": 7.153665436921297
+        "x": 3.579408187431664,
+        "y": 6.361922564801334
       },
       "prevControl": null,
       "nextControl": {
-        "x": 2.4366266894958732,
-        "y": 7.525496564668091
+        "x": 3.330164695553451,
+        "y": 6.342488528772877
       },
-      "isLocked": true,
-      "linkedName": "Left Trench Hub"
+      "isLocked": false,
+      "linkedName": "Left Trench Starting Pose"
+    },
+    {
+      "anchor": {
+        "x": 3.579,
+        "y": 7.436
+      },
+      "prevControl": {
+        "x": 3.329,
+        "y": 7.436
+      },
+      "nextControl": {
+        "x": 3.829,
+        "y": 7.436
+      },
+      "isLocked": false,
+      "linkedName": null
     },
     {
       "anchor": {
@@ -110,31 +126,27 @@
   ],
   "rotationTargets": [
     {
-      "waypointRelativePos": 0.2958059210526315,
-      "rotationDegrees": -0.0
+      "waypointRelativePos": 1.6397615131578944,
+      "rotationDegrees": 180.0
     },
     {
-      "waypointRelativePos": 0.6489103618421053,
-      "rotationDegrees": -0.0
-    },
-    {
-      "waypointRelativePos": 0.8544202302631574,
+      "waypointRelativePos": 1.9044202302631583,
       "rotationDegrees": -105.00000000000001
     },
     {
-      "waypointRelativePos": 2.3468133223684235,
+      "waypointRelativePos": 3.3468133223684235,
       "rotationDegrees": -115.0
     },
     {
-      "waypointRelativePos": 3.0901803607214426,
+      "waypointRelativePos": 4.090180360721442,
       "rotationDegrees": 90.0
     },
     {
-      "waypointRelativePos": 4.9,
+      "waypointRelativePos": 5.9,
       "rotationDegrees": -180.0
     },
     {
-      "waypointRelativePos": 5.61543996710526,
+      "waypointRelativePos": 6.8891858552631575,
       "rotationDegrees": -180.0
     }
   ],
@@ -157,7 +169,7 @@
   "folder": null,
   "idealStartingState": {
     "velocity": 0.0,
-    "rotation": -52.000190505693446
+    "rotation": 180.0
   },
   "useDefaultConstraints": false
 }

@@ -5,18 +5,6 @@
     "data": {
       "commands": [
         {
-          "type": "path",
-          "data": {
-            "pathName": "Right Trench to Hub"
-          }
-        },
-        {
-          "type": "named",
-          "data": {
-            "name": "Auto Run Shooter"
-          }
-        },
-        {
           "type": "named",
           "data": {
             "name": "Run Intake"
@@ -31,13 +19,7 @@
         {
           "type": "named",
           "data": {
-            "name": "Turn Off Intake"
-          }
-        },
-        {
-          "type": "named",
-          "data": {
-            "name": "Auto Run Shooter"
+            "name": "Run Shooter"
           }
         }
       ]

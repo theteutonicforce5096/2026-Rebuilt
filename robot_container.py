@@ -3,6 +3,7 @@ from commands2.sysid import SysIdRoutine
 from pathplannerlib.auto import AutoBuilder, NamedCommands
 from wpilib import DriverStation, SendableChooser, SmartDashboard, reportWarning
 
+from constants.arm_constants import ArmConstants
 from constants.hopper_constants import HopperConstants
 from constants.intake_constants import IntakeConstants
 from constants.led_constants import LEDConstants
@@ -37,11 +38,14 @@ class RobotContainer:
         # Create hopper subsystem
         self.hopper = HopperConstants.create_hopper()
 
-        # Create intake subsystem. The hopper and intake are built before the drivetrain on
-        # purpose: their configs retry through the several seconds after code start when Phoenix
-        # license checks can reject configs on the CANivore, so by the time CTRE's swerve
-        # constructor applies its own configs (which retry far less) that window has passed.
+        # Create intake and arm subsystems. The arm carries the intake wheel but is its own
+        # subsystem, so an arm move and a shot feeding through the wheel can run at the same time.
+        # These and the hopper are built before the drivetrain on purpose: their configs retry
+        # through the several seconds after code start when Phoenix license checks can reject
+        # configs on the CANivore, so by the time CTRE's swerve constructor applies its own configs
+        # (which retry far less) that window has passed.
         self.intake = IntakeConstants.create_intake()
+        self.arm = ArmConstants.create_arm()
 
         # Create drivetrain subsystem
         self.drivetrain = SwerveDrivetrainConstants.create_drivetrain()
@@ -125,26 +129,32 @@ class RobotContainer:
         )
 
         NamedCommands.registerCommand(
-            "Auto Run Shooter",
+            "Run Shooter",
             commands2.ParallelCommandGroup(
                 commands2.SequentialCommandGroup(
                     commands2.WaitCommand(ShooterConstants._auto_arm_down_delay_sec),
-                    self.intake.runOnce(lambda: self.intake.arm_down_intermediate()),
+                    self.arm.runOnce(lambda: self.arm.arm_down_intermediate()),
                 ),
-                # The same aligned, distance-based shot as teleop B, ending when the hopper runs
-                # empty since there is no driver to stop it.
+                # The same aligned, distance-based shot as teleop B, with no end condition: this is
+                # the last step of every auto, so it should keep feeding for whatever time is left
+                # rather than stopping early on an empty-hopper guess. The autonomous period ending
+                # is what cancels it.
                 self.shooter.create_shot_command(
                     self.hopper,
                     self.drivetrain,
                     distance_based=True,
-                    end_when=lambda: self.shooter.detect_empty(),
+                    end_when=lambda: False,
                 ),
             ),
         )
 
     def create_commands_auto(self):
         """Put every subsystem into a known safe state before autonomous begins."""
-        self.intake.arm_down()
+        # The alliance may only be known once connected to the FMS, so the driving perspective
+        # is rechecked here in case it wasn't determined at startup.
+        self.drivetrain.set_forward_perspective()
+
+        self.arm.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
@@ -153,11 +163,11 @@ class RobotContainer:
     def create_commands_teleop(self):
         """Reset driver-facing state and zero every subsystem output for teleop."""
         # The alliance may only be known once connected to the FMS, so the driving perspective
-        # is set here rather than at startup.
+        # is rechecked here in case it wasn't determined at startup.
         self.drivetrain.set_forward_perspective()
         self.drivetrain.reset_teleop_drive_state()
 
-        self.intake.arm_down()
+        self.arm.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
@@ -214,22 +224,28 @@ class RobotContainer:
             )
         )
 
-        # D-pad right reverses the intake, hopper, and flywheels together to clear a jam.
-        (self.controller.povRight() & teleop).onTrue(
-            commands2.ParallelCommandGroup(
-                self.intake.runOnce(
-                    lambda: self.intake.set_intake_speed(IntakeConstants._eject_volts)
-                ),
-                self.hopper.run_hopper(
-                    HopperConstants._eject_mecanum_velocity,
-                    HopperConstants._eject_agitator_volts,
-                ),
-                self.shooter.runOnce(
-                    lambda: self.shooter.set_flywheel_velocities(
-                        ShooterConstants._eject_flywheel_velocity,
-                        ShooterConstants._eject_flywheel_velocity,
-                    )
-                ),
+        # D-pad right reverses the intake, hopper, and flywheels together to clear a jam, and runs
+        # only while held. The setters latch on the devices, so the mechanisms are started once and
+        # stopped by the end action, which also fires if the command is interrupted.
+        def start_eject() -> None:
+            self.intake.set_intake_speed(IntakeConstants._eject_volts)
+            self.hopper.set_hopper_speeds(
+                HopperConstants._eject_mecanum_velocity,
+                HopperConstants._eject_agitator_volts,
+            )
+            self.shooter.set_flywheel_velocities(
+                ShooterConstants._eject_flywheel_velocity,
+                ShooterConstants._eject_flywheel_velocity,
+            )
+
+        def stop_eject() -> None:
+            self.intake.set_intake_speed(0)
+            self.hopper.set_hopper_speeds(0, 0)
+            self.shooter.set_flywheel_velocities(0, 0)
+
+        (self.controller.povRight() & teleop).whileTrue(
+            commands2.StartEndCommand(
+                start_eject, stop_eject, self.intake, self.hopper, self.shooter
             )
         )
 
@@ -243,11 +259,11 @@ class RobotContainer:
         # straining. The target resolves at press time, so a press during a move steps from
         # the position already commanded.
         (self.controller.povDown() & teleop).onTrue(
-            self._create_arm_move_command(lambda: self.intake.step_arm_down())
+            self._create_arm_move_command(lambda: self.arm.arm_down())
         )
 
         (self.controller.povUp() & teleop).onTrue(
-            self._create_arm_move_command(lambda: self.intake.step_arm_up())
+            self._create_arm_move_command(lambda: self.arm.step_arm_up())
         )
 
         # X fires a manual shot: dashboard flywheel speed, no auto-align, ends on Y.
@@ -302,8 +318,11 @@ class RobotContainer:
                 )
             )
         )
+        # The falling edge lands as teleop disables, and a command that cannot run while disabled
+        # would never restore the default animation. The CANdle is not a disable-gated actuator, so
+        # the write is allowed to land.
         five_seconds_left.onTrue(self.led.runOnce(lambda: self.led.five_seconds_left())).onFalse(
-            self.led.runOnce(lambda: self.led.default())
+            self.led.runOnce(lambda: self.led.default()).ignoringDisable(True)
         )
 
         # --- Test bindings (SysId characterization + drivetrain diagnostics) ---
@@ -341,10 +360,11 @@ class RobotContainer:
 
     def _create_arm_move_command(self, arm_action):
         """
-        Move the intake arm to a position while watching for a stall.
+        Move the arm to a position and hold the arm reserved until the move resolves.
 
-        The stall watch runs until the arm reaches its target or jams, so a blocked arm stops
-        driving instead of straining against whatever is in its way.
+        The stall watch itself lives in the arm's periodic, so this command only has to command the
+        move, keep the arm reserved so a new request cancels the one in flight, and guarantee that
+        an unfinished move ends with the arm unpowered.
 
         :param arm_action: Callable that commands the arm toward its target position.
         :type arm_action: Callable[[], None]
@@ -352,18 +372,22 @@ class RobotContainer:
         :rtype: commands2.Command
         """
 
-        # run needs a None-returning action, so the stall check's result is discarded here.
-        def watch_for_stall() -> None:
-            self.intake.get_stall_detection()
+        def cut_power_if_timed_out(interrupted: bool) -> None:
+            # A move that runs out its timeout without arriving is left straining against a
+            # position request it cannot satisfy, so it is stopped and reported the same way a
+            # detected jam is. An interruption is a new arm request taking over, which commands
+            # the arm itself and must not be overridden here.
+            if not interrupted and not self.arm.detect_arm_movement_completion():
+                self.arm.stop_and_latch_stall()
 
         return commands2.SequentialCommandGroup(
-            self.intake.runOnce(arm_action),
+            self.arm.runOnce(arm_action),
             # The timeout is a backstop for a move that neither finishes nor trips the stall
             # watch, so the arm cannot keep driving forever.
-            self.intake.run(watch_for_stall)
-            .until(lambda: self.intake.detect_arm_movement_completion())
-            .withTimeout(IntakeConstants._arm_move_timeout_sec),
-        )
+            self.arm.run(lambda: None)
+            .until(self.arm.detect_arm_movement_completion)
+            .withTimeout(ArmConstants._arm_move_timeout_sec),
+        ).finallyDo(cut_power_if_timed_out)
 
     def _create_stop_all_command(self):
         """

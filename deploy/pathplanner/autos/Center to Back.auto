@@ -13,7 +13,13 @@
         {
           "type": "named",
           "data": {
-            "name": "Auto Run Shooter"
+            "name": "Run Intake"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "Run Shooter"
           }
         }
       ]

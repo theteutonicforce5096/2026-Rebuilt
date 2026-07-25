@@ -153,9 +153,13 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             check_signal_status(
                 self.pigeon2.optimize_bus_utilization(), "Pigeon 2 bus optimization"
             )
-            # Only the Pigeon signals something reads stay at a high rate: pitch and roll gate
-            # vision measurements, and yaw drives wheel-radius characterization. 100 Hz is plenty
-            # for the 20 ms loop while everything else stays trimmed.
+            # Re-raise only the Pigeon signals this class reads; everything else stays trimmed.
+            # Pitch and roll gate vision once per robot loop, so 100 Hz covers them.
+            #
+            # Yaw and angular velocity Z belong to the odometry thread, which raises them together
+            # with the module signals at the odometry frequency when it starts. Requesting a rate
+            # for them here is redundant and invites a mismatch, since 0.0 means "device default"
+            # to the swerve constructor but "disable this signal" to set_update_frequency.
             check_signal_status(
                 self.pigeon2.get_pitch().set_update_frequency(100.0),
                 "Pigeon 2 pitch update frequency",
@@ -163,10 +167,6 @@ class SwerveDrivetrain(Subsystem, swerve.SwerveDrivetrain):
             check_signal_status(
                 self.pigeon2.get_roll().set_update_frequency(100.0),
                 "Pigeon 2 roll update frequency",
-            )
-            check_signal_status(
-                self.pigeon2.get_yaw().set_update_frequency(100.0),
-                "Pigeon 2 yaw update frequency",
             )
 
         # Create max speed and max acceleration variables

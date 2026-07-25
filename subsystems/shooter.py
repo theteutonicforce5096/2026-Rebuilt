@@ -259,6 +259,15 @@ class Shooter(Subsystem):
         )
         SmartDashboard.putBoolean("Shooter/At Setpoint", self.is_flywheel_at_setpoint())
 
+        # A calculated shot holds fire outside the calibrated band, so both the distance and the
+        # verdict are published; without them a held shot looks like a broken one from the driver
+        # station.
+        shot_distance = self.get_shot_distance()
+        SmartDashboard.putNumber("Shooter/Distance (m)", shot_distance)
+        SmartDashboard.putBoolean(
+            "Shooter/In Range", self.shot_calculator.is_distance_in_range(shot_distance)
+        )
+
         # detect_empty refreshes the surge state as a side effect, so it runs before surging is
         # published. Calling it here is safe because every shot reseeds the timer when it starts,
         # so this extra call cannot shorten a real empty timeout.
@@ -280,20 +289,47 @@ class Shooter(Subsystem):
             and self.flywheel_motor.get_closed_loop_error().is_near(0, tolerance_rps)
         )
 
+    def get_shot_distance(self) -> float:
+        """
+        Measure the shooter-to-hub distance from the current fused pose.
+
+        :returns: Distance in meters from the shooter to the hub center.
+        :rtype: float
+        """
+        return calc_shooter_to_hub_distance(
+            self._get_current_swerve_state().pose,
+            self._get_hub_center(),
+            self._shooter_offset,
+        )
+
+    def is_shot_in_range(self) -> bool:
+        """
+        Report whether the robot is standing where a calculated shot has calibration behind it.
+
+        Outside the calibrated band the shot table clamps to its nearest measured point, and close
+        enough to the hub the physics model has no solution at all, so a distance-based shot has
+        to hold fire rather than launch on an extrapolated target.
+
+        :returns: True when the current shot distance falls inside the calibrated range.
+        :rtype: bool
+        """
+        return self.shot_calculator.is_distance_in_range(self.get_shot_distance())
+
     def get_current_auto_shot_targets(self) -> tuple[float, float, float]:
         """
         Solve the distance-based shot targets from where the robot is standing right now.
+
+        Out of range the targets come back zeroed, which reads as "not at setpoint" everywhere
+        downstream and so holds the feed and the flywheel intake off.
 
         :returns: Shooter-to-hub distance in meters, flywheel target in rotations per second,
             and flywheel-intake target in rotations per second.
         :rtype: tuple[float, float, float]
         """
-        current_state = self._get_current_swerve_state()
-        distance_m = calc_shooter_to_hub_distance(
-            current_state.pose,
-            self._get_hub_center(),
-            self._shooter_offset,
-        )
+        distance_m = self.get_shot_distance()
+        if not self.shot_calculator.is_distance_in_range(distance_m):
+            return distance_m, 0.0, 0.0
+
         flywheel_target_velocity = self.shot_calculator.get_profile_for_distance(distance_m)
         return distance_m, flywheel_target_velocity, self.DEFAULT_FLYWHEEL_INTAKE_TARGET_RPS
 
@@ -342,7 +378,9 @@ class Shooter(Subsystem):
             # moves. The intake wheel only turns once the flywheel is up to speed.
             flywheel_rps, intake_rps = targets()
             self.set_flywheel_velocities(
-                flywheel_rps + self.flywheel_target_offset_rps,
+                # A zeroed target means there is no shot to take, so the trim offset stays off it
+                # and the flywheel is left stopped rather than spun to the offset alone.
+                flywheel_rps + self.flywheel_target_offset_rps if flywheel_rps > 0.0 else 0.0,
                 intake_rps if (feed and self.is_flywheel_at_setpoint()) else 0.0,
             )
 
@@ -359,7 +397,12 @@ class Shooter(Subsystem):
 
         def ready():
             # Feeding starts once the flywheel is at speed and, when aligning, the robot is on
-            # target. The timeout keeps a shot from stalling forever if alignment never settles.
+            # target. The timeout keeps a shot from stalling forever if alignment never settles,
+            # but it must not release a shot the calibration cannot aim, so the range check is
+            # outside it.
+            if distance_based and not self.is_shot_in_range():
+                return False
+
             return self.is_flywheel_at_setpoint() and (
                 drivetrain is None
                 or drivetrain.is_hub_alignment_within_tolerance()

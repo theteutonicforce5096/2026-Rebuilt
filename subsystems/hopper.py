@@ -7,7 +7,7 @@ from phoenix6.hardware import TalonFX
 from wpilib import RobotBase, SmartDashboard
 from wpilib.sysid import SysIdRoutineLog
 
-from subsystems.device_config import configure_device
+from subsystems.device_config import check_signal_status, configure_device
 
 
 class Hopper(Subsystem):
@@ -85,10 +85,22 @@ class Hopper(Subsystem):
             # Nothing here reads the motors, so every signal stays trimmed except the two
             # velocities the dashboard reports. Those are how the drivers confirm the hopper is
             # actually turning during a feed.
-            self.mecanum_wheel.optimize_bus_utilization()
-            self.agitator_wheel.optimize_bus_utilization()
-            self.mecanum_wheel.get_velocity().set_update_frequency(50.0)
-            self.agitator_wheel.get_velocity().set_update_frequency(50.0)
+            check_signal_status(
+                self.mecanum_wheel.optimize_bus_utilization(),
+                "Hopper mecanum wheel bus optimization",
+            )
+            check_signal_status(
+                self.agitator_wheel.optimize_bus_utilization(),
+                "Hopper agitator wheel bus optimization",
+            )
+            check_signal_status(
+                self.mecanum_wheel.get_velocity().set_update_frequency(50.0),
+                "Hopper mecanum wheel velocity update rate",
+            )
+            check_signal_status(
+                self.agitator_wheel.get_velocity().set_update_frequency(50.0),
+                "Hopper agitator wheel velocity update rate",
+            )
 
         # Create control requests
         self.velocity_pid_request = VelocityVoltage(velocity=0)
