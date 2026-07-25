@@ -27,13 +27,13 @@ class ArmConstants:
     # detection window or it counts as stalled. The slowest healthy move covers 0.369 rotations in
     # about 4.5 seconds, closing roughly 0.016 rotations per window, so this leaves better than 3x
     # margin while a jammed arm closes essentially none.
-    _stall_progress_threshold = 0.0025  # rotations of error closed per window
-    _stall_time_threshold = 0.25  # seconds per detection window
+    _stall_progress_threshold = 0.001  # rotations of error closed per window
+    _stall_time_threshold = 0.2  # seconds per detection window
 
     # Time after a new setpoint during which no stall may be declared. A setpoint that reverses a
     # move in flight makes the arm lose ground while its momentum turns around, which is
     # indistinguishable from a jam until the reversal finishes.
-    _stall_grace_sec = 0.5
+    _stall_grace_sec = 0.25
 
     # Hard timeout on a stall-watched arm move. The farthest no-jam move takes about 4.5 seconds at
     # the arm's nominal speed, and a move that reaches this limit has its power cut, so the margin
@@ -41,7 +41,7 @@ class ArmConstants:
     # than nominal before a healthy move is cut short. The stall watch catches a real jam in about
     # a quarter second, so this only ever fires for a jam the watch missed and costs nothing to
     # sit well clear of the healthy case.
-    _arm_move_timeout_sec = 7.0
+    _arm_move_timeout_sec = 5.0
 
     # Arm Configs (Falcon500 - TalonFX)
     _arm_configs = TalonFXConfiguration()
@@ -61,7 +61,7 @@ class ArmConstants:
     # Proportional-only control, so the arm rests wherever k_p times the remaining error can no
     # longer break static friction. That resting error is what sets the arrival tolerance and the
     # stall stand-down band in the Arm subsystem.
-    _arm_configs.slot0.with_k_p(30)
+    _arm_configs.slot0.with_k_p(35)
     _arm_configs.slot0.with_k_i(0)
     _arm_configs.slot0.with_k_d(0)
 
