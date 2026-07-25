@@ -254,10 +254,10 @@ class RobotContainer:
             self.drivetrain.runOnce(lambda: self.drivetrain.reset_pose_hub())
         )
 
-        # Each press steps the arm one preset (intake <-> shooting <-> stowed) in that
-        # direction, and both moves watch for a stall so a jammed arm stops instead of
-        # straining. The target resolves at press time, so a press during a move steps from
-        # the position already commanded.
+        # D-pad down drops the arm straight to the floor position, while each up press steps it
+        # one preset toward stowed. Both watch for a stall so a jammed arm stops instead of
+        # straining. The target resolves at press time from the position already commanded, so
+        # stepping up twice in quick succession reaches stowed without waiting out the first move.
         (self.controller.povDown() & teleop).onTrue(
             self._create_arm_move_command(lambda: self.arm.arm_down())
         )
@@ -359,6 +359,24 @@ class RobotContainer:
         )
 
     def _create_arm_move_command(self, arm_action):
+        """
+        Build the button-facing command that starts an arm move.
+
+        A trigger holds one command instance for the life of the binding, and the scheduler ignores
+        a request to schedule a command that is already running. Binding the move itself would
+        therefore swallow every press made while a move is still in flight, so the press instead
+        schedules a freshly built move: this command finishes the loop it starts, leaving it always
+        available, and the new move displaces the one in flight through the arm requirement they
+        share.
+
+        :param arm_action: Callable that commands the arm toward its target position.
+        :type arm_action: Callable[[], None]
+        :returns: Command that starts an arm move when scheduled.
+        :rtype: commands2.Command
+        """
+        return commands2.cmd.runOnce(lambda: self._build_arm_move_command(arm_action).schedule())
+
+    def _build_arm_move_command(self, arm_action):
         """
         Move the arm to a position and hold the arm reserved until the move resolves.
 

@@ -35,18 +35,6 @@ class ArmConstants:
     # indistinguishable from a jam until the reversal finishes.
     _stall_grace_sec = 0.5
 
-    # Obstruction failsafe, which backs up the progress watch on the upward approach to stowed. An
-    # arm grinding into something compliant can keep inching forward, closing enough error each
-    # window to pass the progress test while drawing near its limit the whole way, so current is
-    # watched independently over that stretch of travel.
-    _obstruction_position = 0.50  # lower edge of the guarded band, in mechanism rotations
-    _obstruction_current_threshold_amps = 20  # 75% of the stator limit: above any healthy move
-    # The arm clears the guarded band in about 0.9 seconds at its nominal speed and 1.3 seconds at
-    # the slowest speed a healthy move can run, so a hold longer than either means only an arm that
-    # has stopped in the band can sustain it. That makes a false trip a timing impossibility rather
-    # than something the current threshold alone has to rule out.
-    _obstruction_current_hold_sec = 2.0
-
     # Hard timeout on a stall-watched arm move. The farthest no-jam move takes about 4.5 seconds at
     # the arm's nominal speed, and a move that reaches this limit has its power cut, so the margin
     # above that has to cover a depleted battery: this tolerates the arm running a third slower
@@ -104,7 +92,4 @@ class ArmConstants:
             cls._stall_progress_threshold,
             cls._stall_time_threshold,
             cls._stall_grace_sec,
-            cls._obstruction_position,
-            cls._obstruction_current_threshold_amps,
-            cls._obstruction_current_hold_sec,
         )
