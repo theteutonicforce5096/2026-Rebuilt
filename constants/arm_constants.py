@@ -16,10 +16,10 @@ class ArmConstants:
 
     # Number of times to attempt to configure each device. Sized so retries span the several
     # seconds after code start when Phoenix license checks can reject configs on a pro bus.
-    _num_config_attempts = 20
+    _num_config_attempts = 25
 
     # Arm positions in mechanism rotations, measured off the fused CANcoder
-    _intake_position = 0.1550
+    _intake_position = 0.1650
     _shooting_position = 0.375
     _stowed_position = 0.545
 
@@ -56,7 +56,7 @@ class ArmConstants:
     _arm_configs.motor_output.with_neutral_mode(signals.NeutralModeValue.BRAKE)
     # The ~167:1 reduction turns 12 A into roughly 36 N-m at the arm, ample for every move while
     # limiting how hard a jammed arm can push during stall detection
-    _arm_configs.current_limits.with_stator_current_limit(11.5)
+    _arm_configs.current_limits.with_stator_current_limit(12)
     _arm_configs.current_limits.with_stator_current_limit_enable(True)
     _arm_configs.feedback.with_feedback_remote_sensor_id(_arm_encoder_id)
     _arm_configs.feedback.with_feedback_sensor_source(
@@ -68,7 +68,7 @@ class ArmConstants:
     # Proportional-only control, so the arm rests wherever k_p times the remaining error can no
     # longer break static friction. That resting error is what sets the arrival tolerance and the
     # stall stand-down band in the Arm subsystem.
-    _arm_configs.slot0.with_k_p(42.5)
+    _arm_configs.slot0.with_k_p(30)
     _arm_configs.slot0.with_k_i(0)
     _arm_configs.slot0.with_k_d(0)
     _arm_configs.slot0.with_k_s(0.2)

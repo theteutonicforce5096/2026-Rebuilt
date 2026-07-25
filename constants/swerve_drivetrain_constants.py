@@ -52,7 +52,7 @@ class SwerveDrivetrainConstants:
     # Number of times to attempt to configure the license-probe device built ahead of the
     # swerve devices. Sized so retries span the several seconds after code start when Phoenix
     # license checks can reject configs on a pro bus.
-    _num_config_attempts = 20
+    _num_config_attempts = 25
 
     _field_type = default_field_type
 
@@ -96,7 +96,7 @@ class SwerveDrivetrainConstants:
     # stator current limit. Pushing past it only spins the wheels.
     # https://v6.docs.ctr-electronics.com/en/2024/docs/api-reference/mechanisms/swerve/swerve-builder-api.html
     # https://v6.docs.ctr-electronics.com/en/latest/docs/hardware-reference/talonfx/improving-performance-with-current-limits.html#preventing-brownouts
-    _slip_current: units.ampere = 50.0
+    _slip_current: units.ampere = 70.0
 
     # Initial configs for the drive and steer motors and the azimuth encoder; these cannot be null.
     # Some configs will be overwritten; check the `with_*_initial_configs()` API documentation.

@@ -15,14 +15,11 @@ class IntakeConstants:
 
     # Number of times to attempt to configure the device. Sized so retries span the several
     # seconds after code start when Phoenix license checks can reject configs on a pro bus.
-    _num_config_attempts = 20
+    _num_config_attempts = 25
 
     # Intake wheel voltages for pulling balls in and spitting them back out
     _intake_volts = 12.0
     _eject_volts = -12.0
-
-    # Minimum time the intake runs before re-pressing the button can cancel it
-    _intake_min_run_sec = 1.0
 
     # Intake Wheel Configs (brushed motor - TalonFXS)
     _wheel_configs = TalonFXSConfiguration()

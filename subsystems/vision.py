@@ -24,7 +24,7 @@ class Vision(Subsystem):
     # camera, but a loop hiccup or brownout can leave several queued. The roboRIO 2.0 cannot
     # afford unbounded pose solves inside one 20 ms loop, so only the newest few frames are
     # processed and anything older is dropped as stale.
-    MAX_RESULTS_PER_CAMERA_PER_LOOP: Final[int] = 5
+    MAX_RESULTS_PER_CAMERA_PER_LOOP: Final[int] = 1
 
     def __init__(
         self,

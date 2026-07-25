@@ -16,7 +16,7 @@ class ShooterConstants:
 
     # Number of times to attempt to configure each device. Sized so retries span the several
     # seconds after code start when Phoenix license checks can reject configs on a pro bus.
-    _num_config_attempts = 20
+    _num_config_attempts = 25
 
     # Flywheel Motor Configs (NEO VORTEX - TalonFXS)
     _flywheel_motor_configs = TalonFXSConfiguration()

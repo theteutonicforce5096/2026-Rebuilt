@@ -229,13 +229,8 @@ class RobotContainer:
         # A toggles the intake. The wait keeps a quick double-press from cancelling the intake
         # before it has had a chance to pull anything in.
         (self.controller.a() & teleop).onTrue(
-            commands2.SequentialCommandGroup(
-                self.intake.runOnce(
-                    lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)
-                ),
-                commands2.WaitCommand(IntakeConstants._intake_min_run_sec),
-                commands2.WaitUntilCommand(lambda: self.controller.getHID().getAButton()),
-                self.intake.runOnce(lambda: self.intake.set_intake_speed(0)),
+            self.intake.runOnce(
+                lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)
             )
         )
 
