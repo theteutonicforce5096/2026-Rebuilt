@@ -19,16 +19,16 @@ class ArmConstants:
     _num_config_attempts = 20
 
     # Arm positions in mechanism rotations, measured off the fused CANcoder
-    _intake_position = 0.165
+    _intake_position = 0.160
     _shooting_position = 0.36
-    _stowed_position = 0.534
+    _stowed_position = 0.541
 
     # Stall detection: a commanded arm must close at least this much position error over each
     # detection window or it counts as stalled. The slowest healthy move covers 0.369 rotations in
     # about 4.5 seconds, closing roughly 0.016 rotations per window, so this leaves better than 3x
     # margin while a jammed arm closes essentially none.
     _stall_progress_threshold = 0.001  # rotations of error closed per window
-    _stall_time_threshold = 0.05  # seconds per detection window
+    _stall_time_threshold = 0.25  # seconds per detection window
 
     # Time after a new setpoint during which no stall may be declared. A setpoint that reverses a
     # move in flight makes the arm lose ground while its momentum turns around, which is
