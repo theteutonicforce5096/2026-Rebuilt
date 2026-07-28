@@ -23,19 +23,10 @@ class Intake(Subsystem):
     _ARM_POSITION_TOLERANCE_ROT: Final = 0.009
 
     # Minimum position error at which a stall may be declared. Inside this band the closed-loop
-<<<<<<< Updated upstream
-    # output tapers off and the arm legitimately stops closing error, which must not read as a
-    # jam. A jam inside this final sliver is ended by the arm-move command timeout instead.
-    _STALL_POSITION_ERROR_MIN_ROT: Final = 0.027
-=======
     # output tapers off and the arm naturally slows below the stall velocity threshold, which
     # must not read as a jam. A jam inside this final sliver is ended by the arm-move command
     # timeout instead.
     _STALL_POSITION_ERROR_MIN_ROT: Final = 0.009
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
     def __init__(
         self,
@@ -50,15 +41,8 @@ class Intake(Subsystem):
         intake_position: float,
         stowed_position: float,
         shooting_position: float,
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        stall_progress_threshold: float,
-=======
-=======
->>>>>>> Stashed changes
-        stall_current_threshold: float,
+        stall_current_threhsold: float,
         stall_velocity_threshold: float,
->>>>>>> Stashed changes
         stall_time_threshold: float,
     ):
         """
@@ -86,10 +70,10 @@ class Intake(Subsystem):
         :type stowed_position: float
         :param shooting_position: Encoder position where the arm is at an intermediate position
         :type shooting_position: float
-        :param stall_progress_threshold: Minimum rotations of position error the arm must close
-            per detection window to count as moving
-        :type stall_progress_threshold: float
-        :param stall_time_threshold: Length of each stall detection window in seconds
+        :param stall_velocity_threshold: Arm velocity below which the arm counts as stalled
+        :type stall_velocity_threshold: float
+        :param stall_time_threshold: Time the stall conditions must hold before a stall is
+            declared
         :type stall_time_threshold: float
         """
         Subsystem.__init__(self)
@@ -156,23 +140,10 @@ class Intake(Subsystem):
         self.is_stalled = False
 
         # Stall detection tunables
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-        self.stall_progress_threshold = stall_progress_threshold
-=======
-=======
->>>>>>> Stashed changes
-        self.stall_current_threshold = stall_current_threshold
+        self.stall_current_threshold = stall_current_threhsold
         self.stall_velocity_threshold = stall_velocity_threshold
->>>>>>> Stashed changes
         self.stall_time_threshold = stall_time_threshold
         self.stall_timer = Timer()
-
-        # Position error at the start of the current detection window, or None when no window
-        # is open. Progress is judged per window rather than from instantaneous velocity, which
-        # is too noisy to trust at the arm's slow travel speeds.
-        self._stall_window_start_error: float | None = None
-        self._stall_window_is_first = True
 
         # Arm signals refreshed each loop for stall detection and telemetry
         self.arm_stator_current = 0.0
@@ -226,7 +197,8 @@ class Intake(Subsystem):
         # A new move starts clean, so clear any stall left over from the previous move before
         # commanding the arm again.
         self.is_stalled = False
-        self._reset_stall_watch()
+        self.stall_timer.stop()
+        self.stall_timer.reset()
 
         self.intake_arm.set_control(self.position_voltage_request.with_position(position))
 
@@ -305,12 +277,10 @@ class Intake(Subsystem):
         """
         Watch the moving arm and cut power if it stops making progress.
 
-        Progress is judged over fixed windows: while the arm is commanded well short of its
-        target, it must close a minimum amount of position error each window or it counts as
-        stalled. Judging windowed progress instead of instantaneous velocity tolerates the
-        arm's slow travel speed and its noisy velocity signal, while still catching a jam
-        anywhere in the travel — including an arm being pushed backward, which loses ground
-        instead of closing it.
+        A stall is any lack of movement while the arm is commanded well short of its target:
+        the arm barely moves for long enough to rule out normal acceleration. Detection is
+        purely movement-based, so it catches a jam anywhere in the travel regardless of how
+        much current the obstruction happens to draw.
 
         :returns: True once a stall has been detected, otherwise False.
         :rtype: bool
@@ -323,9 +293,6 @@ class Intake(Subsystem):
         if self.is_stalled:
             return True
 
-<<<<<<< Updated upstream
-        position_error = abs(self.commanded_position - self.arm_position)
-=======
         # Stall: still commanding a move, but hardly moving. The wider error band keeps the
         # closed-loop taper near the target from reading as a stall (see the class constant).
         is_commanding_motion = (
@@ -334,46 +301,20 @@ class Intake(Subsystem):
         stall_condition_met = (
             is_commanding_motion and self.arm_velocity < self.stall_velocity_threshold and self.arm_stator_current > self.stall_current_threshold
         )
->>>>>>> Stashed changes
 
-        # Near the target the closed-loop output tapers and progress legitimately shrinks, so
-        # the watch stands down and arrival detection takes over (see the class constant).
-        if position_error <= self._STALL_POSITION_ERROR_MIN_ROT:
-            self._reset_stall_watch()
-            return False
+        # The timer only runs while the conditions hold, so a brief hesitation during normal
+        # acceleration resets it instead of counting toward a stall.
+        if stall_condition_met:
+            self.stall_timer.start()
+        else:
+            self.stall_timer.stop()
+            self.stall_timer.reset()
 
-        # Open a window on the first loop of a watched move.
-        if self._stall_window_start_error is None:
-            self._stall_window_start_error = position_error
-            self.stall_timer.restart()
-            return False
+        self.is_stalled = (
+            self.stall_timer.hasElapsed(self.stall_time_threshold) and stall_condition_met
+        )
 
-        if not self.stall_timer.hasElapsed(self.stall_time_threshold):
-            return False
-
-        progress = self._stall_window_start_error - position_error
-        if progress < self.stall_progress_threshold:
-            # The first window after a new setpoint may legitimately show no progress while
-            # the arm reverses momentum from an interrupted move, so it gets one grace
-            # restart; a real jam simply fails the next window as well.
-            if self._stall_window_is_first:
-                self._stall_window_is_first = False
-                self._stall_window_start_error = position_error
-                self.stall_timer.restart()
-                return False
+        if self.is_stalled:
             self.set_arm_voltage(0)
-            self.is_stalled = True
-            return True
 
-        # Healthy progress; watch the next window.
-        self._stall_window_is_first = False
-        self._stall_window_start_error = position_error
-        self.stall_timer.restart()
-        return False
-
-    def _reset_stall_watch(self):
-        """Close any open stall detection window so the next watched loop starts a fresh one."""
-        self._stall_window_start_error = None
-        self._stall_window_is_first = True
-        self.stall_timer.stop()
-        self.stall_timer.reset()
+        return self.is_stalled
