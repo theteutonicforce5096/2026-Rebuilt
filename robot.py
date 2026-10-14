@@ -37,14 +37,15 @@ class RebuiltRobot(commands2.TimedCommandRobot):
         """Start match logging, clear leftover commands, and schedule the selected auto."""
         # The FMS is attached by the time the match starts, so this is where match logging can
         # actually begin (robotInit runs in the pit, long before the FMS connects).
-        if DriverStation.isFMSAttached():
-            SignalLogger.start()
+        # if DriverStation.isFMSAttached():
+        #     SignalLogger.start()
 
-        commands2.CommandScheduler.getInstance().cancelAll()
-        self.robot_container.create_commands_auto()
-        self.autonomous_command = self.robot_container.get_selected_auto_command()
-        if self.autonomous_command is not None:
-            self.autonomous_command.schedule()
+        # commands2.CommandScheduler.getInstance().cancelAll()
+        # self.robot_container.create_commands_auto()
+        # self.autonomous_command = self.robot_container.get_selected_auto_command()
+        # if self.autonomous_command is not None:
+        #     self.autonomous_command.schedule()
+        pass
 
     def teleopInit(self):
         """Clear leftover autonomous commands and prepare the robot for driver control."""
@@ -58,5 +59,6 @@ class RebuiltRobot(commands2.TimedCommandRobot):
 
     def testInit(self):
         """Clear leftover commands and put the robot into a safe state for test mode."""
-        commands2.CommandScheduler.getInstance().cancelAll()
-        self.robot_container.create_commands_test()
+        # commands2.CommandScheduler.getInstance().cancelAll()
+        # self.robot_container.create_commands_test()
+        pass

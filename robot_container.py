@@ -164,10 +164,10 @@ class RobotContainer:
         """Reset driver-facing state and zero every subsystem output for teleop."""
         # The alliance may only be known once connected to the FMS, so the driving perspective
         # is rechecked here in case it wasn't determined at startup.
-        self.drivetrain.set_forward_perspective()
-        self.drivetrain.reset_teleop_drive_state()
+        # self.drivetrain.set_forward_perspective()
+        # self.drivetrain.reset_teleop_drive_state()
 
-        self.arm.arm_down()
+        # self.arm.arm_down()
         self.intake.set_intake_speed(0)
         self.hopper.set_hopper_speeds(0, 0)
         self.shooter.set_flywheel_velocities(0, 0)
@@ -200,31 +200,31 @@ class RobotContainer:
         def stick_button(button):
             return lambda: not DriverStation.isAutonomousEnabled() and button()
 
-        self.drivetrain.setDefaultCommand(
-            self.drivetrain.get_operator_drive_command(
-                stick_button(lambda: self.controller.getLeftTriggerAxis() > self._TRIGGER_DEADBAND),
-                stick_button(
-                    lambda: self.controller.getRightTriggerAxis() > self._TRIGGER_DEADBAND
-                ),
-                stick_axis(lambda: -self.controller.getLeftY()),
-                stick_axis(lambda: -self.controller.getLeftX()),
-                stick_axis(lambda: -self.controller.getRightX()),
-            ).beforeStarting(
-                self.drivetrain.runOnce(lambda: self.drivetrain.reset_teleop_drive_state())
-            )
-        )
+        # self.drivetrain.setDefaultCommand(
+        #     self.drivetrain.get_operator_drive_command(
+        #         stick_button(lambda: self.controller.getLeftTriggerAxis() > self._TRIGGER_DEADBAND),
+        #         stick_button(
+        #             lambda: self.controller.getRightTriggerAxis() > self._TRIGGER_DEADBAND
+        #         ),
+        #         stick_axis(lambda: -self.controller.getLeftY()),
+        #         stick_axis(lambda: -self.controller.getLeftX()),
+        #         stick_axis(lambda: -self.controller.getRightX()),
+        #     ).beforeStarting(
+        #         self.drivetrain.runOnce(lambda: self.drivetrain.reset_teleop_drive_state())
+        #     )
+        # )
 
         # --- Teleop bindings ---
 
         # Both bumpers together re-zero field-centric driving to wherever the robot is pointing.
-        def reset_field_centric_heading():
-            self.drivetrain.seed_field_centric()
-            self.drivetrain.set_forward_perspective()
-            self.drivetrain.reset_teleop_drive_state()
+        # def reset_field_centric_heading():
+        #     self.drivetrain.seed_field_centric()
+        #     self.drivetrain.set_forward_perspective()
+        #     self.drivetrain.reset_teleop_drive_state()
 
-        (self.controller.leftBumper() & self.controller.rightBumper() & teleop).onTrue(
-            self.drivetrain.runOnce(reset_field_centric_heading)
-        )
+        # (self.controller.leftBumper() & self.controller.rightBumper() & teleop).onTrue(
+        #     self.drivetrain.runOnce(reset_field_centric_heading)
+        # )
 
         # A toggles the intake. The wait keeps a quick double-press from cancelling the intake
         # before it has had a chance to pull anything in.
@@ -237,82 +237,82 @@ class RobotContainer:
         # D-pad right reverses the intake, hopper, and flywheels together to clear a jam, and runs
         # only while held. The setters latch on the devices, so the mechanisms are started once and
         # stopped by the end action, which also fires if the command is interrupted.
-        def start_eject() -> None:
-            self.intake.set_intake_speed(IntakeConstants._eject_volts)
-            self.hopper.set_hopper_speeds(
-                HopperConstants._eject_mecanum_velocity,
-                HopperConstants._eject_agitator_volts,
-            )
-            self.shooter.set_flywheel_velocities(
-                ShooterConstants._eject_flywheel_velocity,
-                ShooterConstants._eject_flywheel_velocity,
-            )
+        # def start_eject() -> None:
+        #     self.intake.set_intake_speed(IntakeConstants._eject_volts)
+        #     self.hopper.set_hopper_speeds(
+        #         HopperConstants._eject_mecanum_velocity,
+        #         HopperConstants._eject_agitator_volts,
+        #     )
+        #     self.shooter.set_flywheel_velocities(
+        #         ShooterConstants._eject_flywheel_velocity,
+        #         ShooterConstants._eject_flywheel_velocity,
+        #     )
 
-        def stop_eject() -> None:
-            self.intake.set_intake_speed(0)
-            self.hopper.set_hopper_speeds(0, 0)
-            self.shooter.set_flywheel_velocities(0, 0)
+        # def stop_eject() -> None:
+        #     self.intake.set_intake_speed(0)
+        #     self.hopper.set_hopper_speeds(0, 0)
+        #     self.shooter.set_flywheel_velocities(0, 0)
 
-        (self.controller.povRight() & teleop).whileTrue(
-            commands2.StartEndCommand(
-                start_eject, stop_eject, self.intake, self.hopper, self.shooter
-            )
-        )
+        # (self.controller.povRight() & teleop).whileTrue(
+        #     commands2.StartEndCommand(
+        #         start_eject, stop_eject, self.intake, self.hopper, self.shooter
+        #     )
+        # )
 
         # D-pad left re-seeds odometry from the hub after the pose has drifted.
-        (self.controller.povLeft() & teleop).onTrue(
-            self.drivetrain.runOnce(lambda: self.drivetrain.reset_pose_hub())
-        )
+        # (self.controller.povLeft() & teleop).onTrue(
+        #     self.drivetrain.runOnce(lambda: self.drivetrain.reset_pose_hub())
+        # )
 
         # D-pad down drops the arm straight to the floor position, while each up press steps it
         # one preset toward stowed. Both watch for a stall so a jammed arm stops instead of
         # straining. The target resolves at press time from the position already commanded, so
         # stepping up twice in quick succession reaches stowed without waiting out the first move.
-        (self.controller.povDown() & teleop).onTrue(
+        (self.controller.povDown() & self.controller.leftBumper() & self.controller.rightBumper() & teleop).onTrue(
             self._create_arm_move_command(lambda: self.arm.arm_down())
         )
 
-        (self.controller.povUp() & teleop).onTrue(
+        (self.controller.povUp() & self.controller.leftBumper() & self.controller.rightBumper() & teleop).onTrue(
             self._create_arm_move_command(lambda: self.arm.step_arm_up())
         )
 
         # X fires a manual shot: dashboard flywheel speed, no auto-align, ends on Y.
-        (self.controller.x() & teleop).onTrue(
-            commands2.SequentialCommandGroup(
-                self.led.runOnce(lambda: self.led.shooting_manual()),
-                self.intake.runOnce(
-                    lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)
-                ),
-                self.shooter.create_shot_command(
-                    self.hopper,
-                    distance_based=False,
-                    end_when=lambda: self.controller.getHID().getYButton(),
-                ),
-                self._create_stop_all_command(),
-            )
-        )
+        # (self.controller.x() & teleop).onTrue(
+        #     commands2.SequentialCommandGroup(
+        #         self.led.runOnce(lambda: self.led.shooting_manual()),
+        #         self.intake.runOnce(
+        #             lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)
+        #         ),
+        #         self.shooter.create_shot_command(
+        #             self.hopper,
+        #             distance_based=False,
+        #             end_when=lambda: self.controller.getHID().getYButton(),
+        #         ),
+        #         self._create_stop_all_command(),
+        #     )
+        # )
 
         # B fires a calculated shot: auto-aligns to the hub and solves the flywheel speed while
         # spinning up, then hands the drivetrain back so the driver can reposition without
         # disturbing the shot. Ends on Y or when the hopper runs empty.
-        (self.controller.b() & teleop).onTrue(
-            commands2.SequentialCommandGroup(
-                self.led.runOnce(lambda: self.led.shooting_calculated()),
-                self.intake.runOnce(
-                    lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)
-                ),
-                self.shooter.create_shot_command(
-                    self.hopper,
-                    self.drivetrain,
-                    distance_based=True,
-                    end_when=lambda: (
-                        self.controller.getHID().getYButton() or self.shooter.detect_empty()
-                    ),
-                    release_to_driver_after_aim=True,
-                ),
-                self._create_stop_all_command(),
-            )
-        )
+        # (self.controller.b() & teleop).onTrue(
+        #     commands2.SequentialCommandGroup(
+        #         self.led.runOnce(lambda: self.led.shooting_calculated()),
+        #         self.intake.runOnce(
+        #             lambda: self.intake.set_intake_speed(IntakeConstants._intake_volts)
+        #         ),
+        #         self.shooter.create_shot_command(
+        #             self.hopper,
+        #             self.drivetrain,
+        #             distance_based=True,
+        #             end_when=lambda: (
+        #                 self.controller.getHID().getYButton() or self.shooter.detect_empty()
+        #             ),
+        #             release_to_driver_after_aim=True,
+        #         ),
+        #         self._create_stop_all_command(),
+        #     )
+        # )
 
         # Y is the panic stop for everything shooting-related.
         (self.controller.y() & teleop).onTrue(self._create_stop_all_command())
@@ -320,55 +320,55 @@ class RobotContainer:
         # Flash the LEDs for the last five seconds of teleop, then go back to the default state.
         # getMatchTime() returns -1 without a real timing source, so this also requires an FMS or
         # a practice match to avoid firing during a bench test.
-        five_seconds_left = commands2.button.Trigger(
-            lambda: (
-                DriverStation.isTeleopEnabled()
-                and 0 < DriverStation.getMatchTime() <= self._ENDGAME_WARNING_SEC
-                and (
-                    DriverStation.isFMSAttached()
-                    or DriverStation.getMatchType() == DriverStation.MatchType.kPractice
-                )
-            )
-        )
-        # The falling edge lands as teleop disables, and a command that cannot run while disabled
-        # would never restore the default animation. The CANdle is not a disable-gated actuator, so
-        # the write is allowed to land.
-        five_seconds_left.onTrue(self.led.runOnce(lambda: self.led.five_seconds_left())).onFalse(
-            self.led.runOnce(lambda: self.led.default()).ignoringDisable(True)
-        )
+        # five_seconds_left = commands2.button.Trigger(
+        #     lambda: (
+        #         DriverStation.isTeleopEnabled()
+        #         and 0 < DriverStation.getMatchTime() <= self._ENDGAME_WARNING_SEC
+        #         and (
+        #             DriverStation.isFMSAttached()
+        #             or DriverStation.getMatchType() == DriverStation.MatchType.kPractice
+        #         )
+        #     )
+        # )
+        # # The falling edge lands as teleop disables, and a command that cannot run while disabled
+        # # would never restore the default animation. The CANdle is not a disable-gated actuator, so
+        # # the write is allowed to land.
+        # five_seconds_left.onTrue(self.led.runOnce(lambda: self.led.five_seconds_left())).onFalse(
+        #     self.led.runOnce(lambda: self.led.default()).ignoringDisable(True)
+        # )
 
-        # --- Test bindings (SysId characterization + drivetrain diagnostics) ---
+        # # --- Test bindings (SysId characterization + drivetrain diagnostics) ---
 
-        # Color buttons run SysId on whichever routine the dashboard chooser is set to.
-        (self.controller.y() & test).whileTrue(
-            self._create_sys_id_command(
-                lambda routine: routine.quasistatic(SysIdRoutine.Direction.kForward)
-            )
-        )
-        (self.controller.a() & test).whileTrue(
-            self._create_sys_id_command(
-                lambda routine: routine.quasistatic(SysIdRoutine.Direction.kReverse)
-            )
-        )
-        (self.controller.b() & test).whileTrue(
-            self._create_sys_id_command(
-                lambda routine: routine.dynamic(SysIdRoutine.Direction.kForward)
-            )
-        )
-        (self.controller.x() & test).whileTrue(
-            self._create_sys_id_command(
-                lambda routine: routine.dynamic(SysIdRoutine.Direction.kReverse)
-            )
-        )
+        # # Color buttons run SysId on whichever routine the dashboard chooser is set to.
+        # (self.controller.y() & test).whileTrue(
+        #     self._create_sys_id_command(
+        #         lambda routine: routine.quasistatic(SysIdRoutine.Direction.kForward)
+        #     )
+        # )
+        # (self.controller.a() & test).whileTrue(
+        #     self._create_sys_id_command(
+        #         lambda routine: routine.quasistatic(SysIdRoutine.Direction.kReverse)
+        #     )
+        # )
+        # (self.controller.b() & test).whileTrue(
+        #     self._create_sys_id_command(
+        #         lambda routine: routine.dynamic(SysIdRoutine.Direction.kForward)
+        #     )
+        # )
+        # (self.controller.x() & test).whileTrue(
+        #     self._create_sys_id_command(
+        #         lambda routine: routine.dynamic(SysIdRoutine.Direction.kReverse)
+        #     )
+        # )
 
-        (self.controller.povUp() & test).onTrue(
-            self.drivetrain.create_effective_wheel_radius_characterization_command()
-        )
+        # (self.controller.povUp() & test).onTrue(
+        #     self.drivetrain.create_effective_wheel_radius_characterization_command()
+        # )
 
-        # Hold the modules forward and publish their azimuth errors for offset calibration.
-        (self.controller.povDown() & test).whileTrue(
-            self.drivetrain.create_module_alignment_diagnostic_command()
-        )
+        # # Hold the modules forward and publish their azimuth errors for offset calibration.
+        # (self.controller.povDown() & test).whileTrue(
+        #     self.drivetrain.create_module_alignment_diagnostic_command()
+        # )
 
     def _create_arm_move_command(self, arm_action):
         """
